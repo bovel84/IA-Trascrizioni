@@ -518,7 +518,6 @@
         <input type="password" id="groqApiKey" placeholder="gsk_...">
         <small style="color:#6b7280;">
             Ottieni una chiave <strong>gratuita</strong> su <a href="https://console.groq.com" target="_blank" style="color:#667eea;">console.groq.com</a>
-target="_blank" style="color:#667eea;">console.groq.com</a>
             <br>✨ Usata per: trascrizione file audio con Whisper AI + analisi testo con LLM
         </small>
     </div>
@@ -1024,7 +1023,56 @@ transcribeRecordedBtn.addEventListener('click', async () => {
         
         // Salva
         mainTranscript.textContent = transcriptText;
-        localStorage.setI
+        localStorage.setItem('transcript', transcriptText);
+        enableAnalysisButtons();
+        
+        const wordCount = transcriptText.trim().split(/\s+/).length;
+        showStatus(`✅ Trascrizione completata! ${wordCount} parole trascritte.`, 'success');
+        
+        // Passa alla tab analisi
+        setTimeout(() => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tabContents.forEach(tc => tc.classList.remove('active'));
+            document.querySelector('[data-tab="analysis"]').classList.add('active');
+            document.getElementById('tab-analysis').classList.add('active');
+        }, 2000);
+        
+    } catch (error) {
+        showStatus('❌ Errore trascrizione: ' + error.message, 'error');
+    } finally {
+        transcribeRecordedBtn.disabled = false;
+    }
+});
+
+// Scarica audio registrato
+downloadRecordedBtn.addEventListener('click', () => {
+    if (!recordedBlob) return;
+    
+    const fileExtension = recordedBlob.type.includes('webm') ? 'webm' : 
+                         recordedBlob.type.includes('ogg') ? 'ogg' : 
+                         recordedBlob.type.includes('mp4') ? 'm4a' : 'audio';
+    
+    const url = URL.createObjectURL(recordedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `registrazione_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.${fileExtension}`;
+    a.click();
+    
+    showStatus('💾 Download avviato!', 'success');
+});
+
+// Nuova registrazione
+newRecordingBtn.addEventListener('click', () => {
+    recordedAudioSection.style.display = 'none';
+    liveTranscript.style.display = 'block';
+    liveTranscript.classList.add('empty');
+    liveTranscript.textContent = 'La trascrizione in tempo reale apparirà qui...';
+    recordedBlob = null;
+    recordedChunks = [];
+    
+    showStatus('🎙️ Pronto per una nuova registrazione', 'info');
+});
+
 /* ===========================================
    REGISTRAZIONE VOCALE (Tempo Reale)
 =========================================== */
@@ -1747,4 +1795,3 @@ groqApiKey.addEventListener('input', () => {
 
 </body>
 </html>
-            
