@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trascrizione e Analisi Audio Avanzata</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-docx-js/0.3.1/html-docx.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e5e7eb;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .upload-area {
+            border: 3px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f9fafb;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #eef2ff;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-success.recording {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .transcript-area {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .transcript-area.empty {
+            color: #9ca3af;
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        textarea.transcript-area {
+            width: 100%;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .analysis-section {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .analysis-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .analysis-content {
+            color: #374151;
+            line-height: 1.8;
+        }
+
+        .speaker-segment {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .speaker-name {
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status.active {
+            display: flex;
+        }
+
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status.loading {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .info-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #92400e;
+        }
+
+        .language-selector {
+            margin-bottom: 20px;
+        }
+
+        .language-selector label {
+            display: block;
+            margin-bottom: 8px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .language-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+        }
+
+        #audioFileName {
+            margin-top: 15px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+
+            .tab {
+                padding: 10px 16px;
+                font-size: 14px;
+                white-space: nowrap;
+            }
+
+            .btn {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .button-group {
+                justify-content: stretch;
+            }
+
+            .button-group .btn {
+                flex: 1;
+                min-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Trascrizione e Analisi Audio Pro</h1>
+        <p class="subtitle">Trascrivi, analizza e identifica i parlanti con AI</p>
+
+        <div class="status" id="status"></div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="record">🎙️ Registra</button>
+            <button class="tab" data-tab="upload">📁 Carica File</button>
+            <button class="tab" data-tab="paste">📝 Incolla Testo</button>
+            <button class="tab" data-tab="analysis">🔍 Analisi</button>
+        </div>
+
+        <!-- TAB REGISTRAZIONE -->
+        <div class="tab-content active" id="tab-record">
+            <div class="language-selector">
+                <label for="language">Lingua di trascrizione:</label>
+                <select id="language">
+                    <option value="it-IT">Italiano</option>
+                    <option value="en-US">Inglese (US)</option>
+                    <option value="en-GB">Inglese (UK)</option>
+                    <option value="es-ES">Spagnolo</option>
+                    <option value="fr-FR">Francese</option>
+                    <option value="de-DE">Tedesco</option>
+                </select>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-success" id="recordBtn">
+                    <span id="recordBtnText">▶️ Inizia Registrazione</span>
+                </button>
+            </div>
+
+            <div class="transcript-area" id="liveTranscript">
+                La trascrizione in tempo reale apparirà qui...
+            </div>
+        </div>
+
+        <!-- TAB CARICAMENTO FILE -->
+        <div class="tab-content" id="tab-upload">
+            <div class="info-box">
+                🎯 Carica un file audio e scegli come trascriverlo
+            </div>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📤</div>
+                <h3>Trascina qui il file audio o clicca per caricare</h3>
+                <p style="color: #6b7280; margin-top: 10px;">Formati supportati: MP3, WAV, M4A, OGG, WebM</p>
+                <input type="file" id="audioFile" accept="audio/*" style="display: none;">
+            </div>
+
+            <div id="audioFileName"></div>
+
+            <audio id="audioPlayer" controls style="width: 100%; margin: 20px 0; display: none;"></audio>
+
+            <div class="language-selector">
+                <label>Metodo di trascrizione:</label>
+                <select id="transcriptionMethod">
+                    <option value="free">🎙️ Gratuito - Riproduci e Registra (100% Gratis)</option>
+                    <option value="whisper">⭐ Whisper API - Qualità Professionale (Richiede chiave)</option>
+                </select>
+            </div>
+
+            <div id="freeMethodInfo" class="info-box" style="background: #d1fae5; border-color: #10b981; color: #065f46;">
+                ✅ <strong>Metodo Gratuito - Come funziona:</strong>
+                <ol style="margin-top: 8px; margin-left: 20px; line-height: 1.6;">
+                    <li>Il file audio verrà riprodotto automaticamente</li>
+                    <li>Il tuo microfono registrerà l'audio riprodotto</li>
+                    <li>La trascrizione avverrà in tempo reale (completamente gratis!)</li>
+                </ol>
+                <p style="margin-top: 10px;"><strong>💡 Consiglio:</strong> Alza il volume e avvicina il microfono agli altoparlanti per una migliore qualità.</p>
+            </div>
+
+            <div id="whisperSection" style="display: none;">
+                <div class="language-selector">
+                    <label for="whisperLanguage">Lingua del file audio:</label>
+                    <select id="whisperLanguage">
+                        <option value="it">Italiano</option>
+                        <option value="en">Inglese</option>
+                        <option value="es">Spagnolo</option>
+                        <option value="fr">Francese</option>
+                        <option value="de">Tedesco</option>
+                        <option value="pt">Portoghese</option>
+                        <option value="">Auto-detect</option>
+                    </select>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">
+                        Chiave API OpenAI:
+                    </label>
+                    <input type="password" id="whisperApiKey" placeholder="sk-..." 
+                           style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+                    <p style="color: #6b7280; font-size: 13px; margin-top: 5px;">
+                        🔒 Chiave usata solo dal tuo browser. Non viene salvata.
+                    </p>
+                </div>
+
+                <div class="info-box" style="background: #dbeafe; border-color: #3b82f6; color: #1e40af;">
+                    💡 <strong>Come ottenere la chiave (primi $5 GRATIS):</strong><br>
+                    Vai su <a href="https://platform.openai.com/signup" target="_blank" style="color: #1e40af; text-decoration: underline;">platform.openai.com</a> → API Keys → Crea nuova chiave
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="transcribeAudioBtn" disabled>
+                    <span id="transcribeBtnText">🎯 Trascrivi Audio (Gratis)</span>
+                </button>
+                <button class="btn btn-warning" id="stopTranscriptionBtn" style="display: none;">
+                    ⏹️ Ferma Trascrizione
+                </button>
+            </div>
+
+            <div id="transcriptionProgress" style="display: none; margin: 20px 0;">
+                <div style="background: #f3f4f6; border-radius: 8px; height: 8px; overflow: hidden;">
+                    <div id="progressBar" style="background: #667eea; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <p id="progressText" style="text-align: center; margin-top: 10px; color: #6b7280;"></p>
+            </div>
+
+            <div id="liveFileTranscript" class="transcript-area" style="display: none; margin-top: 20px;">
+                La trascrizione apparirà qui in tempo reale...
+            </div>
+        </div>
+
+        <!-- TAB INCOLLA TESTO -->
+        <div class="tab-content" id="tab-paste">
+            <p style="margin-bottom: 15px; color: #374151;">Incolla qui una trascrizione esistente per analizzarla:</p>
+            <textarea class="transcript-area" id="pastedText" placeholder="Incolla qui il testo trascritto..." style="min-height: 300px;"></textarea>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" id="usePastedTextBtn">
+                    ✓ Usa questo testo
+                </button>
+            </div>
+        </div>
+
+        <!-- TAB ANALISI -->
+        <div class="tab-content" id="tab-analysis">
+            <div class="info-box" id="analysisInfo">
+                📊 Carica o registra una trascrizione per iniziare l'analisi
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">
+                    Chiave API Groq (per analisi AI):
+                </label>
+                <input type="password" id="groqApiKey" placeholder="gsk_..." 
+                       style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+                <p style="color: #6b7280; font-size: 13px; margin-top: 5px;">
+                    🔒 Chiave usata solo dal tuo browser. Non viene salvata. | 
+                    <a href="https://console.groq.com/keys" target="_blank" style="color: #667eea; text-decoration: underline;">Ottieni chiave GRATIS</a>
+                </p>
+            </div>
+
+            <div class="info-box" style="background: #d1fae5; border-color: #10b981; color: #065f46;">
+                ✅ <strong>Groq con Llama 3.1 - GRATIS e VELOCE!</strong>
+                <ul style="margin-top: 8px; margin-left: 20px; line-height: 1.6;">
+                    <li>✨ Completamente gratuito (nessun costo)</li>
+                    <li>⚡ Velocissimo (inferenza ultra-rapida)</li>
+                    <li>🧠 Llama 3.1 8B - Ottima qualità</li>
+                    <li>🔗 Vai su <a href="https://console.groq.com/keys" target="_blank" style="color: #065f46; text-decoration: underline; font-weight: 600;">console.groq.com</a> per la tua chiave</li>
+                </ul>
+            </div>
+
+            <div class="info-box" style="background: #dbeafe; border-color: #3b82f6; color: #1e40af;">
+                💡 <strong>Consiglio:</strong> Prima di analizzare, usa <strong>"✨ Correggi Testo"</strong> per migliorare la qualità della trascrizione!<br>
+                L'AI correggerà automaticamente errori grammaticali, punteggiatura e errori di comprensione.
+            </div>
+
+            <div class="transcript-area" id="mainTranscript" contenteditable="true">
+                Il testo trascritto apparirà qui. Puoi modificarlo prima dell'analisi.
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-success" id="correctTextBtn" disabled>
+                    ✨ Correggi Testo
+                </button>
+                <button class="btn btn-primary" id="summarizeBtn" disabled>
+                    📝 Riassumi
+                </button>
+                <button class="btn btn-primary" id="analyzeBtn" disabled>
+                    🔍 Analizza
+                </button>
+                <button class="btn btn-primary" id="identifySpeakersBtn" disabled>
+                    👥 Identifica Parlanti
+                </button>
+                <button class="btn btn-info" id="exportPdfBtn" disabled>
+                    📄 Esporta PDF
+                </button>
+                <button class="btn btn-info" id="exportDocBtn" disabled>
+                    📝 Esporta DOC
+                </button>
+                <button class="btn btn-secondary" id="clearBtn">
+                    🗑️ Cancella
+                </button>
+            </div>
+
+            <div id="analysisResults"></div>
+        </div>
+    </div>
+
+    <script>
+        // Variabili globali
+        let recognition;
+        let isRecording = false;
+        let finalTranscript = '';
+        let currentAudioFile = null;
+
+        // Elementi DOM
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const statusDiv = document.getElementById('status');
+        const recordBtn = document.getElementById('recordBtn');
+        const recordBtnText = document.getElementById('recordBtnText');
+        const liveTranscript = document.getElementById('liveTranscript');
+        const mainTranscript = document.getElementById('mainTranscript');
+        const languageSelect = document.getElementById('language');
+        const uploadArea = document.getElementById('uploadArea');
+        const audioFile = document.getElementById('audioFile');
+        const audioFileName = document.getElementById('audioFileName');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const transcriptionMethod = document.getElementById('transcriptionMethod');
+        const freeMethodInfo = document.getElementById('freeMethodInfo');
+        const whisperSection = document.getElementById('whisperSection');
+        const whisperLanguage = document.getElementById('whisperLanguage');
+        const whisperApiKey = document.getElementById('whisperApiKey');
+        const transcribeAudioBtn = document.getElementById('transcribeAudioBtn');
+        const transcribeBtnText = document.getElementById('transcribeBtnText');
+        const stopTranscriptionBtn = document.getElementById('stopTranscriptionBtn');
+        const transcriptionProgress = document.getElementById('transcriptionProgress');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const liveFileTranscript = document.getElementById('liveFileTranscript');
+        const pastedText = document.getElementById('pastedText');
+        const usePastedTextBtn = document.getElementById('usePastedTextBtn');
+        const groqApiKey = document.getElementById('groqApiKey');
+        const correctTextBtn = document.getElementById('correctTextBtn');
+        const summarizeBtn = document.getElementById('summarizeBtn');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const identifySpeakersBtn = document.getElementById('identifySpeakersBtn');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportDocBtn = document.getElementById('exportDocBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const analysisResults = document.getElementById('analysisResults');
+        const analysisInfo = document.getElementById('analysisInfo');
+
+        // Gestione Tab
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(tc => tc.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+            });
+        });
+
+        // Web Speech API per registrazione live
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = languageSelect.value;
+
+            recognition.onstart = () => {
+                showStatus('🎤 Sto ascoltando... Parla nel microfono', 'loading');
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                finalTranscript = '';
+
+                for (let i = 0; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                liveTranscript.innerHTML = finalTranscript + '<span style="color: #9ca3af;">' + interimTranscript + '</span>';
+                liveTranscript.classList.remove('empty');
+            };
+
+            recognition.onerror = (event) => {
+                let errorMessage = 'Errore durante la trascrizione';
+                
+                if (event.error === 'no-speech') {
+                    errorMessage = '⚠️ Nessun parlato rilevato. Riprova.';
+                } else if (event.error === 'audio-capture') {
+                    errorMessage = '❌ Microfono non disponibile';
+                } else if (event.error === 'not-allowed') {
+                    errorMessage = '❌ Permesso microfono negato';
+                }
+                
+                showStatus(errorMessage, 'error');
+                stopRecording();
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    recognition.start();
+                }
+            };
+
+            languageSelect.addEventListener('change', () => {
+                recognition.lang = languageSelect.value;
+            });
+        } else {
+            showStatus('❌ Il tuo browser non supporta il riconoscimento vocale. Usa Chrome o Edge.', 'error');
+            recordBtn.disabled = true;
+        }
+
+        // Registrazione
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        function startRecording() {
+            if (!recognition) return;
+            
+            finalTranscript = '';
+            liveTranscript.textContent = 'Sto ascoltando...';
+            
+            isRecording = true;
+            recordBtn.classList.add('recording');
+            recordBtnText.textContent = '⏹️ Ferma Registrazione';
+            
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error('Errore avvio:', e);
+            }
+        }
+
+        function stopRecording() {
+            if (!recognition) return;
+            
+            isRecording = false;
+            recordBtn.classList.remove('recording');
+            recordBtnText.textContent = '▶️ Inizia Registrazione';
+            
+            recognition.stop();
+            
+            if (finalTranscript.trim()) {
+                mainTranscript.textContent = finalTranscript;
+                enableAnalysisButtons();
+                showStatus('✅ Trascrizione completata! Vai alla tab Analisi', 'success');
+                
+                // Switch to analysis tab
+                setTimeout(() => {
+                    document.querySelector('[data-tab="analysis"]').click();
+                }, 2000);
+            } else {
+                liveTranscript.textContent = 'La trascrizione in tempo reale apparirà qui...';
+            }
+        }
+
+        // Upload file audio
+        uploadArea.addEventListener('click', () => audioFile.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleAudioFile(files[0]);
+            }
+        });
+
+        audioFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleAudioFile(e.target.files[0]);
+            }
+        });
+
+        function handleAudioFile(file) {
+            if (!file.type.startsWith('audio/')) {
+                showStatus('❌ Per favore carica un file audio valido', 'error');
+                return;
+            }
+
+            currentAudioFile = file;
+            audioFileName.textContent = `📁 File caricato: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            
+            // Mostra il player audio
+            const url = URL.createObjectURL(file);
+            audioPlayer.src = url;
+            audioPlayer.style.display = 'block';
+            
+            transcribeAudioBtn.disabled = false;
+            
+            showStatus('✅ File caricato! Seleziona il metodo e clicca "Trascrivi Audio"', 'success');
+        }
+
+        // Gestione metodo trascrizione
+        transcriptionMethod.addEventListener('change', () => {
+            if (transcriptionMethod.value === 'whisper') {
+                freeMethodInfo.style.display = 'none';
+                whisperSection.style.display = 'block';
+                transcribeBtnText.textContent = '⭐ Trascrivi con Whisper API';
+            } else {
+                freeMethodInfo.style.display = 'block';
+                whisperSection.style.display = 'none';
+                transcribeBtnText.textContent = '🎯 Trascrivi Audio (Gratis)';
+            }
+        });
+
+        // Trascrizione file audio
+        transcribeAudioBtn.addEventListener('click', async () => {
+            if (!currentAudioFile) return;
+
+            const method = transcriptionMethod.value;
+
+            if (method === 'whisper') {
+                await transcribeWithWhisper();
+            } else {
+                await transcribeWithFreeMethod();
+            }
+        });
+
+        // Trascrizione con Whisper API
+        async function transcribeWithWhisper() {
+            const apiKey = whisperApiKey.value.trim();
+            
+            if (!apiKey) {
+                showStatus('❌ Inserisci la tua chiave API OpenAI', 'error');
+                return;
+            }
+
+            showStatus('🚀 Trascrizione in corso con Whisper API...', 'loading');
+            transcriptionProgress.style.display = 'block';
+            progressBar.style.width = '30%';
+            progressText.textContent = 'Caricamento file...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', currentAudioFile);
+                formData.append('model', 'whisper-1');
+                
+                const lang = whisperLanguage.value;
+                if (lang) {
+                    formData.append('language', lang);
+                }
+
+                progressBar.style.width = '60%';
+                progressText.textContent = 'Elaborazione in corso...';
+
+                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: formData
+                });
+
+                progressBar.style.width = '90%';
+                progressText.textContent = 'Quasi pronto...';
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || 'Errore API Whisper');
+                }
+
+                const data = await response.json();
+                const transcription = data.text;
+
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Completato!';
+
+                mainTranscript.textContent = transcription;
+                enableAnalysisButtons();
+                
+                showStatus('✅ Trascrizione completata con successo!', 'success');
+                
+                setTimeout(() => {
+                    transcriptionProgress.style.display = 'none';
+                    progressBar.style.width = '0%';
+                    document.querySelector('[data-tab="analysis"]').click();
+                }, 2000);
+
+            } catch (error) {
+                console.error('Errore Whisper:', error);
+                showStatus(`❌ Errore: ${error.message}`, 'error');
+                transcriptionProgress.style.display = 'none';
+                progressBar.style.width = '0%';
+            }
+        }
+
+        // Trascrizione gratuita - Riproduzione e Registrazione
+        let fileTranscriptionActive = false;
+        let fileTranscript = '';
+
+        async function transcribeWithFreeMethod() {
+            if (!recognition) {
+                showStatus('❌ Web Speech API non supportata. Usa Chrome o Edge.', 'error');
+                return;
+            }
+
+            showStatus('🎤 Preparazione trascrizione gratuita...', 'loading');
+            
+            // Mostra l'area di trascrizione live
+            liveFileTranscript.style.display = 'block';
+            liveFileTranscript.textContent = 'Trascrizione in corso...';
+            
+            // Reset transcript
+            fileTranscript = '';
+            
+            // Configura riconoscimento
+            recognition.lang = languageSelect.value;
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            // Setup event handlers per trascrizione file
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        fileTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                liveFileTranscript.innerHTML = fileTranscript + '<span style="color: #9ca3af;">' + interimTranscript + '</span>';
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Errore riconoscimento:', event.error);
+                if (event.error === 'no-speech') {
+                    showStatus('⚠️ Assicurati che il volume sia alto e il microfono vicino agli altoparlanti', 'error');
+                } else if (event.error === 'not-allowed') {
+                    showStatus('❌ Permesso microfono negato', 'error');
+                    stopFileTranscription();
+                } else {
+                    showStatus(`⚠️ Errore: ${event.error}. Riprova.`, 'error');
+                }
+            };
+
+            recognition.onend = () => {
+                if (fileTranscriptionActive && !audioPlayer.paused) {
+                    // Riavvia il riconoscimento se l'audio sta ancora riproducendo
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.log('Recognition already started');
+                    }
+                } else if (fileTranscriptionActive) {
+                    // Audio finito
+                    stopFileTranscription();
+                }
+            };
+
+            // Gestione fine audio
+            audioPlayer.onended = () => {
+                stopFileTranscription();
+            };
+
+            // Avvia trascrizione
+            fileTranscriptionActive = true;
+            transcribeAudioBtn.style.display = 'none';
+            stopTranscriptionBtn.style.display = 'inline-flex';
+
+            try {
+                await recognition.start();
+                showStatus('🎙️ Trascrizione attiva! L\'audio sta per partire...', 'loading');
+                
+                // Aspetta un momento per permettere al riconoscimento di attivarsi
+                setTimeout(() => {
+                    audioPlayer.currentTime = 0;
+                    audioPlayer.play();
+                    showStatus('▶️ Audio in riproduzione - Trascrizione in corso...', 'loading');
+                }, 1000);
+
+            } catch (error) {
+                console.error('Errore avvio trascrizione:', error);
+                showStatus('❌ Errore avvio trascrizione', 'error');
+                stopFileTranscription();
+            }
+        }
+
+        // Ferma trascrizione file
+        stopTranscriptionBtn.addEventListener('click', stopFileTranscription);
+
+        function stopFileTranscription() {
+            fileTranscriptionActive = false;
+            
+            if (recognition) {
+                recognition.stop();
+            }
+            
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            
+            transcribeAudioBtn.style.display = 'inline-flex';
+            stopTranscriptionBtn.style.display = 'none';
+
+            if (fileTranscript.trim()) {
+                mainTranscript.textContent = fileTranscript;
+                enableAnalysisButtons();
+                showStatus('✅ Trascrizione completata! Vai alla tab Analisi', 'success');
+                
+                setTimeout(() => {
+                    document.querySelector('[data-tab="analysis"]').click();
+                }, 2000);
+            } else {
+                liveFileTranscript.textContent = 'Nessuna trascrizione rilevata. Prova ad alzare il volume.';
+                showStatus('⚠️ Nessun audio trascritto', 'error');
+            }
+        }
+
+        // Incolla testo
+        usePastedTextBtn.addEventListener('click', () => {
+            const text = pastedText.value.trim();
+            
+            if (!text) {
+                showStatus('⚠️ Incolla del testo prima di continuare', 'error');
+                return;
+            }
+
+            mainTranscript.textContent = text;
+            enableAnalysisButtons();
+            showStatus('✅ Testo caricato! Vai alla tab Analisi', 'success');
+            
+            setTimeout(() => {
+                document.querySelector('[data-tab="analysis"]').click();
+            }, 1500);
+        });
+
+        // Abilita pulsanti analisi
+        function enableAnalysisButtons() {
+            correctTextBtn.disabled = false;
+            summarizeBtn.disabled = false;
+            analyzeBtn.disabled = false;
+            identifySpeakersBtn.disabled = false;
+            exportPdfBtn.disabled = false;
+            exportDocBtn.disabled = false;
+            analysisInfo.style.display = 'none';
+        }
+
+        // Chiamate API Groq per analisi con Llama 3.1
+        async function callGroqAPI(prompt) {
+            const apiKey = groqApiKey.value.trim();
+            
+            if (!apiKey) {
+                showStatus('❌ Inserisci la tua chiave API Groq nella sezione Analisi', 'error');
+                return null;
+            }
+
+            showStatus('🤖 Elaborazione con Llama 3.1 (Groq)...', 'loading');
+            
+            try {
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.1-8b-instant",
+                        messages: [
+                            {
+                                role: "user",
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 4096
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || `Errore API: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content;
+            } catch (error) {
+                console.error('Errore Groq API:', error);
+                showStatus(`❌ Errore: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        // Correzione testo con AI
+        correctTextBtn.addEventListener('click', async () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) {
+                showStatus('⚠️ Nessun testo da correggere', 'error');
+                return;
+            }
+
+            const originalText = text; // Salva il testo originale
+
+            const prompt = `Sei un esperto correttore di bozze. Correggi il seguente testo trascritto migliorandone:
+1. **Grammatica e sintassi**: correggi errori grammaticali
+2. **Punteggiatura**: aggiungi virgole, punti, punti interrogativi ed esclamativi dove necessario
+3. **Ortografia**: correggi errori di battitura e parole mal trascritte
+4. **Leggibilità**: dividi in paragrafi logici dove appropriato
+5. **Errori di trascrizione comuni**: correggi parole simili foneticamente ma scritte male (es. "l'ho" vs "lo", "c'è" vs "ce")
+
+IMPORTANTE:
+- Mantieni ESATTAMENTE lo stesso significato e contenuto
+- NON aggiungere informazioni che non ci sono
+- NON rimuovere contenuti importanti
+- Mantieni lo stile conversazionale se presente
+- Restituisci SOLO il testo corretto, senza commenti o spiegazioni aggiuntive
+
+Testo da correggere:
+${text}`;
+
+            const result = await callGroqAPI(prompt);
+            
+            if (result) {
+                // Mostra confronto
+                const correctedText = result.trim();
+                
+                displayAnalysisResult('✨ Correzione Testo', `
+                    <div style="margin-bottom: 20px;">
+                        <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                            <strong>💡 Confronto:</strong> Qui sotto puoi vedere il testo originale e quello corretto. Clicca "Usa Testo Corretto" per sostituirlo.
+                        </div>
+                        
+                        <h4 style="color: #6b7280; margin-bottom: 10px;">📄 Testo Originale:</h4>
+                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; border: 2px solid #e5e7eb;">
+                            ${originalText.replace(/\n/g, '<br>')}
+                        </div>
+                        
+                        <h4 style="color: #10b981; margin-bottom: 10px;">✅ Testo Corretto:</h4>
+                        <div style="background: #d1fae5; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto; border: 2px solid #10b981;">
+                            ${correctedText.replace(/\n/g, '<br>')}
+                        </div>
+                        
+                        <button id="useCorrectedText" 
+                                style="margin-top: 20px; padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s;">
+                            ✓ Usa Testo Corretto
+                        </button>
+                    </div>
+                `);
+                
+                // Aggiungi event listener al pulsante dopo che è stato creato
+                setTimeout(() => {
+                    const useBtn = document.getElementById('useCorrectedText');
+                    if (useBtn) {
+                        useBtn.addEventListener('click', () => {
+                            mainTranscript.textContent = correctedText;
+                            showStatus('✅ Testo corretto applicato!', 'success');
+                            useBtn.textContent = '✓ Applicato!';
+                            useBtn.style.background = '#6b7280';
+                            useBtn.disabled = true;
+                        });
+                        
+                        useBtn.addEventListener('mouseenter', () => {
+                            if (!useBtn.disabled) {
+                                useBtn.style.background = '#059669';
+                                useBtn.style.transform = 'translateY(-2px)';
+                                useBtn.style.boxShadow = '0 5px 15px rgba(16, 185, 129, 0.4)';
+                            }
+                        });
+                        
+                        useBtn.addEventListener('mouseleave', () => {
+                            if (!useBtn.disabled) {
+                                useBtn.style.background = '#10b981';
+                                useBtn.style.transform = 'translateY(0)';
+                                useBtn.style.boxShadow = 'none';
+                            }
+                        });
+                    }
+                }, 100);
+                
+                showStatus('✅ Correzione completata! Vedi il confronto qui sotto', 'success');
+            }
+        });
+
+        // Riassunto
+        summarizeBtn.addEventListener('click', async () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) return;
+
+            const prompt = `Analizza e riassumi il seguente testo trascritto. Fornisci:
+1. Un riassunto conciso (3-5 frasi)
+2. I punti chiave principali
+3. Eventuali temi o argomenti ricorrenti
+
+Testo da analizzare:
+${text}
+
+Rispondi in italiano con una formattazione chiara e leggibile.`;
+
+            const result = await callGroqAPI(prompt);
+            
+            if (result) {
+                displayAnalysisResult('📝 Riassunto', result);
+                showStatus('✅ Riassunto completato!', 'success');
+            }
+        });
+
+        // Analisi completa
+        analyzeBtn.addEventListener('click', async () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) return;
+
+            const prompt = `Effettua un'analisi approfondita del seguente testo trascritto. Includi:
+1. **Analisi del contenuto**: temi principali, argomenti trattati
+2. **Tono e stile**: formale/informale, emotivo/neutro
+3. **Struttura**: organizzazione logica del discorso
+4. **Insight chiave**: informazioni importanti, decisioni, azioni da intraprendere
+5. **Sentiment**: analisi del sentimento generale
+
+Testo da analizzare:
+${text}
+
+Rispondi in italiano con una formattazione chiara usando intestazioni e paragrafi ben strutturati.`;
+
+            const result = await callGroqAPI(prompt);
+            
+            if (result) {
+                displayAnalysisResult('🔍 Analisi Completa', result);
+                showStatus('✅ Analisi completata!', 'success');
+            }
+        });
+
+        // Identificazione parlanti
+        identifySpeakersBtn.addEventListener('click', async () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) return;
+
+            const prompt = `Analizza il seguente testo trascritto e identifica i diversi parlanti. Per ogni parlante identificato:
+1. Assegna un nome (Parlante 1, Parlante 2, ecc. oppure suggerisci nomi se il contesto lo permette)
+2. Segmenta il testo attribuendo ogni parte al parlante corretto
+3. Fornisci un breve profilo o descrizione dello stile di ciascun parlante
+4. Conta quante volte interviene ciascun parlante
+
+Formatta l'output in modo chiaro, separando i segmenti di dialogo con il nome del parlante.
+
+Testo da analizzare:
+${text}
+
+Rispondi in italiano con una formattazione chiara che evidenzi chiaramente i diversi parlanti.`;
+
+            const result = await callGroqAPI(prompt);
+            
+            if (result) {
+                displayAnalysisResult('👥 Identificazione Parlanti', result);
+                showStatus('✅ Identificazione parlanti completata!', 'success');
+            }
+        });
+
+        // Mostra risultati analisi
+        function displayAnalysisResult(title, content) {
+            const section = document.createElement('div');
+            section.className = 'analysis-section';
+            section.innerHTML = `
+                <h3>${title}</h3>
+                <div class="analysis-content">${formatAnalysisContent(content)}</div>
+            `;
+            
+            analysisResults.insertBefore(section, analysisResults.firstChild);
+        }
+
+        function formatAnalysisContent(content) {
+            // Converti markdown-like formatting in HTML
+            return content
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/^(.+)$/gm, '<p>$1</p>');
+        }
+
+        // Esporta PDF
+        exportPdfBtn.addEventListener('click', () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) return;
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Aggiungi titolo
+                doc.setFontSize(18);
+                doc.text('Trascrizione Audio', 20, 20);
+                
+                // Aggiungi data
+                doc.setFontSize(10);
+                doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, 20, 30);
+                
+                // Aggiungi testo trascritto
+                doc.setFontSize(12);
+                const splitText = doc.splitTextToSize(text, 170);
+                doc.text(splitText, 20, 40);
+                
+                // Aggiungi analisi se presenti
+                let yPosition = 40 + (splitText.length * 7);
+                if (analysisResults.children.length > 0) {
+                    yPosition += 20;
+                    doc.setFontSize(16);
+                    doc.text('Analisi', 20, yPosition);
+                    yPosition += 10;
+                    
+                    doc.setFontSize(10);
+                    Array.from(analysisResults.children).forEach(section => {
+                        const title = section.querySelector('h3').textContent;
+                        const content = section.querySelector('.analysis-content').textContent;
+                        
+                        if (yPosition > 270) {
+                            doc.addPage();
+                            yPosition = 20;
+                        }
+                        
+                        doc.setFontSize(12);
+                        doc.text(title, 20, yPosition);
+                        yPosition += 7;
+                        
+                        doc.setFontSize(10);
+                        const splitContent = doc.splitTextToSize(content, 170);
+                        doc.text(splitContent, 20, yPosition);
+                        yPosition += (splitContent.length * 5) + 10;
+                    });
+                }
+                
+                doc.save(`trascrizione_${new Date().toISOString().slice(0,10)}.pdf`);
+                showStatus('✅ PDF salvato con successo!', 'success');
+            } catch (error) {
+                console.error('Errore esportazione PDF:', error);
+                showStatus('❌ Errore durante l\'esportazione PDF', 'error');
+            }
+        });
+
+        // Esporta DOC
+        exportDocBtn.addEventListener('click', () => {
+            const text = mainTranscript.textContent.trim();
+            if (!text) return;
+
+            try {
+                let htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Trascrizione Audio</title>
+                    </head>
+                    <body>
+                        <h1>Trascrizione Audio</h1>
+                        <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')}</p>
+                        <hr>
+                        <h2>Testo Trascritto</h2>
+                        <p>${text.replace(/\n/g, '<br>')}</p>
+                `;
+
+                if (analysisResults.children.length > 0) {
+                    htmlContent += '<hr><h2>Analisi</h2>';
+                    
+                    Array.from(analysisResults.children).forEach(section => {
+                        const title = section.querySelector('h3').textContent;
+                        const content = section.querySelector('.analysis-content').innerHTML;
+                        htmlContent += `<h3>${title}</h3><div>${content}</div>`;
+                    });
+                }
+
+                htmlContent += '</body></html>';
+
+                const blob = htmlDocx.asBlob(htmlContent);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `trascrizione_${new Date().toISOString().slice(0,10)}.doc`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showStatus('✅ DOC salvato con successo!', 'success');
+            } catch (error) {
+                console.error('Errore esportazione DOC:', error);
+                showStatus('❌ Errore durante l\'esportazione DOC', 'error');
+            }
+        });
+
+        // Cancella
+        clearBtn.addEventListener('click', () => {
+            if (confirm('Sei sicuro di voler cancellare tutto?')) {
+                if (isRecording) stopRecording();
+                if (fileTranscriptionActive) stopFileTranscription();
+                
+                finalTranscript = '';
+                fileTranscript = '';
+                mainTranscript.textContent = 'Il testo trascritto apparirà qui. Puoi modificarlo prima dell\'analisi.';
+                liveTranscript.textContent = 'La trascrizione in tempo reale apparirà qui...';
+                liveFileTranscript.style.display = 'none';
+                liveFileTranscript.textContent = 'La trascrizione apparirà qui in tempo reale...';
+                pastedText.value = '';
+                analysisResults.innerHTML = '';
+                currentAudioFile = null;
+                audioFileName.textContent = '';
+                audioPlayer.style.display = 'none';
+                audioPlayer.src = '';
+                transcribeAudioBtn.disabled = true;
+                transcribeAudioBtn.style.display = 'inline-flex';
+                stopTranscriptionBtn.style.display = 'none';
+                transcriptionProgress.style.display = 'none';
+                progressBar.style.width = '0%';
+                
+                correctTextBtn.disabled = true;
+                summarizeBtn.disabled = true;
+                analyzeBtn.disabled = true;
+                identifySpeakersBtn.disabled = true;
+                exportPdfBtn.disabled = true;
+                exportDocBtn.disabled = true;
+                analysisInfo.style.display = 'block';
+                
+                showStatus('🗑️ Tutto cancellato', 'info');
+            }
+        });
+
+        // Utility: mostra status
+        function showStatus(message, type) {
+            statusDiv.innerHTML = type === 'loading' 
+                ? `<div class="spinner"></div><span>${message}</span>`
+                : message;
+            statusDiv.className = `status active ${type}`;
+            
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    statusDiv.classList.remove('active');
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
