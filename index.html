@@ -508,7 +508,7 @@
             line-height: 1.7;
             color: #374151;
         }
-.analysis-content ul,
+        .analysis-content ul,
         .analysis-content ol {
             margin-left: 20px;
             margin-top: 10px;
@@ -526,7 +526,7 @@
             font-size: 14px;
         }
         select, input[type="text"], input[type="password"], input[type="number"], textarea {
-            width: 100%;
+width: 100%;
             padding: 12px;
             border: 2px solid #e5e7eb;
             border-radius: 8px;
@@ -952,6 +952,12 @@
                 </div>
             </div>
 
+            <div class="info-box info" style="margin-bottom: 20px;">
+                <strong>ℹ️ Modalità Continua vs Interrotta</strong><br>
+                <strong>Continua (consigliata)</strong>: Registra e trascrive senza interruzioni. Il sistema si riavvia automaticamente dopo pause.<br>
+                <strong>Interrotta</strong>: Ferma la trascrizione automaticamente dopo una pausa. Meglio per registrazioni brevi o se hai problemi di stabilità.
+            </div>
+
             <div class="recording-controls">
                 <div class="control-row">
                     <div class="control-group">
@@ -973,7 +979,7 @@
                     <div class="control-group">
                         <span class="control-label">Modalità</span>
                         <div class="toggle-container">
-                            <span>Continua</span>
+<span>Continua</span>
                             <div id="continuousToggle" class="toggle-switch active">
                                 <div class="toggle-slider"></div>
                             </div>
@@ -998,7 +1004,7 @@
                     </button>
                     <button id="stopBtn" class="btn btn-danger" disabled>
                         <span>⏹️</span> Ferma
-</button>
+                    </button>
                     <button id="pauseBtn" class="btn btn-warning" disabled>
                         <span>⏸️</span> Pausa
                     </button>
@@ -1304,8 +1310,7 @@
                 <small style="color:#6b7280; display:block; margin-bottom:20px;">
                     Filtra le parole riconosciute con confidenza inferiore a questa soglia. Valori più alti = maggiore precisione ma meno parole.
                 </small>
-                
-                <label for="groqApiKey">🔑 Groq API Key</label>
+<label for="groqApiKey">🔑 Groq API Key</label>
                 <input type="password" id="groqApiKey" placeholder="gsk_...">
                 <small style="color:#6b7280; display:block; margin-top:5px;">
                     Necessaria per: trascrizione file audio (Whisper), analisi AI, riassunti, sentiment analysis, ecc.<br>
@@ -1346,6 +1351,8 @@
     let interimTranscript = '';
     let finalTranscript = '';
     let wakeLock = null; // Wake Lock per mantenere schermo attivo
+    let recognitionStartTime = null; // Timestamp ultimo avvio recognition
+    let recognitionRestartCount = 0; // Contatore riavvii consecutivi
     
     // Configurazione
     const config = {
@@ -1397,8 +1404,7 @@
     const summarizeBtn = document.getElementById('summarizeBtn');
     const analyzeBtn = document.getElementById('analyzeBtn');
     const sentimentBtn = document.getElementById('sentimentBtn');
-    const keywordsBtn =
-document.getElementById('keywordsBtn');
+    const keywordsBtn = document.getElementById('keywordsBtn');
     const actionItemsBtn = document.getElementById('actionItemsBtn');
     
     // Bottoni export
@@ -1643,6 +1649,9 @@ document.getElementById('keywordsBtn');
         });
         
         recognition.onstart = function() {
+            recognitionStartTime = Date.now();
+            recognitionRestartCount = 0; // Reset contatore quando parte correttamente
+            
             console.log('✅ 🎤 Riconoscimento vocale AVVIATO - Lingua:', recognition.lang);
             console.log('📢 PARLA ORA! Il microfono è attivo e in ascolto...');
             const wakeLockStatus = wakeLock ? ' 🔋 Schermo attivo' : '';
@@ -1695,8 +1704,7 @@ document.getElementById('keywordsBtn');
                 const result = event.results[i];
                 
                 console.log('  Result', i, '- isFinal:', result.isFinal, '- alternatives:', result.length);
-                
-                // Scegli l'alternativa con la confidenza più alta
+ // Scegli l'alternativa con la confidenza più alta
                 let bestTranscript = result[0].transcript;
                 let bestConfidence = result[0].confidence || 0.5;
                 
@@ -1808,21 +1816,70 @@ document.getElementById('keywordsBtn');
         };
         
         recognition.onend = function() {
-            console.log('🔴 Recognition ENDED - isRecording:', isRecording, '| isPaused:', isPaused, '| continuous:', config.continuousMode);
+            const now = Date.now();
+            const recognitionDuration = recognitionStartTime ? now - recognitionStartTime : 0;
+            
+            console.log('🔴 Recognition ENDED - Duration:', recognitionDuration + 'ms', '| isRecording:', isRecording, '| isPaused:', isPaused, '| continuous:', config.continuousMode);
+            
             if (isRecording && !isPaused && config.continuousMode) {
-                // Riavvia automaticamente se in modalità continua
+                // Se il recognition si è chiuso troppo velocemente (< 1 secondo), potrebbe essere un loop
+                if (recognitionDuration < 1000) {
+                    recognitionRestartCount++;
+                    console.warn('⚠️ Recognition chiuso rapidamente (' + recognitionDuration + 'ms) - Restart #' + recognitionRestartCount);
+                    
+                    // Se ci sono troppi riavvii rapidi (> 5), aumentiamo il delay
+                    if (recognitionRestartCount > 5) {
+                        console.error('❌ Troppi riavvii rapidi! Pausa di 3 secondi...');
+                        showStatus('⚠️ Sistema di riconoscimento vocale instabile. Riprovo tra 3 secondi...', 'warning');
+                        
+                        setTimeout(function() {
+                            if (isRecording && recognition) {
+                                try {
+                                    recognitionRestartCount = 0; // Reset contatore
+                                    recognition.start();
+                                    console.log('✅ Recognition riavviato dopo pausa');
+                                } catch(e) {
+                                    console.error('❌ Errore riavvio dopo pausa:', e);
+                                }
+                            }
+                        }, 3000);
+                        return;
+                    }
+                }
+                
+                // Riavvio normale in modalità continua
                 console.log('🔄 Riavvio automatico del riconoscimento in modalità continua...');
+                
+                // Delay basato sul numero di riavvii: più riavvii = delay maggiore
+                const delay = Math.min(300 + (recognitionRestartCount * 200), 2000);
+                console.log('⏱️ Delay riavvio:', delay + 'ms');
+                
                 setTimeout(function() {
-                    if (isRecording &&
-recognition) {
+                    if (isRecording && recognition) {
                         try {
                             recognition.start();
                             console.log('✅ Recognition riavviato con successo');
                         } catch(e) {
-                            console.error('❌ Errore riavvio recognition:', e);
+                            // Se il recognition è già in esecuzione, non è un errore
+                            if (e.message && e.message.includes('already started')) {
+                                console.log('ℹ️ Recognition già in esecuzione, skip riavvio');
+                            } else {
+                                console.error('❌ Errore riavvio recognition:', e);
+                                // In caso di errore, prova di nuovo dopo 1 secondo
+                                setTimeout(function() {
+                                    if (isRecording && recognition) {
+                                        try {
+                                            recognition.start();
+                                            console.log('✅ Recognition riavviato dopo retry');
+                                        } catch(retryErr) {
+                                            console.error('❌ Errore retry riavvio:', retryErr);
+                                        }
+                                    }
+                                }, 1000);
+                            }
                         }
                     }
-                }, 100);
+                }, delay);
             } else {
                 console.log('ℹ️ Recognition terminato senza riavvio');
             }
@@ -1971,7 +2028,7 @@ recognition) {
     }
     
     function stopRecording() {
-        isRecording = false;
+isRecording = false;
         isPaused = false;
         
         // Rilascia Wake Lock
@@ -2211,7 +2268,7 @@ recognition) {
                     const audioData = audioRequest.result;
                     if (audioData && audioData.data) {
                         const blob = new Blob([audioData.data], { type: 'audio/webm' });
-const url = URL.createObjectURL(blob);
+                        const url = URL.createObjectURL(blob);
                         recordedAudio.src = url;
                         recordedAudioSection.style.display = 'block';
                     }
@@ -2290,8 +2347,7 @@ const url = URL.createObjectURL(blob);
             showStatus('❌ Inserisci la tua API Key Groq per trascrivere il file audio', 'error');
             return;
         }
-        
-        showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading');
+showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading');
         
         const progressContainer = document.getElementById('uploadProgress');
         const progressFill = document.getElementById('progressFill');
@@ -2576,7 +2632,7 @@ const url = URL.createObjectURL(blob);
         
         // Rimuovi testo interim
         const interimDiv = document.getElementById('interimTextFile');
-        if (interimDiv) {
+if (interimDiv) {
             interimDiv.remove();
         }
         
@@ -2691,7 +2747,7 @@ const url = URL.createObjectURL(blob);
         if (result) addAnalysisSection('Riassunto Dettagliato', result, '📝');
     });
     
-   analyzeBtn.addEventListener('click', async function() {
+    analyzeBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
@@ -2970,8 +3026,7 @@ const url = URL.createObjectURL(blob);
             showStatus('⚠️ Inserisci del testo', 'error');
             return;
         }
-        
-        const prompt = 'Analizza il seguente testo e identifica i diversi parlanti. ' +
+const prompt = 'Analizza il seguente testo e identifica i diversi parlanti. ' +
             'Riformatta il testo aggiungendo [Parlante X]: prima di ogni intervento. ' +
             'Se non ci sono parlanti chiari, suggerisci una possibile divisione basata sul contesto:\n\n' + text;
         
@@ -3000,7 +3055,8 @@ const url = URL.createObjectURL(blob);
         if (!confirm('⚠️ Sei sicuro di voler cancellare TUTTE le sessioni salvate? Questa azione non può essere annullata.')) {
             return;
         }
- if (!db) {
+        
+        if (!db) {
             showStatus('❌ Database non inizializzato', 'error');
             return;
         }
