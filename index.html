@@ -598,7 +598,7 @@
             gap: 3px;
             margin: 20px 0;
         }
-        .visualizer-bar {
+.visualizer-bar {
             width: 4px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             border-radius: 2px;
@@ -1060,6 +1060,11 @@
 
         <!-- Tab: File Upload -->
         <div id="tab-file" class="tab-content">
+            <div class="info-box warning" style="margin-bottom: 20px;">
+                <strong>🔑 API Key Richiesta</strong><br>
+                Per trascrivere file audio, inserisci la tua API Key Groq nella sezione Impostazioni. La trascrizione usa Groq Whisper Large V3.
+            </div>
+            
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📤</div>
                 <h3>Trascina un file audio qui</h3>
@@ -1080,8 +1085,26 @@
 
             <div id="fileTranscriptArea" style="display:none;">
                 <h3>📄 Trascrizione del File</h3>
+                
                 <div id="fileTranscript" class="transcript-area empty">
                     La trascrizione apparirà qui...
+                </div>
+                
+                <!-- Controlli per trascrizione in tempo reale -->
+                <div style="margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 10px;">
+                    <div class="info-box info" style="margin-bottom: 15px;">
+                        <strong>🎙️ Trascrizione Live Aggiuntiva</strong><br>
+                        Vuoi aggiungere più contenuto? Riproduci il file audio (o parlane) e clicca "Avvia Trascrizione Live" per continuare a trascrivere tramite microfono.
+                    </div>
+                    
+                    <div class="button-group">
+                        <button id="startLiveTranscriptionBtn" class="btn btn-primary">
+                            <span>🎤</span> Avvia Trascrizione Live
+                        </button>
+                        <button id="stopLiveTranscriptionBtn" class="btn btn-danger" disabled style="display:none;">
+                            <span>⏹️</span> Ferma Trascrizione
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1124,7 +1147,7 @@
             </div>
 
             <!-- Analysis Tools -->
-            <div class="button-group" style="margin-top:20px;">
+                    <div class="button-group" style="margin-top:20px;">
                 <button id="correctTextBtn" class="btn btn-primary" disabled>
                     <span>✨</span> Correggi Testo
                 </button>
@@ -1290,11 +1313,13 @@
     // ============================================
     
     let recognition = null;
+    let liveFileRecognition = null; // Riconoscimento per file audio
     let mediaRecorder = null;
     let recordedChunks = [];
     let recordedBlob = null;
     let isRecording = false;
     let isPaused = false;
+    let isLiveTranscribing = false; // Flag per trascrizione live del file
     let transcript = "";
     let speakers = new Map();
     let currentSpeaker = 1;
@@ -1376,6 +1401,10 @@
     const autoSaveToggle = document.getElementById('autoSaveToggle');
     const saveAudioToggle = document.getElementById('saveAudioToggle');
     
+    // Pulsanti trascrizione live file audio
+    const startLiveTranscriptionBtn = document.getElementById('startLiveTranscriptionBtn');
+    const stopLiveTranscriptionBtn = document.getElementById('stopLiveTranscriptionBtn');
+    
     // ============================================
     // WAKE LOCK - Mantieni schermo attivo durante registrazione
     // ============================================
@@ -1438,7 +1467,6 @@
     // ============================================
     // INIZIALIZZAZIONE DATABASE
     // ============================================
-    
     function initDB() {
         return new Promise(function(resolve, reject) {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -1582,7 +1610,7 @@
             return false;
         }
         
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
         recognition = new SpeechRecognition();
         
         // Configurazione ottimizzata per migliore riconoscimento
@@ -1882,7 +1910,8 @@
         // Rilascia Wake Lock
         releaseWakeLock();
         
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        if (mediaRecorder &&
+mediaRecorder.state !== 'inactive') {
             try {
                 mediaRecorder.stop();
             } catch(e) {
@@ -2184,49 +2213,309 @@
         }
     });
     
-    function handleAudioFile(file) {
+    async function handleAudioFile(file) {
         if (file.size > 100 * 1024 * 1024) {
             showStatus('❌ File troppo grande (max 100MB)', 'error');
             return;
         }
         
-        showStatus('📤 Elaborazione file audio...', 'loading');
+        const key = groqApiKey.value.trim();
+        if (!key) {
+            showStatus('❌ Inserisci la tua API Key Groq per trascrivere il file audio', 'error');
+            return;
+        }
+        
+        showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading');
         
         const progressContainer = document.getElementById('uploadProgress');
         const progressFill = document.getElementById('progressFill');
         const progressPercent = document.getElementById('progressPercent');
         
         progressContainer.style.display = 'block';
+        progressFill.style.width = '20%';
+        progressPercent.textContent = '20%';
         
-        // Simulate progress (in produzione useresti l'API di trascrizione)
-        let progress = 0;
-        const progressInterval = setInterval(function() {
-            progress += 10;
-            progressFill.style.width = progress + '%';
-            progressPercent.textContent = progress + '%';
+        try {
+            // Crea FormData in modo sicuro
+            const formData = new FormData();
             
-            if (progress >= 100) {
-                clearInterval(progressInterval);
+            // Crea un nuovo Blob dal file per evitare problemi di clonazione
+            const fileBlob = new Blob([file], { type: file.type });
+            formData.append('file', fileBlob, file.name);
+            formData.append('model', 'whisper-large-v3');
+            formData.append('response_format', 'verbose_json');
+            
+            // Estrai solo il codice lingua (es: 'it' da 'it-IT')
+            const langCode = languageSelect.value.split('-')[0];
+            formData.append('language', langCode);
+            
+            progressFill.style.width = '40%';
+            progressPercent.textContent = '40%';
+            
+            console.log('📤 Invio file a Groq Whisper API...');
+            
+            // Chiama Groq Whisper API
+            // Non specificare Content-Type, lascia che fetch lo gestisca automaticamente
+            const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + key
+                    // NON includere Content-Type - fetch lo gestisce automaticamente con FormData
+                },
+                body: formData
+            });
+            
+            progressFill.style.width = '70%';
+            progressPercent.textContent = '70%';
+            
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.error('Errore API:', errorText);
+                throw new Error('Errore API Groq Whisper: ' + res.status + ' - ' + res.statusText);
+            }
+            
+            const data = await res.json();
+            console.log('✅ Risposta ricevuta da Groq Whisper');
+            
+            progressFill.style.width = '90%';
+            progressPercent.textContent = '90%';
+            
+            // Processa il risultato
+            let transcribedText = data.text || '';
+            
+            // Se ci sono segmenti con speaker diarization, usali
+            if (data.segments && data.segments.length > 0) {
+                // Raggruppa segmenti per parlante (simulato)
+                transcribedText = '';
+                let lastSpeaker = 1;
+                
+                data.segments.forEach(function(segment, index) {
+                    // Cambia parlante ogni 2-3 segmenti (simulazione)
+                    if (index % 3 === 0 && index > 0) {
+                        lastSpeaker = lastSpeaker === config.maxSpeakers ? 1 : lastSpeaker + 1;
+                    }
+                    transcribedText += '[Parlante ' + lastSpeaker + ']: ' + segment.text.trim() + '\n';
+                });
+            } else {
+                // Nessun segmento, usa il testo completo
+                transcribedText = '[Parlante 1]: ' + transcribedText;
+            }
+            
+            progressFill.style.width = '100%';
+            progressPercent.textContent = '100%';
+            
+            // Mostra il risultato
+            setTimeout(function() {
                 progressContainer.style.display = 'none';
                 
-                // Simulate transcription result
-                const mockTranscript = '[Trascrizione automatica del file ' + file.name + ']\n\n' +
-                    '[Parlante 1]: Questo è un esempio di trascrizione del file audio caricato.\n' +
-                    '[Parlante 2]: Il sistema identificherà automaticamente i diversi parlanti.\n' +
-                    '[Parlante 1]: E assegnerà colori diversi per una migliore visualizzazione.';
+                // Crea segmenti visuali
+                const lines = transcribedText.split('\n').filter(function(l) { return l.trim(); });
+                const fileTranscriptDiv = document.getElementById('fileTranscript');
+                fileTranscriptDiv.innerHTML = '';
                 
-                document.getElementById('fileTranscript').innerHTML = createSpeakerSegment(mockTranscript, 1, 0.9).outerHTML;
-                document.getElementById('fileTranscriptArea').style.display = 'block';
-                
-                transcript = mockTranscript;
-                mainTranscript.innerHTML = document.getElementById('fileTranscript').innerHTML;
-                document.getElementById('transcriptSection').style.display = 'block';
+                lines.forEach(function(line) {
+                    const match = line.match(/\[Parlante (\d+)\]: (.+)/);
+                    if (match) {
+                        const speakerId = parseInt(match[1]);
+                        const text = match[2];
+                        const segment = createSpeakerSegment(text, speakerId, 0.95);
+                        fileTranscriptDiv.appendChild(segment);
+                    } else if (line.trim()) {
+                        const segment = createSpeakerSegment(line, 1, 0.95);
+                        fileTranscriptDiv.appendChild(segment);
+                    }
+                });
+mainTranscript.innerHTML
+document.getElementById('transcriptSection').style.display = 'block';
                 document.getElementById('analysisInfo').style.display = 'none';
                 enableAnalysisButtons();
                 
-                showStatus('✅ File elaborato con successo!', 'success');
+                showStatus('✅ Trascrizione completata! (' + file.name + ')', 'success');
+            }, 500);
+            
+        } catch (err) {
+            progressContainer.style.display = 'none';
+            console.error('Errore trascrizione:', err);
+            showStatus('❌ Errore trascrizione: ' + err.message, 'error');
+        }
+    }
+    
+    // ============================================
+    // TRASCRIZIONE LIVE FILE AUDIO
+    // ============================================
+    
+    async function startLiveFileTranscription() {
+        if (isLiveTranscribing) {
+            showStatus('⚠️ Trascrizione già in corso', 'warning');
+            return;
+        }
+        
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            showStatus('❌ Il tuo browser non supporta il riconoscimento vocale', 'error');
+            return;
+        }
+        
+        try {
+            // Richiedi accesso al microfono
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+            liveFileRecognition = new SpeechRecognition();
+            
+            liveFileRecognition.continuous = true;
+            liveFileRecognition.interimResults = true;
+            liveFileRecognition.maxAlternatives = 5;
+            liveFileRecognition.lang = languageSelect.value;
+            
+            const fileTranscriptDiv = document.getElementById('fileTranscript');
+            fileTranscriptDiv.classList.remove('empty');
+            if (fileTranscriptDiv.textContent === 'La trascrizione apparirà qui...') {
+                fileTranscriptDiv.innerHTML = '';
             }
-        }, 200);
+            
+            liveFileRecognition.onstart = function() {
+                isLiveTranscribing = true;
+                startLiveTranscriptionBtn.disabled = true;
+                startLiveTranscriptionBtn.style.display = 'none';
+                stopLiveTranscriptionBtn.disabled = false;
+                stopLiveTranscriptionBtn.style.display = 'inline-flex';
+                showStatus('🎤 Trascrizione live attiva - Riproduci il file audio!', 'loading');
+                console.log('🎤 Trascrizione live avviata per file audio');
+            };
+            
+            liveFileRecognition.onresult = function(event) {
+                let interimText = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    
+                    let bestTranscript = result[0].transcript;
+                    let bestConfidence = result[0].confidence || 0.5;
+                    
+                    for (let j = 1; j < result.length && j < 3; j++) {
+                        const altConfidence = result[j].confidence || 0;
+                        if (altConfidence > bestConfidence) {
+                            bestTranscript = result[j].transcript;
+                            bestConfidence = altConfidence;
+                        }
+                    }
+                    
+                    const transcriptText = bestTranscript.trim();
+                    const confidence = bestConfidence;
+                    
+                    if (result.isFinal) {
+                        console.log('✅ Testo dal file:', transcriptText, '| Confidenza:', (confidence * 100).toFixed(0) + '%');
+                        
+                        // Rimuovi testo interim
+                        const interimDiv = document.getElementById('interimTextFile');
+                        if (interimDiv) {
+                            interimDiv.remove();
+                        }
+                        
+                        // Rileva cambio parlante
+                        const speakerId = detectSpeakerChange(transcriptText, confidence);
+                        
+                        // Aggiungi segmento
+                        const segment = createSpeakerSegment(transcriptText, speakerId, confidence);
+                        fileTranscriptDiv.appendChild(segment);
+                        
+                        // Aggiorna transcript globale
+                        transcript += '[Parlante ' + speakerId + ']: ' + transcriptText + '\n';
+                        
+                        // Aggiorna anche il transcript principale
+                        mainTranscript.innerHTML = fileTranscriptDiv.innerHTML;
+                        document.getElementById('transcriptSection').style.display = 'block';
+                        document.getElementById('analysisInfo').style.display = 'none';
+                        enableAnalysisButtons();
+                        
+                        // Auto scroll
+                        fileTranscriptDiv.scrollTop = fileTranscriptDiv.scrollHeight;
+                        
+                    } else {
+                        interimText += transcriptText;
+                    }
+                }
+                
+                // Mostra risultati interim
+                if (interimText) {
+                    let tempDiv = document.getElementById('interimTextFile');
+                    if (!tempDiv) {
+                        tempDiv = document.createElement('div');
+                        tempDiv.id = 'interimTextFile';
+                        tempDiv.style.opacity = '0.7';
+                        tempDiv.style.fontStyle = 'italic';
+                        tempDiv.style.color = '#667eea';
+                        tempDiv.style.padding = '10px';
+                        fileTranscriptDiv.appendChild(tempDiv);
+                    }
+                    tempDiv.textContent = '🎤 ' + interimText;
+                    fileTranscriptDiv.scrollTop = fileTranscriptDiv.scrollHeight;
+                }
+            };
+            
+            liveFileRecognition.onerror = function(event) {
+                console.error('Errore trascrizione live:', event.error);
+                
+                if (event.error === 'no-speech') {
+                    // Normale, non mostrare errore
+                } else if (event.error === 'audio-capture') {
+                    showStatus('❌ Errore microfono', 'error');
+                    stopLiveFileTranscription();
+                } else if (event.error === 'not-allowed') {
+                    showStatus('❌ Permesso microfono negato', 'error');
+                    stopLiveFileTranscription();
+                } else {
+                    showStatus('❌ Errore: ' + event.error, 'error');
+                }
+            };
+            
+            liveFileRecognition.onend = function() {
+                if (isLiveTranscribing) {
+                    // Riavvia automaticamente
+                    setTimeout(function() {
+                        if (isLiveTranscribing && liveFileRecognition) {
+                            try {
+                                liveFileRecognition.start();
+                            } catch(e) {
+                                console.log('Riavvio trascrizione live:', e);
+                            }
+                        }
+                    }, 100);
+                }
+            };
+            
+            liveFileRecognition.start();
+            
+        } catch (err) {
+            console.error('Errore avvio trascrizione live:', err);
+            showStatus('❌ Errore accesso microfono: ' + err.message, 'error');
+        }
+    }
+    
+    function stopLiveFileTranscription() {
+        isLiveTranscribing = false;
+        
+        if (liveFileRecognition) {
+            try {
+                liveFileRecognition.stop();
+            } catch(e) {
+                console.error('Errore stop trascrizione live:', e);
+            }
+            liveFileRecognition = null;
+        }
+        
+        // Rimuovi testo interim
+        const interimDiv = document.getElementById('interimTextFile');
+        if (interimDiv) {
+            interimDiv.remove();
+        }
+        
+        startLiveTranscriptionBtn.disabled = false;
+        startLiveTranscriptionBtn.style.display = 'inline-flex';
+        stopLiveTranscriptionBtn.disabled = true;
+        stopLiveTranscriptionBtn.style.display = 'none';
+        
+        showStatus('⏹️ Trascrizione live fermata', 'info');
     }
     
     // ============================================
@@ -2297,8 +2586,7 @@
     correctTextBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
-        
-        const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l\'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n' + text;
+const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l\'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (!result) return;
@@ -2567,9 +2855,15 @@
     });
     
     // ============================================
-    // TEXT ANALYSIS
+    // LIVE FILE TRANSCRIPTION
     // ============================================
     
+    startLiveTranscriptionBtn.addEventListener('click', startLiveFileTranscription);
+    stopLiveTranscriptionBtn.addEventListener('click', stopLiveFileTranscription);
+    
+    // ============================================
+    // TEXT ANALYSIS
+    // ============================================
     document.getElementById('analyzeTextBtn').addEventListener('click', function() {
         const text = pastedText.value.trim();
         if (!text) {
