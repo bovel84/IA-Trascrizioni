@@ -508,7 +508,7 @@
             line-height: 1.7;
             color: #374151;
         }
-        .analysis-content ul,
+.analysis-content ul,
         .analysis-content ol {
             margin-left: 20px;
             margin-top: 10px;
@@ -598,7 +598,7 @@
             gap: 3px;
             margin: 20px 0;
         }
-.visualizer-bar {
+        .visualizer-bar {
             width: 4px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             border-radius: 2px;
@@ -998,7 +998,7 @@
                     </button>
                     <button id="stopBtn" class="btn btn-danger" disabled>
                         <span>⏹️</span> Ferma
-                    </button>
+</button>
                     <button id="pauseBtn" class="btn btn-warning" disabled>
                         <span>⏸️</span> Pausa
                     </button>
@@ -1137,6 +1137,12 @@
                 <strong>ℹ️ Area Analisi</strong><br>
                 Registra o carica un audio per abilitare le funzioni di analisi avanzate.
             </div>
+            
+            <div class="info-box warning" style="margin-bottom: 20px;">
+                <strong>🔑 Configurazione Richiesta</strong><br>
+                Per usare le funzioni di analisi AI, inserisci la tua <strong>Groq API Key</strong> nella sezione <strong>⚙️ Impostazioni</strong>.
+                La chiave è necessaria per: correzione testi, riassunti, analisi sentiment, keywords e action items.
+            </div>
 
             <!-- Main Transcript Display -->
             <div style="display:none;" id="transcriptSection">
@@ -1147,7 +1153,7 @@
             </div>
 
             <!-- Analysis Tools -->
-                    <div class="button-group" style="margin-top:20px;">
+            <div class="button-group" style="margin-top:20px;">
                 <button id="correctTextBtn" class="btn btn-primary" disabled>
                     <span>✨</span> Correggi Testo
                 </button>
@@ -1184,16 +1190,6 @@
                 </button>
             </div>
 
-            <!-- API Key Input -->
-            <div style="margin-top:30px;">
-                <label for="groqApiKey">🔑 Groq API Key (per analisi AI)</label>
-                <input type="password" id="groqApiKey" placeholder="gsk_...">
-                <small style="color:#6b7280;">
-                    Ottieni la tua chiave gratuita su 
-                    <a href="https://console.groq.com" target="_blank" style="color:#667eea;">console.groq.com</a>
-                </small>
-            </div>
-
             <!-- Analysis Results -->
             <div id="analysisResults" style="margin-top:30px;"></div>
         </div>
@@ -1228,10 +1224,6 @@
             
             <div style="margin-bottom:30px;">
                 <h4>🎤 Impostazioni Riconoscimento Vocale</h4>
-                
-                <label>Confidenza Minima (%)</label>
-                <input type="range" id="confidenceThreshold" min="0" max="100" value="70">
-                <span id="confidenceValue">70%</span>
                 
                 <label>Numero Massimo Parlanti</label>
                 <input type="number" id="maxSpeakers" min="2" max="10" value="5">
@@ -1299,6 +1291,27 @@
                         <input type="color" id="speaker5Color" value="#8b5cf6">
                     </div>
                 </div>
+            </div>
+
+            <div style="margin-bottom:30px;">
+                <h4>🤖 Impostazioni AI</h4>
+                
+                <label>🎯 Soglia di Confidenza Minima (%)</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <input type="range" id="confidenceThreshold" min="0" max="100" value="10" style="flex: 1;">
+                    <span id="confidenceValue" style="min-width: 45px; font-weight: 600; color: #667eea;">10%</span>
+                </div>
+                <small style="color:#6b7280; display:block; margin-bottom:20px;">
+                    Filtra le parole riconosciute con confidenza inferiore a questa soglia. Valori più alti = maggiore precisione ma meno parole.
+                </small>
+                
+                <label for="groqApiKey">🔑 Groq API Key</label>
+                <input type="password" id="groqApiKey" placeholder="gsk_...">
+                <small style="color:#6b7280; display:block; margin-top:5px;">
+                    Necessaria per: trascrizione file audio (Whisper), analisi AI, riassunti, sentiment analysis, ecc.<br>
+                    Ottieni la tua chiave gratuita su 
+                    <a href="https://console.groq.com" target="_blank" style="color:#667eea; text-decoration:underline;">console.groq.com</a>
+                </small>
             </div>
 
             <button id="saveSettingsBtn" class="btn btn-success" style="margin-top:20px;">
@@ -1384,7 +1397,8 @@
     const summarizeBtn = document.getElementById('summarizeBtn');
     const analyzeBtn = document.getElementById('analyzeBtn');
     const sentimentBtn = document.getElementById('sentimentBtn');
-    const keywordsBtn = document.getElementById('keywordsBtn');
+    const keywordsBtn =
+document.getElementById('keywordsBtn');
     const actionItemsBtn = document.getElementById('actionItemsBtn');
     
     // Bottoni export
@@ -1467,6 +1481,7 @@
     // ============================================
     // INIZIALIZZAZIONE DATABASE
     // ============================================
+    
     function initDB() {
         return new Promise(function(resolve, reject) {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -1607,6 +1622,7 @@
     function initSpeechRecognition() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             showStatus('❌ Il tuo browser non supporta il riconoscimento vocale', 'error');
+            console.error('❌ Browser non supportato per riconoscimento vocale');
             return false;
         }
         
@@ -1619,8 +1635,16 @@
         recognition.maxAlternatives = 5;  // Aumentato per migliori alternative
         recognition.lang = languageSelect.value;
         
+        console.log('🔧 Speech Recognition configurato:', {
+            continuous: recognition.continuous,
+            interimResults: recognition.interimResults,
+            maxAlternatives: recognition.maxAlternatives,
+            lang: recognition.lang
+        });
+        
         recognition.onstart = function() {
-            console.log('🎤 Riconoscimento vocale avviato - Lingua:', recognition.lang);
+            console.log('✅ 🎤 Riconoscimento vocale AVVIATO - Lingua:', recognition.lang);
+            console.log('📢 PARLA ORA! Il microfono è attivo e in ascolto...');
             const wakeLockStatus = wakeLock ? ' 🔋 Schermo attivo' : '';
             showStatus('🎤 Registrazione in corso... Inizia a parlare!' + wakeLockStatus, 'loading');
             visualizer.style.display = 'flex';
@@ -1639,18 +1663,46 @@
             }
         };
         
+        recognition.onaudiostart = function() {
+            console.log('🔊 Audio catturato dal microfono - Il browser sta ascoltando!');
+        };
+        
+        recognition.onsoundstart = function() {
+            console.log('🔉 Suono rilevato dal microfono!');
+        };
+        
+        recognition.onspeechstart = function() {
+            console.log('🗣️ Voce rilevata! Il riconoscimento sta processando...');
+        };
+        
+        recognition.onspeechend = function() {
+            console.log('🔇 Fine della voce rilevata');
+        };
+        
+        recognition.onsoundend = function() {
+            console.log('🔈 Fine del suono');
+        };
+        
+        recognition.onaudioend = function() {
+            console.log('🔇 Fine della cattura audio');
+        };
+        
         recognition.onresult = function(event) {
+            console.log('📝 RISULTATO RICEVUTO! Total results:', event.results.length);
             let interimText = '';
             
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
                 
+                console.log('  Result', i, '- isFinal:', result.isFinal, '- alternatives:', result.length);
+                
                 // Scegli l'alternativa con la confidenza più alta
                 let bestTranscript = result[0].transcript;
                 let bestConfidence = result[0].confidence || 0.5;
                 
-                // Controlla alternative se disponibili
-                for (let j = 1; j < result.length && j < 3; j++) {
+                // Log di tutte le alternative
+                for (let j = 0; j < result.length && j < 3; j++) {
+                    console.log('    Alt', j, ':', result[j].transcript, '| Confidence:', result[j].confidence);
                     const altConfidence = result[j].confidence || 0;
                     if (altConfidence > bestConfidence) {
                         bestTranscript = result[j].transcript;
@@ -1662,7 +1714,7 @@
                 const confidence = bestConfidence;
                 
                 if (result.isFinal) {
-                    console.log('✅ Testo riconosciuto:', transcriptText, '| Confidenza:', (confidence * 100).toFixed(0) + '%');
+                    console.log('✅ ✅ TESTO FINALE RICONOSCIUTO:', transcriptText, '| Confidenza:', (confidence * 100).toFixed(0) + '%');
                     
                     // Rimuovi il testo interim se presente
                     const interimDiv = document.getElementById('interimText');
@@ -1701,12 +1753,12 @@
                     
                 } else {
                     interimText += transcriptText;
+                    console.log('🔄 Testo TEMPORANEO (interim):', transcriptText);
                 }
             }
             
             // Mostra risultati interim
             if (interimText) {
-                console.log('🔄 Testo temporaneo:', interimText);
                 let tempDiv = document.getElementById('interimText');
                 if (!tempDiv) {
                     tempDiv = document.createElement('div');
@@ -1723,41 +1775,56 @@
         };
         
         recognition.onerror = function(event) {
-            console.error('Speech recognition error:', event.error);
+            console.error('❌ ERRORE Speech Recognition:', event.error, '| Messaggio:', event.message || 'nessun messaggio');
             
             if (event.error === 'no-speech') {
+                console.warn('⚠️ Nessuna voce rilevata - Assicurati di parlare vicino al microfono');
                 // Non mostrare notifiche continue per no-speech in modalità continua
                 // È normale non parlare per alcuni secondi
                 if (!config.continuousMode) {
-                    showStatus('🔇 Nessun audio rilevato', 'warning');
+                    showStatus('🔇 Nessun audio rilevato - Parla più forte o avvicinati al microfono', 'warning');
                 }
                 // L'evento onend gestirà il riavvio automatico
             } else if (event.error === 'audio-capture') {
-                showStatus('❌ Errore microfono', 'error');
+                console.error('❌ Errore cattura audio - Il microfono potrebbe non essere disponibile');
+                showStatus('❌ Errore microfono - Controlla che sia connesso e funzionante', 'error');
                 isRecording = false;
             } else if (event.error === 'not-allowed') {
-                showStatus('❌ Permesso microfono negato', 'error');
+                console.error('❌ Permesso microfono negato - Abilita il microfono nelle impostazioni del browser');
+                showStatus('❌ Permesso microfono negato - Clicca sull\'icona del lucchetto nella barra degli indirizzi', 'error');
                 isRecording = false;
             } else if (event.error === 'aborted') {
-                // Errore normale quando si stoppa manualmente
-                console.log('Recognition aborted');
+                console.log('ℹ️ Riconoscimento interrotto manualmente');
+            } else if (event.error === 'network') {
+                console.error('❌ Errore di rete - Verifica la connessione internet');
+                showStatus('❌ Errore di rete - Il riconoscimento vocale richiede connessione internet', 'error');
+            } else if (event.error === 'service-not-allowed') {
+                console.error('❌ Servizio non consentito - Verifica permessi browser');
+                showStatus('❌ Servizio non consentito - Controlla i permessi del browser', 'error');
             } else {
+                console.error('❌ Errore sconosciuto:', event.error);
                 showStatus('❌ Errore: ' + event.error, 'error');
             }
         };
         
         recognition.onend = function() {
+            console.log('🔴 Recognition ENDED - isRecording:', isRecording, '| isPaused:', isPaused, '| continuous:', config.continuousMode);
             if (isRecording && !isPaused && config.continuousMode) {
                 // Riavvia automaticamente se in modalità continua
+                console.log('🔄 Riavvio automatico del riconoscimento in modalità continua...');
                 setTimeout(function() {
-                    if (isRecording && recognition) {
+                    if (isRecording &&
+recognition) {
                         try {
                             recognition.start();
+                            console.log('✅ Recognition riavviato con successo');
                         } catch(e) {
-                            console.log('Riavvio recognition:', e);
+                            console.error('❌ Errore riavvio recognition:', e);
                         }
                     }
                 }, 100);
+            } else {
+                console.log('ℹ️ Recognition terminato senza riavvio');
             }
         };
         
@@ -1910,8 +1977,7 @@
         // Rilascia Wake Lock
         releaseWakeLock();
         
-        if (mediaRecorder &&
-mediaRecorder.state !== 'inactive') {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             try {
                 mediaRecorder.stop();
             } catch(e) {
@@ -2145,7 +2211,7 @@ mediaRecorder.state !== 'inactive') {
                     const audioData = audioRequest.result;
                     if (audioData && audioData.data) {
                         const blob = new Blob([audioData.data], { type: 'audio/webm' });
-                        const url = URL.createObjectURL(blob);
+const url = URL.createObjectURL(blob);
                         recordedAudio.src = url;
                         recordedAudioSection.style.display = 'block';
                     }
@@ -2325,8 +2391,12 @@ mediaRecorder.state !== 'inactive') {
                         fileTranscriptDiv.appendChild(segment);
                     }
                 });
-mainTranscript.innerHTML
-document.getElementById('transcriptSection').style.display = 'block';
+                
+                document.getElementById('fileTranscriptArea').style.display = 'block';
+                
+                transcript = transcribedText;
+                mainTranscript.innerHTML = fileTranscriptDiv.innerHTML;
+                document.getElementById('transcriptSection').style.display = 'block';
                 document.getElementById('analysisInfo').style.display = 'none';
                 enableAnalysisButtons();
                 
@@ -2586,7 +2656,8 @@ document.getElementById('transcriptSection').style.display = 'block';
     correctTextBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
-const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l\'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n' + text;
+        
+        const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l\'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (!result) return;
@@ -2620,7 +2691,7 @@ const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente tes
         if (result) addAnalysisSection('Riassunto Dettagliato', result, '📝');
     });
     
-    analyzeBtn.addEventListener('click', async function() {
+   analyzeBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
@@ -2841,6 +2912,12 @@ const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente tes
     document.getElementById('saveSettingsBtn').addEventListener('click', function() {
         localStorage.setItem('transcriptionConfig', JSON.stringify(config));
         
+        // Save Groq API Key
+        const apiKey = groqApiKey.value.trim();
+        if (apiKey) {
+            localStorage.setItem('groqKey', apiKey);
+        }
+        
         // Save speaker colors
         for (let i = 1; i <= 5; i++) {
             const colorInput = document.getElementById('speaker' + i + 'Color');
@@ -2864,6 +2941,7 @@ const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente tes
     // ============================================
     // TEXT ANALYSIS
     // ============================================
+    
     document.getElementById('analyzeTextBtn').addEventListener('click', function() {
         const text = pastedText.value.trim();
         if (!text) {
@@ -2922,8 +3000,7 @@ const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente tes
         if (!confirm('⚠️ Sei sicuro di voler cancellare TUTTE le sessioni salvate? Questa azione non può essere annullata.')) {
             return;
         }
-        
-        if (!db) {
+ if (!db) {
             showStatus('❌ Database non inizializzato', 'error');
             return;
         }
