@@ -2,7 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
     <title>Trascrizione Audio Pro - Analisi Avanzata e Multi-Parlante</title>
 
     <!-- Librerie esterne -->
@@ -12,12 +15,24 @@
 
     <style>
         /* RESET & BASE */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* Rimuove highlight touch su iOS */
+        }
+        html {
+            scroll-behavior: smooth; /* Scrolling fluido */
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            touch-action: manipulation; /* Migliora performance touch */
+            overflow-x: hidden; /* Previene scroll orizzontale */
         }
         .container {
             max-width: 1200px;
@@ -334,6 +349,9 @@
             gap: 8px;
             position: relative;
             overflow: hidden;
+            min-height: 44px; /* Touch target per mobile */
+            -webkit-user-select: none;
+            user-select: none;
         }
         .btn::before {
             content: '';
@@ -597,29 +615,226 @@
             50% { height: 40px; }
         }
 
-        /* RESPONSIVE */
+        /* RESPONSIVE - MOBILE FIRST */
         @media (max-width: 768px) {
-            .container {
-                padding: 20px;
+            body {
+                padding: 10px;
             }
+            
+            .container {
+                padding: 15px;
+                border-radius: 15px;
+            }
+            
             h1 {
                 font-size: 24px;
+                margin-bottom: 8px;
             }
+            
+            .subtitle {
+                font-size: 12px;
+                margin-bottom: 20px;
+            }
+            
+            /* Tabs mobile */
             .tabs {
                 gap: 5px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding-bottom: 5px;
+            }
+            .tabs::-webkit-scrollbar {
+                display: none;
             }
             .tab {
-                padding: 10px 15px;
-                font-size: 14px;
+                padding: 8px 12px;
+                font-size: 13px;
+                white-space: nowrap;
+                flex-shrink: 0;
             }
+            
+            /* Buttons mobile */
             .button-group {
                 flex-direction: column;
+                gap: 10px;
             }
             .btn {
                 width: 100%;
+                padding: 12px 20px;
+                font-size: 14px;
             }
+            
+            /* Stats grid mobile */
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .stat-box {
+                padding: 12px;
+            }
+            .stat-value {
+                font-size: 20px;
+            }
+            .stat-label {
+                font-size: 11px;
+            }
+            
+            /* Controls mobile */
+            .control-row {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .control-group {
+                width: 100%;
+            }
+            .control-label {
+                font-size: 12px;
+            }
+            select, input[type="text"], input[type="password"], input[type="number"], textarea {
+                font-size: 16px; /* Previene zoom su iOS */
+                padding: 10px;
+            }
+            
+            /* Transcript mobile */
+            .transcript-area {
+                height: 250px;
+                font-size: 14px;
+                padding: 12px;
+            }
+            
+            /* Segments mobile */
+            .transcript-segment {
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            .segment-header {
+                flex-wrap: wrap;
+                gap: 6px;
+                font-size: 12px;
+            }
+            .segment-text {
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            
+            /* Info boxes mobile */
+            .info-box {
+                padding: 12px;
+                font-size: 13px;
+            }
+            
+            /* Recording controls mobile */
+            .recording-controls {
+                padding: 15px;
+            }
+            
+            /* Toggle switches mobile */
+            .toggle-switch {
+                width: 44px;
+                height: 24px;
+            }
+            .toggle-slider {
+                width: 18px;
+                height: 18px;
+            }
+            .toggle-switch.active .toggle-slider {
+                transform: translateX(20px);
+            }
+            
+            /* Audio visualizer mobile */
+            .audio-visualizer {
+                height: 60px;
+            }
+            .visualizer-bar {
+                width: 3px;
+            }
+            
+            /* History cards mobile */
+            .history-card {
+                padding: 12px;
+            }
+            .history-info {
+                font-size: 12px;
+            }
+            
+            /* Drop zone mobile */
+            .drop-zone {
+                padding: 30px 15px;
+                font-size: 14px;
+            }
+            
+            /* Analysis results mobile */
+            .analysis-card {
+                padding: 15px;
+            }
+            
+            /* Tooltip mobile */
+            .tooltip .tooltiptext {
+                width: 150px;
+                margin-left: -75px;
+                font-size: 11px;
+            }
+            
+            /* Status mobile */
+            .status {
+                font-size: 13px;
+                padding: 10px 15px;
+            }
+        }
+        
+        /* MOBILE SMALL (< 480px) */
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+            
+            .container {
+                padding: 10px;
+                border-radius: 10px;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+            
+            .subtitle {
+                font-size: 11px;
+            }
+            
+            .tab {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            
+            .btn {
+                padding: 10px 15px;
+                font-size: 13px;
+            }
+            
             .stats-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .transcript-area {
+                height: 200px;
+                font-size: 13px;
+            }
+        }
+        
+        /* LANDSCAPE MOBILE */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .transcript-area {
+                height: 150px;
+            }
+            
+            .audio-visualizer {
+                height: 40px;
+            }
+            
+            .info-box {
+                padding: 8px;
+                font-size: 12px;
             }
         }
 
@@ -718,6 +933,22 @@
                     • Visualizzazione in tempo reale con colori distintivi<br>
                     • Salvataggio automatico audio e trascrizione<br>
                     • Analisi della confidenza per ogni segmento
+                </div>
+            </div>
+            <div class="info-box warning" style="margin-top: 10px;">
+                <div>
+                    <strong>💡 Suggerimenti per una migliore trascrizione:</strong><br>
+                    • Parla chiaramente e a volume normale<br>
+                    • Riduci rumori di fondo (chiudi finestre, silenzia notifiche)<br>
+                    • Usa un microfono di buona qualità se disponibile<br>
+                    • Verifica che il browser abbia i permessi per il microfono<br>
+                    • Apri la console (F12) per vedere i log di debug se la trascrizione non funziona
+                </div>
+            </div>
+            <div class="info-box success" style="margin-top: 10px; display:none;" id="wakeLockInfo">
+                <div>
+                    <strong>🔋 Modalità Schermo Attivo</strong><br>
+                    Il dispositivo manterrà lo schermo attivo durante la registrazione per garantire che la trascrizione continui senza interruzioni, anche con schermo spento o in background.
                 </div>
             </div>
 
@@ -1058,8 +1289,8 @@
     // INIZIALIZZAZIONE E VARIABILI GLOBALI
     // ============================================
     
-    let recognition;
-    let mediaRecorder;
+    let recognition = null;
+    let mediaRecorder = null;
     let recordedChunks = [];
     let recordedBlob = null;
     let isRecording = false;
@@ -1074,6 +1305,9 @@
     let sessions = [];
     let currentSessionId = null;
     let speakerColors = {};
+    let interimTranscript = '';
+    let finalTranscript = '';
+    let wakeLock = null; // Wake Lock per mantenere schermo attivo
     
     // Configurazione
     const config = {
@@ -1143,29 +1377,96 @@
     const saveAudioToggle = document.getElementById('saveAudioToggle');
     
     // ============================================
+    // WAKE LOCK - Mantieni schermo attivo durante registrazione
+    // ============================================
+    
+    async function requestWakeLock() {
+        if (!('wakeLock' in navigator)) {
+            console.log('Wake Lock API non supportata su questo browser');
+            return false;
+        }
+        
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('✅ Wake Lock attivato - Lo schermo rimarrà attivo durante la registrazione');
+            
+            // Mostra info box
+            const wakeLockInfo = document.getElementById('wakeLockInfo');
+            if (wakeLockInfo) {
+                wakeLockInfo.style.display = 'block';
+            }
+            
+            wakeLock.addEventListener('release', function() {
+                console.log('Wake Lock rilasciato');
+                if (wakeLockInfo) {
+                    wakeLockInfo.style.display = 'none';
+                }
+            });
+            
+            // Riattiva Wake Lock se la pagina torna visibile
+            document.addEventListener('visibilitychange', async function() {
+                if (wakeLock !== null && document.visibilityState === 'visible' && isRecording) {
+                    try {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log('Wake Lock riattivato dopo visibilità');
+                    } catch (err) {
+                        console.error('Errore riattivazione Wake Lock:', err);
+                    }
+                }
+            });
+            
+            return true;
+        } catch (err) {
+            console.error('Errore richiesta Wake Lock:', err.name, err.message);
+            return false;
+        }
+    }
+    
+    function releaseWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release()
+                .then(function() {
+                    wakeLock = null;
+                    console.log('Wake Lock rilasciato manualmente');
+                })
+                .catch(function(err) {
+                    console.error('Errore rilascio Wake Lock:', err);
+                });
+        }
+    }
+    
+    // ============================================
     // INIZIALIZZAZIONE DATABASE
     // ============================================
     
     function initDB() {
-        return new Promise((resolve, reject) => {
+        return new Promise(function(resolve, reject) {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
+            request.onerror = function() {
+                console.error('Errore apertura database:', request.error);
+                reject(request.error);
+            };
+            
+            request.onsuccess = function() {
                 db = request.result;
+                console.log('Database aperto con successo');
                 resolve(db);
             };
             
-            request.onupgradeneeded = (event) => {
+            request.onupgradeneeded = function(event) {
                 db = event.target.result;
+                console.log('Upgrade database necessario');
                 
                 if (!db.objectStoreNames.contains('sessions')) {
                     const sessionStore = db.createObjectStore('sessions', { keyPath: 'id' });
                     sessionStore.createIndex('date', 'date', { unique: false });
+                    console.log('Created sessions store');
                 }
                 
                 if (!db.objectStoreNames.contains('audio')) {
                     const audioStore = db.createObjectStore('audio', { keyPath: 'sessionId' });
+                    console.log('Created audio store');
                 }
             };
         });
@@ -1175,15 +1476,15 @@
     // GESTIONE TABS
     // ============================================
     
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
             const targetTab = tab.dataset.tab;
             
-            tabs.forEach(t => t.classList.remove('active'));
-            tabContents.forEach(tc => tc.classList.remove('active'));
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            tabContents.forEach(function(tc) { tc.classList.remove('active'); });
             
             tab.classList.add('active');
-            document.getElementById(`tab-${targetTab}`).classList.add('active');
+            document.getElementById('tab-' + targetTab).classList.add('active');
             
             if (targetTab === 'history') {
                 loadSessions();
@@ -1222,7 +1523,7 @@
         // Analisi basica del pattern di parlato
         const questions = (text.match(/\?/g) || []).length;
         const exclamations = (text.match(/!/g) || []).length;
-        const avgWordLength = text.split(' ').reduce((acc, word) => acc + word.length, 0) / text.split(' ').length;
+        const avgWordLength = text.split(' ').reduce(function(acc, word) { return acc + word.length; }, 0) / text.split(' ').length;
         
         // Confronta con pattern precedenti (semplificato)
         const isDifferent = Math.random() > 0.7; // Simulazione per demo
@@ -1230,24 +1531,26 @@
         return { questions, exclamations, avgWordLength, isDifferent };
     }
     
-    function createSpeakerSegment(text, speakerId, confidence = 1) {
+    function createSpeakerSegment(text, speakerId, confidence) {
+        if (typeof confidence === 'undefined') confidence = 1;
+        
         const segment = document.createElement('div');
-        segment.className = `transcript-segment speaker-${speakerId}-segment`;
+        segment.className = 'transcript-segment speaker-' + speakerId + '-segment';
         
         const header = document.createElement('div');
         header.className = 'segment-header';
         
         const speakerLabel = document.createElement('span');
-        speakerLabel.className = `speaker-${speakerId}`;
-        speakerLabel.textContent = `Parlante ${speakerId}`;
+        speakerLabel.className = 'speaker-' + speakerId;
+        speakerLabel.textContent = 'Parlante ' + speakerId;
         
         const timestamp = document.createElement('span');
         timestamp.className = 'segment-timestamp';
         timestamp.textContent = new Date().toLocaleTimeString('it-IT');
         
         const confidenceBadge = document.createElement('span');
-        confidenceBadge.className = `confidence-badge ${getConfidenceClass(confidence)}`;
-        confidenceBadge.textContent = `${Math.round(confidence * 100)}%`;
+        confidenceBadge.className = 'confidence-badge ' + getConfidenceClass(confidence);
+        confidenceBadge.textContent = Math.round(confidence * 100) + '%';
         
         header.appendChild(speakerLabel);
         header.appendChild(timestamp);
@@ -1274,7 +1577,7 @@
     // ============================================
     
     function initSpeechRecognition() {
-        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
             showStatus('❌ Il tuo browser non supporta il riconoscimento vocale', 'error');
             return false;
         }
@@ -1282,50 +1585,74 @@
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         
+        // Configurazione ottimizzata per migliore riconoscimento
         recognition.continuous = config.continuousMode;
         recognition.interimResults = true;
-        recognition.maxAlternatives = 3;
+        recognition.maxAlternatives = 5;  // Aumentato per migliori alternative
         recognition.lang = languageSelect.value;
         
-        let interimTranscript = '';
-        let finalTranscript = '';
-        
-        recognition.onstart = () => {
-            showStatus('🎤 Registrazione in corso...', 'loading');
+        recognition.onstart = function() {
+            console.log('🎤 Riconoscimento vocale avviato - Lingua:', recognition.lang);
+            const wakeLockStatus = wakeLock ? ' 🔋 Schermo attivo' : '';
+            showStatus('🎤 Registrazione in corso... Inizia a parlare!' + wakeLockStatus, 'loading');
             visualizer.style.display = 'flex';
             liveStats.style.display = 'grid';
             liveTranscript.classList.remove('empty');
-            liveTranscript.innerHTML = '';
+            if (liveTranscript.textContent === 'La trascrizione in tempo reale apparirà qui...') {
+                liveTranscript.innerHTML = '';
+            }
             sessionStartTime = Date.now();
             updateStats();
             
             if (config.autoSave) {
-                autoSaveInterval = setInterval(() => saveCurrentSession(true), config.autoSaveIntervalSec * 1000);
+                autoSaveInterval = setInterval(function() {
+                    saveCurrentSession(true);
+                }, config.autoSaveIntervalSec * 1000);
             }
         };
         
-        recognition.onresult = (event) => {
-            interimTranscript = '';
+        recognition.onresult = function(event) {
+            let interimText = '';
             
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
-                const transcriptText = result[0].transcript;
-                const confidence = result[0].confidence || 0.5;
+                
+                // Scegli l'alternativa con la confidenza più alta
+                let bestTranscript = result[0].transcript;
+                let bestConfidence = result[0].confidence || 0.5;
+                
+                // Controlla alternative se disponibili
+                for (let j = 1; j < result.length && j < 3; j++) {
+                    const altConfidence = result[j].confidence || 0;
+                    if (altConfidence > bestConfidence) {
+                        bestTranscript = result[j].transcript;
+                        bestConfidence = altConfidence;
+                    }
+                }
+                
+                const transcriptText = bestTranscript.trim();
+                const confidence = bestConfidence;
                 
                 if (result.isFinal) {
-                    finalTranscript = transcriptText;
+                    console.log('✅ Testo riconosciuto:', transcriptText, '| Confidenza:', (confidence * 100).toFixed(0) + '%');
                     
-                    // Detect speaker change
+                    // Rimuovi il testo interim se presente
+                    const interimDiv = document.getElementById('interimText');
+                    if (interimDiv) {
+                        interimDiv.remove();
+                    }
+                    
+                    // Rileva cambio parlante
                     const speakerId = detectSpeakerChange(transcriptText, confidence);
                     
-                    // Add to transcript with speaker identification
+                    // Aggiungi al transcript con identificazione parlante
                     const segment = createSpeakerSegment(transcriptText, speakerId, confidence);
                     liveTranscript.appendChild(segment);
                     
-                    // Update global transcript
-                    transcript += `[Parlante ${speakerId}]: ${transcriptText}\n`;
+                    // Aggiorna transcript globale
+                    transcript += '[Parlante ' + speakerId + ']: ' + transcriptText + '\n';
                     
-                    // Update speaker stats
+                    // Aggiorna statistiche parlanti
                     if (!speakers.has(speakerId)) {
                         speakers.set(speakerId, {
                             words: 0,
@@ -1344,39 +1671,65 @@
                     // Auto scroll
                     liveTranscript.scrollTop = liveTranscript.scrollHeight;
                     
-                    finalTranscript = '';
                 } else {
-                    interimTranscript += transcriptText;
+                    interimText += transcriptText;
                 }
             }
             
-            // Show interim results
-            if (interimTranscript) {
-                const tempDiv = document.getElementById('interimText') || document.createElement('div');
-                tempDiv.id = 'interimText';
-                tempDiv.style.opacity = '0.7';
-                tempDiv.style.fontStyle = 'italic';
-                tempDiv.textContent = '🎤 ' + interimTranscript;
-                
-                if (!document.getElementById('interimText')) {
+            // Mostra risultati interim
+            if (interimText) {
+                console.log('🔄 Testo temporaneo:', interimText);
+                let tempDiv = document.getElementById('interimText');
+                if (!tempDiv) {
+                    tempDiv = document.createElement('div');
+                    tempDiv.id = 'interimText';
+                    tempDiv.style.opacity = '0.7';
+                    tempDiv.style.fontStyle = 'italic';
+                    tempDiv.style.color = '#667eea';
                     liveTranscript.appendChild(tempDiv);
                 }
+                tempDiv.textContent = '🎤 ' + interimText;
+                // Auto scroll anche per interim
+                liveTranscript.scrollTop = liveTranscript.scrollHeight;
             }
         };
         
-        recognition.onerror = (event) => {
+        recognition.onerror = function(event) {
             console.error('Speech recognition error:', event.error);
-            showStatus(`❌ Errore: ${event.error}`, 'error');
             
             if (event.error === 'no-speech') {
-                showStatus('🔇 Nessun audio rilevato', 'warning');
+                // Non mostrare notifiche continue per no-speech in modalità continua
+                // È normale non parlare per alcuni secondi
+                if (!config.continuousMode) {
+                    showStatus('🔇 Nessun audio rilevato', 'warning');
+                }
+                // L'evento onend gestirà il riavvio automatico
+            } else if (event.error === 'audio-capture') {
+                showStatus('❌ Errore microfono', 'error');
+                isRecording = false;
+            } else if (event.error === 'not-allowed') {
+                showStatus('❌ Permesso microfono negato', 'error');
+                isRecording = false;
+            } else if (event.error === 'aborted') {
+                // Errore normale quando si stoppa manualmente
+                console.log('Recognition aborted');
+            } else {
+                showStatus('❌ Errore: ' + event.error, 'error');
             }
         };
         
-        recognition.onend = () => {
+        recognition.onend = function() {
             if (isRecording && !isPaused && config.continuousMode) {
                 // Riavvia automaticamente se in modalità continua
-                recognition.start();
+                setTimeout(function() {
+                    if (isRecording && recognition) {
+                        try {
+                            recognition.start();
+                        } catch(e) {
+                            console.log('Riavvio recognition:', e);
+                        }
+                    }
+                }, 100);
             }
         };
         
@@ -1389,7 +1742,7 @@
     
     function updateStats() {
         // Word count
-        const words = transcript.split(/\s+/).filter(w => w.length > 0).length;
+        const words = transcript.split(/\s+/).filter(function(w) { return w.length > 0; }).length;
         document.getElementById('wordCount').textContent = words;
         
         // Speaker count
@@ -1401,20 +1754,20 @@
             const minutes = Math.floor(duration / 60);
             const seconds = duration % 60;
             document.getElementById('duration').textContent = 
-                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
         }
         
         // Average confidence
         let totalConfidence = 0;
         let totalSegments = 0;
-        speakers.forEach(speaker => {
+        speakers.forEach(function(speaker) {
             totalConfidence += speaker.totalConfidence;
             totalSegments += speaker.segments;
         });
         
         if (totalSegments > 0) {
             const avgConfidence = (totalConfidence / totalSegments * 100).toFixed(0);
-            document.getElementById('confidenceAvg').textContent = `${avgConfidence}%`;
+            document.getElementById('confidenceAvg').textContent = avgConfidence + '%';
         }
     }
     
@@ -1428,60 +1781,97 @@
                 audio: {
                     echoCancellation: config.noiseFilter,
                     noiseSuppression: config.noiseFilter,
-                    sampleRate: 44100
+                    autoGainControl: true,  // Regola automaticamente il volume
+                    sampleRate: 48000,      // Sample rate più alto per migliore qualità
+                    channelCount: 1,        // Mono per speech recognition
+                    sampleSize: 16          // 16-bit audio
                 } 
             });
             
+            // Reset variabili
+            recordedChunks = [];
+            transcript = "";
+            speakers.clear();
+            currentSpeaker = 1;
+            
             mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm'
+                mimeType: 'audio/webm;codecs=opus'
             });
             
-            mediaRecorder.ondataavailable = (event) => {
+            mediaRecorder.ondataavailable = function(event) {
                 if (event.data.size > 0) {
                     recordedChunks.push(event.data);
                 }
             };
             
-            mediaRecorder.onstop = () => {
+            mediaRecorder.onstop = function() {
                 recordedBlob = new Blob(recordedChunks, { type: 'audio/webm' });
                 const url = URL.createObjectURL(recordedBlob);
                 recordedAudio.src = url;
                 recordedAudioSection.style.display = 'block';
                 
-                // Initialize waveform
-                if (wavesurfer) {
-                    wavesurfer.destroy();
+                // Initialize waveform se disponibile
+                if (typeof WaveSurfer !== 'undefined') {
+                    if (wavesurfer) {
+                        wavesurfer.destroy();
+                    }
+                    wavesurfer = WaveSurfer.create({
+                        container: '#waveform',
+                        waveColor: '#667eea',
+                        progressColor: '#764ba2',
+                        cursorColor: '#764ba2',
+                        barWidth: 2,
+                        barRadius: 3,
+                        responsive: true,
+                        height: 60,
+                        normalize: true
+                    });
+                    wavesurfer.loadBlob(recordedBlob);
                 }
-                wavesurfer = WaveSurfer.create({
-                    container: '#waveform',
-                    waveColor: '#667eea',
-                    progressColor: '#764ba2',
-                    cursorColor: '#764ba2',
-                    barWidth: 2,
-                    barRadius: 3,
-                    responsive: true,
-                    height: 60,
-                    normalize: true
-                });
-                wavesurfer.loadBlob(recordedBlob);
             };
             
-            mediaRecorder.start();
+            mediaRecorder.start(1000); // Registra in chunks di 1 secondo
             isRecording = true;
             
+            // Attiva Wake Lock per mantenere il dispositivo attivo
+            requestWakeLock().then(function(success) {
+                if (success) {
+                    console.log('🔋 Dispositivo manterrà lo schermo attivo');
+                } else {
+                    console.log('⚠️ Wake Lock non disponibile, lo schermo potrebbe spegnersi');
+                }
+            });
+            
+            // Aggiorna UI
             startBtn.disabled = true;
             stopBtn.disabled = false;
             pauseBtn.disabled = false;
             saveSessionBtn.disabled = false;
             startBtn.classList.add('recording');
             
-            // Start speech recognition
+            // Inizia riconoscimento vocale
             if (initSpeechRecognition()) {
-                recognition.start();
+                try {
+                    recognition.start();
+                } catch(e) {
+                    console.error('Errore avvio recognition:', e);
+                    // Prova a riavviare dopo un breve delay
+                    setTimeout(function() {
+                        if (recognition) {
+                            recognition.start();
+                        }
+                    }, 500);
+                }
             }
             
         } catch (err) {
+            console.error('Errore accesso microfono:', err);
             showStatus('❌ Errore accesso microfono: ' + err.message, 'error');
+            
+            // Reset UI in caso di errore
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            pauseBtn.disabled = true;
         }
     }
     
@@ -1489,17 +1879,30 @@
         isRecording = false;
         isPaused = false;
         
+        // Rilascia Wake Lock
+        releaseWakeLock();
+        
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
+            try {
+                mediaRecorder.stop();
+            } catch(e) {
+                console.error('Errore stop mediaRecorder:', e);
+            }
         }
         
         if (recognition) {
-            recognition.stop();
+            try {
+                recognition.stop();
+            } catch(e) {
+                console.error('Errore stop recognition:', e);
+            }
         }
         
         // Stop all streams
         if (mediaRecorder && mediaRecorder.stream) {
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            mediaRecorder.stream.getTracks().forEach(function(track) {
+                track.stop();
+            });
         }
         
         startBtn.disabled = false;
@@ -1565,10 +1968,14 @@
     // SALVATAGGIO SESSIONI
     // ============================================
     
-    async function saveCurrentSession(isAutoSave = false) {
-        if (!transcript) return;
+    function saveCurrentSession(isAutoSave) {
+        if (!transcript || !db) return;
         
-        const sessionId = currentSessionId || 'session_' + Date.now();
+        if (typeof isAutoSave === 'undefined') {
+            isAutoSave = false;
+        }
+        
+        const sessionId = currentSessionId || ('session_' + Date.now());
         currentSessionId = sessionId;
         
         const session = {
@@ -1583,38 +1990,72 @@
         };
         
         // Save to IndexedDB
-        const transaction = db.transaction(['sessions'], 'readwrite');
-        const store = transaction.objectStore('sessions');
-        store.put(session);
-        
-        // Save audio if available
-        if (recordedBlob && config.saveAudio) {
-            const audioTransaction = db.transaction(['audio'], 'readwrite');
-            const audioStore = audioTransaction.objectStore('audio');
+        try {
+            const transaction = db.transaction(['sessions'], 'readwrite');
+            const store = transaction.objectStore('sessions');
+            const request = store.put(session);
             
-            const reader = new FileReader();
-            reader.onload = () => {
-                audioStore.put({
-                    sessionId: sessionId,
-                    data: reader.result
-                });
+            request.onsuccess = function() {
+                // Save audio if available
+                if (recordedBlob && config.saveAudio) {
+                    // Leggi il blob prima di creare la transazione
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        // Crea la transazione solo dopo che il blob è stato letto
+                        try {
+                            const audioTransaction = db.transaction(['audio'], 'readwrite');
+                            const audioStore = audioTransaction.objectStore('audio');
+                            
+                            const audioRequest = audioStore.put({
+                                sessionId: sessionId,
+                                data: reader.result
+                            });
+                            
+                            audioRequest.onerror = function() {
+                                console.error('Errore salvataggio audio:', audioRequest.error);
+                            };
+                        } catch (err) {
+                            console.error('Errore transazione audio:', err);
+                        }
+                    };
+                    reader.readAsArrayBuffer(recordedBlob);
+                }
+                
+                if (!isAutoSave) {
+                    showStatus('💾 Sessione salvata con successo!', 'success');
+                }
             };
-            reader.readAsArrayBuffer(recordedBlob);
-        }
-        
-        if (!isAutoSave) {
-            showStatus('💾 Sessione salvata con successo!', 'success');
+            
+            request.onerror = function() {
+                console.error('Errore salvataggio sessione:', request.error);
+                if (!isAutoSave) {
+                    showStatus('❌ Errore nel salvataggio', 'error');
+                }
+            };
+        } catch (err) {
+            console.error('Errore database:', err);
         }
     }
     
-    async function loadSessions() {
+    function loadSessions() {
+        if (!db) {
+            console.error('Database non inizializzato');
+            return;
+        }
+        
         const transaction = db.transaction(['sessions'], 'readonly');
         const store = transaction.objectStore('sessions');
         const request = store.getAll();
         
-        request.onsuccess = () => {
-            sessions = request.result.sort((a, b) => new Date(b.date) - new Date(a.date));
+        request.onsuccess = function() {
+            sessions = request.result.sort(function(a, b) {
+                return new Date(b.date) - new Date(a.date);
+            });
             displaySessions();
+        };
+        
+        request.onerror = function() {
+            console.error('Errore caricamento sessioni:', request.error);
         };
     }
     
@@ -1625,7 +2066,7 @@
         }
         
         sessionsList.innerHTML = '';
-        sessions.forEach(session => {
+        sessions.forEach(function(session) {
             const sessionDiv = document.createElement('div');
             sessionDiv.className = 'session-item';
             
@@ -1634,34 +2075,28 @@
             const minutes = Math.floor(duration / 60);
             const seconds = duration % 60;
             
-            sessionDiv.innerHTML = `
-                <div class="session-info">
-                    <h4>Sessione del ${date.toLocaleDateString('it-IT')} ${date.toLocaleTimeString('it-IT')}</h4>
-                    <div class="session-meta">
-                        📝 ${session.wordCount} parole | ⏱️ ${minutes}:${seconds.toString().padStart(2, '0')} | 
-                        👥 ${session.speakers ? session.speakers.length : 1} parlanti | 🌍 ${session.language}
-                    </div>
-                </div>
-                <div class="session-actions">
-                    <button class="btn btn-sm btn-info" onclick="loadSession('${session.id}')">
-                        <span>📂</span> Carica
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteSession('${session.id}')">
-                        <span>🗑️</span>
-                    </button>
-                </div>
-            `;
+            sessionDiv.innerHTML = '<div class="session-info">' +
+                '<h4>Sessione del ' + date.toLocaleDateString('it-IT') + ' ' + date.toLocaleTimeString('it-IT') + '</h4>' +
+                '<div class="session-meta">' +
+                '📝 ' + session.wordCount + ' parole | ⏱️ ' + minutes + ':' + seconds.toString().padStart(2, '0') + ' | ' +
+                '👥 ' + (session.speakers ? session.speakers.length : 1) + ' parlanti | 🌍 ' + session.language +
+                '</div></div>' +
+                '<div class="session-actions">' +
+                '<button class="btn btn-sm btn-info" onclick="loadSession(\'' + session.id + '\')">' +
+                '<span>📂</span> Carica</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="deleteSession(\'' + session.id + '\')">' +
+                '<span>🗑️</span></button></div>';
             
             sessionsList.appendChild(sessionDiv);
         });
     }
     
-    window.loadSession = async function(sessionId) {
+    window.loadSession = function(sessionId) {
         const transaction = db.transaction(['sessions', 'audio'], 'readonly');
         const sessionStore = transaction.objectStore('sessions');
         const sessionRequest = sessionStore.get(sessionId);
         
-        sessionRequest.onsuccess = () => {
+        sessionRequest.onsuccess = function() {
             const session = sessionRequest.result;
             if (session) {
                 // Load transcript
@@ -1677,9 +2112,9 @@
                 const audioStore = transaction.objectStore('audio');
                 const audioRequest = audioStore.get(sessionId);
                 
-                audioRequest.onsuccess = () => {
+                audioRequest.onsuccess = function() {
                     const audioData = audioRequest.result;
-                    if (audioData) {
+                    if (audioData && audioData.data) {
                         const blob = new Blob([audioData.data], { type: 'audio/webm' });
                         const url = URL.createObjectURL(blob);
                         recordedAudio.src = url;
@@ -1688,8 +2123,8 @@
                 };
                 
                 // Switch to analysis tab
-                tabs.forEach(t => t.classList.remove('active'));
-                tabContents.forEach(tc => tc.classList.remove('active'));
+                tabs.forEach(function(t) { t.classList.remove('active'); });
+                tabContents.forEach(function(tc) { tc.classList.remove('active'); });
                 document.querySelector('[data-tab="analysis"]').classList.add('active');
                 document.getElementById('tab-analysis').classList.add('active');
                 
@@ -1699,7 +2134,7 @@
         };
     };
     
-    window.deleteSession = async function(sessionId) {
+    window.deleteSession = function(sessionId) {
         if (!confirm('Sei sicuro di voler eliminare questa sessione?')) return;
         
         const transaction = db.transaction(['sessions', 'audio'], 'readwrite');
@@ -1710,7 +2145,7 @@
         const audioStore = transaction.objectStore('audio');
         audioStore.delete(sessionId);
         
-        transaction.oncomplete = () => {
+        transaction.oncomplete = function() {
             loadSessions();
             showStatus('🗑️ Sessione eliminata', 'info');
         };
@@ -1720,18 +2155,20 @@
     // FILE UPLOAD
     // ============================================
     
-    uploadArea.addEventListener('click', () => audioFile.click());
+    uploadArea.addEventListener('click', function() {
+        audioFile.click();
+    });
     
-    uploadArea.addEventListener('dragover', (e) => {
+    uploadArea.addEventListener('dragover', function(e) {
         e.preventDefault();
         uploadArea.classList.add('dragover');
     });
     
-    uploadArea.addEventListener('dragleave', () => {
+    uploadArea.addEventListener('dragleave', function() {
         uploadArea.classList.remove('dragover');
     });
     
-    uploadArea.addEventListener('drop', (e) => {
+    uploadArea.addEventListener('drop', function(e) {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
         
@@ -1741,13 +2178,13 @@
         }
     });
     
-    audioFile.addEventListener('change', (e) => {
+    audioFile.addEventListener('change', function(e) {
         if (e.target.files.length > 0) {
             handleAudioFile(e.target.files[0]);
         }
     });
     
-    async function handleAudioFile(file) {
+    function handleAudioFile(file) {
         if (file.size > 100 * 1024 * 1024) {
             showStatus('❌ File troppo grande (max 100MB)', 'error');
             return;
@@ -1763,7 +2200,7 @@
         
         // Simulate progress (in produzione useresti l'API di trascrizione)
         let progress = 0;
-        const progressInterval = setInterval(() => {
+        const progressInterval = setInterval(function() {
             progress += 10;
             progressFill.style.width = progress + '%';
             progressPercent.textContent = progress + '%';
@@ -1773,11 +2210,10 @@
                 progressContainer.style.display = 'none';
                 
                 // Simulate transcription result
-                const mockTranscript = `[Trascrizione automatica del file ${file.name}]
-                
-[Parlante 1]: Questo è un esempio di trascrizione del file audio caricato.
-[Parlante 2]: Il sistema identificherà automaticamente i diversi parlanti.
-[Parlante 1]: E assegnerà colori diversi per una migliore visualizzazione.`;
+                const mockTranscript = '[Trascrizione automatica del file ' + file.name + ']\n\n' +
+                    '[Parlante 1]: Questo è un esempio di trascrizione del file audio caricato.\n' +
+                    '[Parlante 2]: Il sistema identificherà automaticamente i diversi parlanti.\n' +
+                    '[Parlante 1]: E assegnerà colori diversi per una migliore visualizzazione.';
                 
                 document.getElementById('fileTranscript').innerHTML = createSpeakerSegment(mockTranscript, 1, 0.9).outerHTML;
                 document.getElementById('fileTranscriptArea').style.display = 'block';
@@ -1824,7 +2260,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${key}`,
+                    'Authorization': 'Bearer ' + key,
                 },
                 body: JSON.stringify({
                     model: 'llama-3.1-70b-versatile',
@@ -1835,7 +2271,7 @@
             });
             
             if (!res.ok) {
-                throw new Error(`Errore API: ${res.status}`);
+                throw new Error('Errore API: ' + res.status);
             }
             
             const data = await res.json();
@@ -1846,23 +2282,23 @@
         }
     }
     
-    function addAnalysisSection(title, content, icon = '📊') {
+    function addAnalysisSection(title, content, icon) {
+        if (!icon) icon = '📊';
+        
         const div = document.createElement('div');
         div.className = 'analysis-section';
-        div.innerHTML = `
-            <h3>${icon} ${title}</h3>
-            <div class="analysis-content">${content.replace(/\n/g, '<br>')}</div>
-        `;
+        div.innerHTML = '<h3>' + icon + ' ' + title + '</h3>' +
+            '<div class="analysis-content">' + content.replace(/\n/g, '<br>') + '</div>';
         analysisResults.prepend(div);
         showStatus('✨ Analisi completata!', 'success');
     }
     
     // Event listeners per bottoni di analisi
-    correctTextBtn.addEventListener('click', async () => {
+    correctTextBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n${text}`;
+        const prompt = 'Correggi grammatica, punteggiatura e ortografia del seguente testo mantenendo l\'identificazione dei parlanti. Restituisci SOLO il testo corretto:\n\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (!result) return;
@@ -1871,7 +2307,7 @@
         // Parse and display with speaker colors
         const lines = result.split('\n');
         mainTranscript.innerHTML = '';
-        lines.forEach(line => {
+        lines.forEach(function(line) {
             const match = line.match(/\[Parlante (\d+)\]: (.*)/);
             if (match) {
                 const segment = createSpeakerSegment(match[2], parseInt(match[1]), 1);
@@ -1886,80 +2322,72 @@
         showStatus('✨ Testo corretto!', 'success');
     });
     
-    summarizeBtn.addEventListener('click', async () => {
+    summarizeBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Crea un riassunto dettagliato del seguente testo identificando i punti principali di ogni parlante. Usa un formato strutturato:\n\n${text}`;
+        const prompt = 'Crea un riassunto dettagliato del seguente testo identificando i punti principali di ogni parlante. Usa un formato strutturato:\n\n' + text;
         const result = await callGroqAPI(prompt);
         
         if (result) addAnalysisSection('Riassunto Dettagliato', result, '📝');
     });
     
-    analyzeBtn.addEventListener('click', async () => {
+    analyzeBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Analizza in modo approfondito questa conversazione:
-1. Identificazione dei parlanti e loro ruoli
-2. Tema principale e argomenti discussi
-3. Tono e dinamiche della conversazione
-4. Punti chiave per ogni parlante
-5. Conclusioni e azioni suggerite
-
-Testo:
-${text}`;
+        const prompt = 'Analizza in modo approfondito questa conversazione:\n' +
+            '1. Identificazione dei parlanti e loro ruoli\n' +
+            '2. Tema principale e argomenti discussi\n' +
+            '3. Tono e dinamiche della conversazione\n' +
+            '4. Punti chiave per ogni parlante\n' +
+            '5. Conclusioni e azioni suggerite\n\n' +
+            'Testo:\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (result) addAnalysisSection('Analisi Completa della Conversazione', result, '🔍');
     });
     
-    sentimentBtn.addEventListener('click', async () => {
+    sentimentBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Analizza il sentiment e le emozioni in questa conversazione per ogni parlante. Identifica:
-1. Sentiment generale (positivo/negativo/neutro)
-2. Emozioni principali espresse
-3. Cambiamenti di tono durante la conversazione
-4. Livello di accordo/disaccordo tra parlanti
-
-Testo:
-${text}`;
+        const prompt = 'Analizza il sentiment e le emozioni in questa conversazione per ogni parlante. Identifica:\n' +
+            '1. Sentiment generale (positivo/negativo/neutro)\n' +
+            '2. Emozioni principali espresse\n' +
+            '3. Cambiamenti di tono durante la conversazione\n' +
+            '4. Livello di accordo/disaccordo tra parlanti\n\n' +
+            'Testo:\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (result) addAnalysisSection('Analisi del Sentiment', result, '😊');
     });
     
-    keywordsBtn.addEventListener('click', async () => {
+    keywordsBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Estrai le parole chiave e i concetti principali da questa conversazione. Organizza per:
-1. Keywords principali (10-15)
-2. Argomenti ricorrenti
-3. Termini tecnici o specialistici
-4. Nomi propri e riferimenti
-
-Testo:
-${text}`;
+        const prompt = 'Estrai le parole chiave e i concetti principali da questa conversazione. Organizza per:\n' +
+            '1. Keywords principali (10-15)\n' +
+            '2. Argomenti ricorrenti\n' +
+            '3. Termini tecnici o specialistici\n' +
+            '4. Nomi propri e riferimenti\n\n' +
+            'Testo:\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (result) addAnalysisSection('Parole Chiave e Concetti', result, '🏷️');
     });
     
-    actionItemsBtn.addEventListener('click', async () => {
+    actionItemsBtn.addEventListener('click', async function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const prompt = `Identifica tutti gli action items, task e impegni presi in questa conversazione. Per ogni item specifica:
-1. Descrizione dell'azione
-2. Chi è responsabile (quale parlante)
-3. Scadenza o tempistica (se menzionata)
-4. Priorità suggerita
-
-Testo:
-${text}`;
+        const prompt = 'Identifica tutti gli action items, task e impegni presi in questa conversazione. Per ogni item specifica:\n' +
+            '1. Descrizione dell\'azione\n' +
+            '2. Chi è responsabile (quale parlante)\n' +
+            '3. Scadenza o tempistica (se menzionata)\n' +
+            '4. Priorità suggerita\n\n' +
+            'Testo:\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (result) addAnalysisSection('Action Items e Task', result, '✅');
@@ -1969,7 +2397,7 @@ ${text}`;
     // ESPORTAZIONE
     // ============================================
     
-    exportPdfBtn.addEventListener('click', () => {
+    exportPdfBtn.addEventListener('click', function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
@@ -1983,15 +2411,15 @@ ${text}`;
         
         doc.setFontSize(10);
         doc.setTextColor(0);
-        doc.text(`Data: ${new Date().toLocaleDateString('it-IT')} ${new Date().toLocaleTimeString('it-IT')}`, 15, 30);
-        doc.text(`Parlanti: ${speakers.size || 1} | Parole: ${text.split(/\s+/).length}`, 15, 35);
+        doc.text('Data: ' + new Date().toLocaleDateString('it-IT') + ' ' + new Date().toLocaleTimeString('it-IT'), 15, 30);
+        doc.text('Parlanti: ' + (speakers.size || 1) + ' | Parole: ' + text.split(/\s+/).length, 15, 35);
         
         // Content
         doc.setFontSize(12);
         const lines = doc.splitTextToSize(text, 180);
         let y = 45;
         
-        lines.forEach(line => {
+        lines.forEach(function(line) {
             if (y > 270) {
                 doc.addPage();
                 y = 20;
@@ -2004,7 +2432,7 @@ ${text}`;
         showStatus('📄 PDF salvato!', 'success');
     });
     
-    exportTxtBtn.addEventListener('click', () => {
+    exportTxtBtn.addEventListener('click', function() {
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
@@ -2013,7 +2441,7 @@ ${text}`;
         showStatus('📝 TXT salvato!', 'success');
     });
     
-    exportJsonBtn.addEventListener('click', () => {
+    exportJsonBtn.addEventListener('click', function() {
         const data = {
             date: new Date().toISOString(),
             language: languageSelect.value,
@@ -2025,10 +2453,10 @@ ${text}`;
         
         // Add analyses if available
         const analysisSections = analysisResults.querySelectorAll('.analysis-section');
-        analysisSections.forEach(section => {
+        analysisSections.forEach(function(section) {
             const title = section.querySelector('h3').textContent;
             const content = section.querySelector('.analysis-content').textContent;
-            data.analyses.push({ title, content });
+            data.analyses.push({ title: title, content: content });
         });
         
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2036,38 +2464,29 @@ ${text}`;
         showStatus('💾 JSON salvato!', 'success');
     });
     
-    exportDocxBtn.addEventListener('click', () => {
+    exportDocxBtn.addEventListener('click', function() {
         // For DOCX export, we'd need a library like docx.js
         // For now, export as HTML that can be opened in Word
         const text = transcript || mainTranscript.textContent;
         if (!text) return;
         
-        const html = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Trascrizione Audio</title>
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
-                    h1 { color: #667eea; }
-                    .speaker-1 { color: #3b82f6; font-weight: bold; }
-                    .speaker-2 { color: #10b981; font-weight: bold; }
-                    .speaker-3 { color: #f59e0b; font-weight: bold; }
-                    .speaker-4 { color: #ef4444; font-weight: bold; }
-                    .speaker-5 { color: #8b5cf6; font-weight: bold; }
-                    .segment { margin: 15px 0; padding: 10px; border-left: 3px solid #e5e7eb; }
-                </style>
-            </head>
-            <body>
-                <h1>Trascrizione Audio Pro</h1>
-                <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')} ${new Date().toLocaleTimeString('it-IT')}</p>
-                <p><strong>Parlanti:</strong> ${speakers.size || 1} | <strong>Parole:</strong> ${text.split(/\s+/).length}</p>
-                <hr>
-                ${mainTranscript.innerHTML}
-            </body>
-            </html>
-        `;
+        const html = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+            '<title>Trascrizione Audio</title>' +
+            '<style>' +
+            'body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }' +
+            'h1 { color: #667eea; }' +
+            '.speaker-1 { color: #3b82f6; font-weight: bold; }' +
+            '.speaker-2 { color: #10b981; font-weight: bold; }' +
+            '.speaker-3 { color: #f59e0b; font-weight: bold; }' +
+            '.speaker-4 { color: #ef4444; font-weight: bold; }' +
+            '.speaker-5 { color: #8b5cf6; font-weight: bold; }' +
+            '.segment { margin: 15px 0; padding: 10px; border-left: 3px solid #e5e7eb; }' +
+            '</style></head><body>' +
+            '<h1>Trascrizione Audio Pro</h1>' +
+            '<p><strong>Data:</strong> ' + new Date().toLocaleDateString('it-IT') + ' ' + new Date().toLocaleTimeString('it-IT') + '</p>' +
+            '<p><strong>Parlanti:</strong> ' + (speakers.size || 1) + ' | <strong>Parole:</strong> ' + text.split(/\s+/).length + '</p>' +
+            '<hr>' + mainTranscript.innerHTML +
+            '</body></html>';
         
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
         saveAs(blob, 'trascrizione_' + Date.now() + '.html');
@@ -2079,62 +2498,68 @@ ${text}`;
     // ============================================
     
     // Toggle switches
-    continuousToggle.addEventListener('click', () => {
+    continuousToggle.addEventListener('click', function() {
         continuousToggle.classList.toggle('active');
         config.continuousMode = continuousToggle.classList.contains('active');
+        if (recognition) {
+            recognition.continuous = config.continuousMode;
+        }
     });
     
-    speakerDetectionToggle.addEventListener('click', () => {
+    speakerDetectionToggle.addEventListener('click', function() {
         speakerDetectionToggle.classList.toggle('active');
         config.speakerDetection = speakerDetectionToggle.classList.contains('active');
     });
     
-    autoPunctuationToggle.addEventListener('click', () => {
+    autoPunctuationToggle.addEventListener('click', function() {
         autoPunctuationToggle.classList.toggle('active');
         config.autoPunctuation = autoPunctuationToggle.classList.contains('active');
     });
     
-    noiseFilterToggle.addEventListener('click', () => {
+    noiseFilterToggle.addEventListener('click', function() {
         noiseFilterToggle.classList.toggle('active');
         config.noiseFilter = noiseFilterToggle.classList.contains('active');
     });
     
-    autoSaveToggle.addEventListener('click', () => {
+    autoSaveToggle.addEventListener('click', function() {
         autoSaveToggle.classList.toggle('active');
         config.autoSave = autoSaveToggle.classList.contains('active');
     });
     
-    saveAudioToggle.addEventListener('click', () => {
+    saveAudioToggle.addEventListener('click', function() {
         saveAudioToggle.classList.toggle('active');
         config.saveAudio = saveAudioToggle.classList.contains('active');
     });
     
     // Settings inputs
-    document.getElementById('confidenceThreshold').addEventListener('input', (e) => {
+    document.getElementById('confidenceThreshold').addEventListener('input', function(e) {
         config.confidenceThreshold = e.target.value / 100;
         document.getElementById('confidenceValue').textContent = e.target.value + '%';
     });
     
-    document.getElementById('maxSpeakers').addEventListener('change', (e) => {
+    document.getElementById('maxSpeakers').addEventListener('change', function(e) {
         config.maxSpeakers = parseInt(e.target.value);
     });
     
-    document.getElementById('speakerPause').addEventListener('change', (e) => {
+    document.getElementById('speakerPause').addEventListener('change', function(e) {
         config.speakerPauseThreshold = parseInt(e.target.value);
     });
     
-    document.getElementById('autoSaveInterval').addEventListener('change', (e) => {
+    document.getElementById('autoSaveInterval').addEventListener('change', function(e) {
         config.autoSaveIntervalSec = parseInt(e.target.value);
     });
     
     // Save settings
-    document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+    document.getElementById('saveSettingsBtn').addEventListener('click', function() {
         localStorage.setItem('transcriptionConfig', JSON.stringify(config));
         
         // Save speaker colors
         for (let i = 1; i <= 5; i++) {
-            const color = document.getElementById(`speaker${i}Color`).value;
-            speakerColors[i] = color;
+            const colorInput = document.getElementById('speaker' + i + 'Color');
+            if (colorInput) {
+                const color = colorInput.value;
+                speakerColors[i] = color;
+            }
         }
         localStorage.setItem('speakerColors', JSON.stringify(speakerColors));
         
@@ -2145,7 +2570,7 @@ ${text}`;
     // TEXT ANALYSIS
     // ============================================
     
-    document.getElementById('analyzeTextBtn').addEventListener('click', async () => {
+    document.getElementById('analyzeTextBtn').addEventListener('click', function() {
         const text = pastedText.value.trim();
         if (!text) {
             showStatus('⚠️ Inserisci del testo da analizzare', 'error');
@@ -2159,26 +2584,24 @@ ${text}`;
         enableAnalysisButtons();
         
         // Switch to analysis tab
-        tabs.forEach(t => t.classList.remove('active'));
-        tabContents.forEach(tc => tc.classList.remove('active'));
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        tabContents.forEach(function(tc) { tc.classList.remove('active'); });
         document.querySelector('[data-tab="analysis"]').classList.add('active');
         document.getElementById('tab-analysis').classList.add('active');
         
         showStatus('📄 Testo caricato per l\'analisi!', 'success');
     });
     
-    document.getElementById('identifySpeakersTextBtn').addEventListener('click', async () => {
+    document.getElementById('identifySpeakersTextBtn').addEventListener('click', async function() {
         const text = pastedText.value.trim();
         if (!text) {
             showStatus('⚠️ Inserisci del testo', 'error');
             return;
         }
         
-        const prompt = `Analizza il seguente testo e identifica i diversi parlanti. 
-        Riformatta il testo aggiungendo [Parlante X]: prima di ogni intervento. 
-        Se non ci sono parlanti chiari, suggerisci una possibile divisione basata sul contesto:
-        
-        ${text}`;
+        const prompt = 'Analizza il seguente testo e identifica i diversi parlanti. ' +
+            'Riformatta il testo aggiungendo [Parlante X]: prima di ogni intervento. ' +
+            'Se non ci sono parlanti chiari, suggerisci una possibile divisione basata sul contesto:\n\n' + text;
         
         const result = await callGroqAPI(prompt);
         if (result) {
@@ -2187,7 +2610,7 @@ ${text}`;
         }
     });
     
-    document.getElementById('clearTextBtn').addEventListener('click', () => {
+    document.getElementById('clearTextBtn').addEventListener('click', function() {
         pastedText.value = '';
         showStatus('🗑️ Testo cancellato', 'info');
     });
@@ -2196,13 +2619,18 @@ ${text}`;
     // HISTORY MANAGEMENT
     // ============================================
     
-    document.getElementById('refreshHistoryBtn').addEventListener('click', () => {
+    document.getElementById('refreshHistoryBtn').addEventListener('click', function() {
         loadSessions();
         showStatus('🔄 Lista aggiornata', 'info');
     });
     
-    document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+    document.getElementById('clearHistoryBtn').addEventListener('click', function() {
         if (!confirm('⚠️ Sei sicuro di voler cancellare TUTTE le sessioni salvate? Questa azione non può essere annullata.')) {
+            return;
+        }
+        
+        if (!db) {
+            showStatus('❌ Database non inizializzato', 'error');
             return;
         }
         
@@ -2214,14 +2642,14 @@ ${text}`;
         const audioStore = transaction.objectStore('audio');
         audioStore.clear();
         
-        transaction.oncomplete = () => {
+        transaction.oncomplete = function() {
             sessions = [];
             displaySessions();
             showStatus('🗑️ Tutte le sessioni cancellate', 'info');
         };
     });
     
-    document.getElementById('exportAllBtn').addEventListener('click', async () => {
+    document.getElementById('exportAllBtn').addEventListener('click', function() {
         if (sessions.length === 0) {
             showStatus('⚠️ Nessuna sessione da esportare', 'warning');
             return;
@@ -2246,9 +2674,11 @@ ${text}`;
     stopBtn.addEventListener('click', stopRecording);
     pauseBtn.addEventListener('click', pauseRecording);
     resumeBtn.addEventListener('click', resumeRecording);
-    saveSessionBtn.addEventListener('click', () => saveCurrentSession(false));
+    saveSessionBtn.addEventListener('click', function() {
+        saveCurrentSession(false);
+    });
     
-    languageSelect.addEventListener('change', () => {
+    languageSelect.addEventListener('change', function() {
         if (recognition) {
             recognition.lang = languageSelect.value;
         }
@@ -2262,11 +2692,11 @@ ${text}`;
         statusDiv.className = 'status active ' + type;
         statusDiv.innerHTML = 
             type === 'loading' 
-            ? `<div class="spinner"></div><span>${msg}</span>`
+            ? '<div class="spinner"></div><span>' + msg + '</span>'
             : msg;
         
         if (type !== 'loading') {
-            setTimeout(() => statusDiv.classList.remove('active'), 4000);
+            setTimeout(function() { statusDiv.classList.remove('active'); }, 4000);
         }
     }
     
@@ -2274,66 +2704,82 @@ ${text}`;
     // INIZIALIZZAZIONE
     // ============================================
     
-    window.addEventListener('load', async () => {
+    window.addEventListener('load', function() {
         // Initialize database
-        await initDB();
-        
-        // Load saved settings
-        const savedConfig = localStorage.getItem('transcriptionConfig');
-        if (savedConfig) {
-            Object.assign(config, JSON.parse(savedConfig));
+        initDB().then(function() {
+            console.log('Database inizializzato');
             
-            // Update UI
-            document.getElementById('confidenceThreshold').value = config.confidenceThreshold * 100;
-            document.getElementById('confidenceValue').textContent = (config.confidenceThreshold * 100) + '%';
-            document.getElementById('maxSpeakers').value = config.maxSpeakers;
-            document.getElementById('speakerPause').value = config.speakerPauseThreshold;
-            document.getElementById('autoSaveInterval').value = config.autoSaveIntervalSec;
-            
-            // Update toggles
-            if (!config.continuousMode) continuousToggle.classList.remove('active');
-            if (!config.speakerDetection) speakerDetectionToggle.classList.remove('active');
-            if (!config.autoPunctuation) autoPunctuationToggle.classList.remove('active');
-            if (!config.noiseFilter) noiseFilterToggle.classList.remove('active');
-            if (!config.autoSave) autoSaveToggle.classList.remove('active');
-            if (!config.saveAudio) saveAudioToggle.classList.remove('active');
-        }
-        
-        // Load speaker colors
-        const savedColors = localStorage.getItem('speakerColors');
-        if (savedColors) {
-            speakerColors = JSON.parse(savedColors);
-            for (let i = 1; i <= 5; i++) {
-                if (speakerColors[i]) {
-                    document.getElementById(`speaker${i}Color`).value = speakerColors[i];
+            // Load saved settings
+            const savedConfig = localStorage.getItem('transcriptionConfig');
+            if (savedConfig) {
+                try {
+                    Object.assign(config, JSON.parse(savedConfig));
                     
-                    // Update CSS
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        .speaker-${i} { background: ${speakerColors[i]}; }
-                        .transcript-segment.speaker-${i}-segment { border-left-color: ${speakerColors[i]}; }
-                    `;
-                    document.head.appendChild(style);
+                    // Update UI
+                    document.getElementById('confidenceThreshold').value = config.confidenceThreshold * 100;
+                    document.getElementById('confidenceValue').textContent = (config.confidenceThreshold * 100) + '%';
+                    document.getElementById('maxSpeakers').value = config.maxSpeakers;
+                    document.getElementById('speakerPause').value = config.speakerPauseThreshold;
+                    document.getElementById('autoSaveInterval').value = config.autoSaveIntervalSec;
+                    
+                    // Update toggles
+                    if (!config.continuousMode) continuousToggle.classList.remove('active');
+                    if (!config.speakerDetection) speakerDetectionToggle.classList.remove('active');
+                    if (!config.autoPunctuation) autoPunctuationToggle.classList.remove('active');
+                    if (!config.noiseFilter) noiseFilterToggle.classList.remove('active');
+                    if (!config.autoSave) autoSaveToggle.classList.remove('active');
+                    if (!config.saveAudio) saveAudioToggle.classList.remove('active');
+                } catch (e) {
+                    console.error('Errore caricamento impostazioni:', e);
                 }
             }
-        }
-        
-        // Load saved API key
-        const savedKey = localStorage.getItem('groqKey');
-        if (savedKey) {
-            groqApiKey.value = savedKey;
-        }
-        
-        // Check browser compatibility
-        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-            showStatus('⚠️ Il tuo browser non supporta il riconoscimento vocale. Usa Chrome, Edge o Safari.', 'warning');
-            startBtn.disabled = true;
-        }
-        
-        // Load sessions
-        loadSessions();
-        
-        console.log('🎙️ Trascrizione Audio Pro - Inizializzazione completata');
+            
+            // Load speaker colors
+            const savedColors = localStorage.getItem('speakerColors');
+            if (savedColors) {
+                try {
+                    speakerColors = JSON.parse(savedColors);
+                    for (let i = 1; i <= 5; i++) {
+                        if (speakerColors[i]) {
+                            const colorInput = document.getElementById('speaker' + i + 'Color');
+                            if (colorInput) {
+                                colorInput.value = speakerColors[i];
+                            }
+                            
+                            // Update CSS
+                            const style = document.createElement('style');
+                            style.textContent = '.speaker-' + i + ' { background: ' + speakerColors[i] + '; } ' +
+                                '.transcript-segment.speaker-' + i + '-segment { border-left-color: ' + speakerColors[i] + '; }';
+                            document.head.appendChild(style);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Errore caricamento colori:', e);
+                }
+            }
+            
+            // Load saved API key
+            const savedKey = localStorage.getItem('groqKey');
+            if (savedKey) {
+                groqApiKey.value = savedKey;
+            }
+            
+            // Check browser compatibility
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                showStatus('⚠️ Il tuo browser non supporta il riconoscimento vocale. Usa Chrome, Edge o Safari.', 'warning');
+                startBtn.disabled = true;
+            }
+            
+            // Load sessions
+            setTimeout(function() {
+                loadSessions();
+            }, 500);
+            
+            console.log('🎙️ Trascrizione Audio Pro - Inizializzazione completata');
+        }).catch(function(err) {
+            console.error('Errore inizializzazione database:', err);
+            showStatus('❌ Errore inizializzazione database', 'error');
+        });
     });
     </script>
 </body>
