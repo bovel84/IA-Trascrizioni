@@ -1635,72 +1635,7 @@
         return 'confidence-low';
     }
     
-    // ============================================
-    // CONFIGURAZIONE RECOGNITION (Chiamata prima di start)
-    // ============================================
-    
-    function configureRecognition() {
-        if (!recognition) {
-            showStatus('❌ Riconoscimento vocale non disponibile', 'error');
-            return false;
-        }
-        
-        // Configurazione semplice (compatibile mobile)
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = languageSelect.value;
-        
-        console.log('🎤 Recognition pronto per avvio');
-        
-        
-        // Handler semplice per onresult (compatibile mobile)
-        recognition.onresult = function(event) {
-            let interimText = '';
-            
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcriptPiece = event.results[i][0].transcript;
-                
-                if (event.results[i].isFinal) {
-                    transcript += transcriptPiece + ' ';
-                } else {
-                    interimText += transcriptPiece;
-                }
-            }
-            
-            // Mostra con interim in grigio
-            liveTranscript.innerHTML = transcript + '<span style="color:#aaa;">' + interimText + '</span>';
-            liveTranscript.scrollTop = liveTranscript.scrollHeight;
-        };
-        
-        
-        recognition.onerror = function(event) {
-            // Ignora no-speech (normale durante pause)
-            if (event.error === 'no-speech') {
-                return;
-            }
-            console.error('❌ Errore:', event.error);
-            if (event.error !== 'aborted') {
-                showStatus('❌ Errore: ' + event.error, 'error');
-            }
-        };
-        
-        recognition.onend = function() {
-            // Riavvia automaticamente se sta ancora registrando
-            if (isRecording) {
-                try {
-                    recognition.start();
-                } catch(err) {
-                    setTimeout(function() {
-                        if (isRecording && recognition) {
-                            recognition.start();
-                        }
-                    }, 100);
-                }
-            }
-        };
-        
-        return true;
-    }
+
     
     // ============================================
     // STATISTICHE LIVE
@@ -1840,9 +1775,56 @@
             startBtn.classList.add('recording');
             
             // Inizia riconoscimento vocale
-            if (recognition && configureRecognition()) {
+            if (recognition) {
+                // Configura SUBITO prima di start (come index 3)
+                recognition.lang = languageSelect.value;
+                recognition.interimResults = true;
+                recognition.continuous = true;
+                
+                recognition.onresult = function(event) {
+                    let interimTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcriptPiece = event.results[i][0].transcript;
+                        
+                        if (event.results[i].isFinal) {
+                            transcript += transcriptPiece + ' ';
+                        } else {
+                            interimTranscript += transcriptPiece;
+                        }
+                    }
+                    
+                    liveTranscript.innerHTML = transcript + '<span style="color:#aaa;">' + interimTranscript + '</span>';
+                    liveTranscript.scrollTop = liveTranscript.scrollHeight;
+                };
+                
+                recognition.onerror = function(event) {
+                    if (event.error === 'no-speech') {
+                        return;
+                    }
+                    console.error('❌ Errore:', event.error);
+                    if (event.error !== 'aborted') {
+                        showStatus('❌ Errore: ' + event.error, 'error');
+                    }
+                };
+                
+                recognition.onend = function() {
+                    if (isRecording) {
+                        try {
+                            recognition.start();
+                        } catch(err) {
+                            setTimeout(function() {
+                                if (isRecording && recognition) {
+                                    recognition.start();
+                                }
+                            }, 100);
+                        }
+                    }
+                };
+                
                 try {
                     recognition.start();
+                    isRecording = true;
                     showStatus('🎤 Registrazione in corso...', 'loading');
                 } catch(e) {
                     console.error('Errore avvio recognition:', e);
