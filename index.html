@@ -526,7 +526,7 @@
             font-size: 14px;
         }
         select, input[type="text"], input[type="password"], input[type="number"], textarea {
-width: 100%;
+            width: 100%;
             padding: 12px;
             border: 2px solid #e5e7eb;
             border-radius: 8px;
@@ -953,9 +953,8 @@ width: 100%;
             </div>
 
             <div class="info-box info" style="margin-bottom: 20px;">
-                <strong>ℹ️ Modalità Continua vs Interrotta</strong><br>
-                <strong>Continua (consigliata)</strong>: Registra e trascrive senza interruzioni. Il sistema si riavvia automaticamente dopo pause.<br>
-                <strong>Interrotta</strong>: Ferma la trascrizione automaticamente dopo una pausa. Meglio per registrazioni brevi o se hai problemi di stabilità.
+                <strong>💡 Suggerimento</strong><br>
+                Il riconoscimento continua automaticamente. Parla liberamente e il testo apparirà in tempo reale.
             </div>
 
             <div class="recording-controls">
@@ -979,7 +978,7 @@ width: 100%;
                     <div class="control-group">
                         <span class="control-label">Modalità</span>
                         <div class="toggle-container">
-<span>Continua</span>
+                            <span>Continua</span>
                             <div id="continuousToggle" class="toggle-switch active">
                                 <div class="toggle-slider"></div>
                             </div>
@@ -1310,7 +1309,8 @@ width: 100%;
                 <small style="color:#6b7280; display:block; margin-bottom:20px;">
                     Filtra le parole riconosciute con confidenza inferiore a questa soglia. Valori più alti = maggiore precisione ma meno parole.
                 </small>
-<label for="groqApiKey">🔑 Groq API Key</label>
+                
+                <label for="groqApiKey">🔑 Groq API Key</label>
                 <input type="password" id="groqApiKey" placeholder="gsk_...">
                 <small style="color:#6b7280; display:block; margin-top:5px;">
                     Necessaria per: trascrizione file audio (Whisper), analisi AI, riassunti, sentiment analysis, ecc.<br>
@@ -1351,8 +1351,6 @@ width: 100%;
     let interimTranscript = '';
     let finalTranscript = '';
     let wakeLock = null; // Wake Lock per mantenere schermo attivo
-    let recognitionStartTime = null; // Timestamp ultimo avvio recognition
-    let recognitionRestartCount = 0; // Contatore riavvii consecutivi
     
     // Configurazione
     const config = {
@@ -1632,30 +1630,24 @@ width: 100%;
             return false;
         }
         
-        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         
-        // Configurazione ottimizzata per migliore riconoscimento
-        recognition.continuous = config.continuousMode;
+        // Configurazione semplice e funzionante
+        recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.maxAlternatives = 5;  // Aumentato per migliori alternative
+        recognition.maxAlternatives = 3;
         recognition.lang = languageSelect.value;
         
         console.log('🔧 Speech Recognition configurato:', {
             continuous: recognition.continuous,
             interimResults: recognition.interimResults,
-            maxAlternatives: recognition.maxAlternatives,
             lang: recognition.lang
         });
         
         recognition.onstart = function() {
-            recognitionStartTime = Date.now();
-            recognitionRestartCount = 0; // Reset contatore quando parte correttamente
-            
             console.log('✅ 🎤 Riconoscimento vocale AVVIATO - Lingua:', recognition.lang);
-            console.log('📢 PARLA ORA! Il microfono è attivo e in ascolto...');
-            const wakeLockStatus = wakeLock ? ' 🔋 Schermo attivo' : '';
-            showStatus('🎤 Registrazione in corso... Inizia a parlare!' + wakeLockStatus, 'loading');
+            showStatus('🎤 Registrazione in corso... Parla!', 'loading');
             visualizer.style.display = 'flex';
             liveStats.style.display = 'grid';
             liveTranscript.classList.remove('empty');
@@ -1673,44 +1665,41 @@ width: 100%;
         };
         
         recognition.onaudiostart = function() {
-            console.log('🔊 Audio catturato dal microfono - Il browser sta ascoltando!');
+            console.log('🔊 Audio catturato');
         };
         
         recognition.onsoundstart = function() {
-            console.log('🔉 Suono rilevato dal microfono!');
+            console.log('🔉 Suono rilevato');
         };
         
         recognition.onspeechstart = function() {
-            console.log('🗣️ Voce rilevata! Il riconoscimento sta processando...');
+            console.log('🗣️ Voce rilevata');
         };
         
         recognition.onspeechend = function() {
-            console.log('🔇 Fine della voce rilevata');
+            console.log('🔇 Fine voce');
         };
         
         recognition.onsoundend = function() {
-            console.log('🔈 Fine del suono');
+            console.log('🔈 Fine suono');
         };
         
         recognition.onaudioend = function() {
-            console.log('🔇 Fine della cattura audio');
+            console.log('🔇 Fine audio');
         };
         
         recognition.onresult = function(event) {
-            console.log('📝 RISULTATO RICEVUTO! Total results:', event.results.length);
             let interimText = '';
             
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
                 
-                console.log('  Result', i, '- isFinal:', result.isFinal, '- alternatives:', result.length);
- // Scegli l'alternativa con la confidenza più alta
+                // Scegli l'alternativa con la confidenza più alta
                 let bestTranscript = result[0].transcript;
                 let bestConfidence = result[0].confidence || 0.5;
                 
-                // Log di tutte le alternative
-                for (let j = 0; j < result.length && j < 3; j++) {
-                    console.log('    Alt', j, ':', result[j].transcript, '| Confidence:', result[j].confidence);
+                // Controlla alternative se disponibili
+                for (let j = 1; j < result.length && j < 3; j++) {
                     const altConfidence = result[j].confidence || 0;
                     if (altConfidence > bestConfidence) {
                         bestTranscript = result[j].transcript;
@@ -1722,7 +1711,7 @@ width: 100%;
                 const confidence = bestConfidence;
                 
                 if (result.isFinal) {
-                    console.log('✅ ✅ TESTO FINALE RICONOSCIUTO:', transcriptText, '| Confidenza:', (confidence * 100).toFixed(0) + '%');
+                    console.log('✅ Testo:', transcriptText, '| Conf:', (confidence * 100).toFixed(0) + '%');
                     
                     // Rimuovi il testo interim se presente
                     const interimDiv = document.getElementById('interimText');
@@ -1761,7 +1750,6 @@ width: 100%;
                     
                 } else {
                     interimText += transcriptText;
-                    console.log('🔄 Testo TEMPORANEO (interim):', transcriptText);
                 }
             }
             
@@ -1783,105 +1771,39 @@ width: 100%;
         };
         
         recognition.onerror = function(event) {
-            console.error('❌ ERRORE Speech Recognition:', event.error, '| Messaggio:', event.message || 'nessun messaggio');
+            console.error('❌ Errore:', event.error);
             
+            // Ignora errori di no-speech che sono normali durante pause
             if (event.error === 'no-speech') {
-                console.warn('⚠️ Nessuna voce rilevata - Assicurati di parlare vicino al microfono');
-                // Non mostrare notifiche continue per no-speech in modalità continua
-                // È normale non parlare per alcuni secondi
-                if (!config.continuousMode) {
-                    showStatus('🔇 Nessun audio rilevato - Parla più forte o avvicinati al microfono', 'warning');
-                }
-                // L'evento onend gestirà il riavvio automatico
+                return;
+            }
+            
+            if (event.error === 'not-allowed') {
+                showStatus('❌ Permesso microfono negato', 'error');
+                isRecording = false;
             } else if (event.error === 'audio-capture') {
-                console.error('❌ Errore cattura audio - Il microfono potrebbe non essere disponibile');
-                showStatus('❌ Errore microfono - Controlla che sia connesso e funzionante', 'error');
+                showStatus('❌ Errore microfono', 'error');
                 isRecording = false;
-            } else if (event.error === 'not-allowed') {
-                console.error('❌ Permesso microfono negato - Abilita il microfono nelle impostazioni del browser');
-                showStatus('❌ Permesso microfono negato - Clicca sull\'icona del lucchetto nella barra degli indirizzi', 'error');
-                isRecording = false;
-            } else if (event.error === 'aborted') {
-                console.log('ℹ️ Riconoscimento interrotto manualmente');
-            } else if (event.error === 'network') {
-                console.error('❌ Errore di rete - Verifica la connessione internet');
-                showStatus('❌ Errore di rete - Il riconoscimento vocale richiede connessione internet', 'error');
-            } else if (event.error === 'service-not-allowed') {
-                console.error('❌ Servizio non consentito - Verifica permessi browser');
-                showStatus('❌ Servizio non consentito - Controlla i permessi del browser', 'error');
-            } else {
-                console.error('❌ Errore sconosciuto:', event.error);
+            } else if (event.error !== 'aborted') {
                 showStatus('❌ Errore: ' + event.error, 'error');
             }
         };
         
         recognition.onend = function() {
-            const now = Date.now();
-            const recognitionDuration = recognitionStartTime ? now - recognitionStartTime : 0;
-            
-            console.log('🔴 Recognition ENDED - Duration:', recognitionDuration + 'ms', '| isRecording:', isRecording, '| isPaused:', isPaused, '| continuous:', config.continuousMode);
-            
-            if (isRecording && !isPaused && config.continuousMode) {
-                // Se il recognition si è chiuso troppo velocemente (< 1 secondo), potrebbe essere un loop
-                if (recognitionDuration < 1000) {
-                    recognitionRestartCount++;
-                    console.warn('⚠️ Recognition chiuso rapidamente (' + recognitionDuration + 'ms) - Restart #' + recognitionRestartCount);
-                    
-                    // Se ci sono troppi riavvii rapidi (> 5), aumentiamo il delay
-                    if (recognitionRestartCount > 5) {
-                        console.error('❌ Troppi riavvii rapidi! Pausa di 3 secondi...');
-                        showStatus('⚠️ Sistema di riconoscimento vocale instabile. Riprovo tra 3 secondi...', 'warning');
-                        
-                        setTimeout(function() {
-                            if (isRecording && recognition) {
-                                try {
-                                    recognitionRestartCount = 0; // Reset contatore
-                                    recognition.start();
-                                    console.log('✅ Recognition riavviato dopo pausa');
-                                } catch(e) {
-                                    console.error('❌ Errore riavvio dopo pausa:', e);
-                                }
-                            }
-                        }, 3000);
-                        return;
-                    }
-                }
-                
-                // Riavvio normale in modalità continua
-                console.log('🔄 Riavvio automatico del riconoscimento in modalità continua...');
-                
-                // Delay basato sul numero di riavvii: più riavvii = delay maggiore
-                const delay = Math.min(300 + (recognitionRestartCount * 200), 2000);
-                console.log('⏱️ Delay riavvio:', delay + 'ms');
-                
-                setTimeout(function() {
-                    if (isRecording && recognition) {
-                        try {
+            console.log('🔴 Recognition ended');
+            // Riavvia automaticamente se sta ancora registrando
+            if (isRecording && !isPaused) {
+                try {
+                    recognition.start();
+                    console.log('✅ Recognition riavviato');
+                } catch(err) {
+                    console.log('Tentativo riavvio...');
+                    setTimeout(function() {
+                        if (isRecording && recognition) {
                             recognition.start();
-                            console.log('✅ Recognition riavviato con successo');
-                        } catch(e) {
-                            // Se il recognition è già in esecuzione, non è un errore
-                            if (e.message && e.message.includes('already started')) {
-                                console.log('ℹ️ Recognition già in esecuzione, skip riavvio');
-                            } else {
-                                console.error('❌ Errore riavvio recognition:', e);
-                                // In caso di errore, prova di nuovo dopo 1 secondo
-                                setTimeout(function() {
-                                    if (isRecording && recognition) {
-                                        try {
-                                            recognition.start();
-                                            console.log('✅ Recognition riavviato dopo retry');
-                                        } catch(retryErr) {
-                                            console.error('❌ Errore retry riavvio:', retryErr);
-                                        }
-                                    }
-                                }, 1000);
-                            }
                         }
-                    }
-                }, delay);
-            } else {
-                console.log('ℹ️ Recognition terminato senza riavvio');
+                    }, 100);
+                }
             }
         };
         
@@ -2028,7 +1950,7 @@ width: 100%;
     }
     
     function stopRecording() {
-isRecording = false;
+        isRecording = false;
         isPaused = false;
         
         // Rilascia Wake Lock
@@ -2347,7 +2269,8 @@ isRecording = false;
             showStatus('❌ Inserisci la tua API Key Groq per trascrivere il file audio', 'error');
             return;
         }
-showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading');
+        
+        showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading');
         
         const progressContainer = document.getElementById('uploadProgress');
         const progressFill = document.getElementById('progressFill');
@@ -2632,7 +2555,7 @@ showStatus('🎙️ Trascrizione audio in corso con Groq Whisper...', 'loading')
         
         // Rimuovi testo interim
         const interimDiv = document.getElementById('interimTextFile');
-if (interimDiv) {
+        if (interimDiv) {
             interimDiv.remove();
         }
         
@@ -3026,7 +2949,8 @@ if (interimDiv) {
             showStatus('⚠️ Inserisci del testo', 'error');
             return;
         }
-const prompt = 'Analizza il seguente testo e identifica i diversi parlanti. ' +
+        
+        const prompt = 'Analizza il seguente testo e identifica i diversi parlanti. ' +
             'Riformatta il testo aggiungendo [Parlante X]: prima di ogni intervento. ' +
             'Se non ci sono parlanti chiari, suggerisci una possibile divisione basata sul contesto:\n\n' + text;
         
