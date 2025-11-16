@@ -911,6 +911,12 @@
         <h1>🎙️ Trascrizione Audio Pro</h1>
         <div class="subtitle">Sistema avanzato di trascrizione con identificazione parlanti e analisi AI</div>
         
+        <!-- Avviso Mobile HTTPS -->
+        <div id="mobileHttpsWarning" style="display:none;" class="info-box warning">
+            <strong>⚠️ Attenzione Mobile:</strong> La registrazione live richiede HTTPS su dispositivi mobili. 
+            Se non funziona, usa la funzione "Carica File" come alternativa.
+        </div>
+        
         <!-- Status -->
         <div id="status" class="status"></div>
 
@@ -942,7 +948,8 @@
                     • Riduci rumori di fondo (chiudi finestre, silenzia notifiche)<br>
                     • Usa un microfono di buona qualità se disponibile<br>
                     • Verifica che il browser abbia i permessi per il microfono<br>
-                    • Apri la console (F12) per vedere i log di debug se la trascrizione non funziona
+                    • <strong>📱 Su mobile:</strong> Assicurati di usare Chrome/Safari e di avere una connessione stabile<br>
+                    • <button id="testDiagnosticBtn" class="btn btn-info" style="margin-top: 8px; padding: 6px 12px; font-size: 12px;">🔍 Test Diagnostico</button>
                 </div>
             </div>
             <div class="info-box success" style="margin-top: 10px; display:none;" id="wakeLockInfo">
@@ -1624,20 +1631,35 @@
     // ============================================
     
     function initSpeechRecognition() {
+        // Controllo compatibilità mobile-friendly
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            showStatus('❌ Il tuo browser non supporta il riconoscimento vocale', 'error');
             console.error('❌ Browser non supportato per riconoscimento vocale');
+            
+            // Verifica se è HTTPS su mobile
+            if (/Android|iPhone|iPad/i.test(navigator.userAgent) && location.protocol !== 'https:') {
+                showStatus('⚠️ Su mobile è richiesto HTTPS per il riconoscimento vocale. Usa la registrazione file come alternativa.', 'warning');
+            } else {
+                showStatus('❌ Il tuo browser non supporta il riconoscimento vocale', 'error');
+            }
             return false;
         }
         
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         
-        // Configurazione semplice e funzionante
+        // Configurazione ottimizzata per mobile e desktop
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.maxAlternatives = 3;
         recognition.lang = languageSelect.value;
+        
+        // Impostazioni specifiche per mobile
+        const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            console.log('📱 Modalità mobile rilevata - configurazione ottimizzata');
+            // Su mobile, riduci la frequenza di risultati intermedi
+            recognition.interimResults = true;
+        }
         
         console.log('🔧 Speech Recognition configurato:', {
             continuous: recognition.continuous,
@@ -1851,16 +1873,26 @@
     
     async function startRecording() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            // Configurazione audio ottimizzata per compatibilità mobile
+            const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+            const audioConstraints = {
                 audio: {
                     echoCancellation: config.noiseFilter,
                     noiseSuppression: config.noiseFilter,
-                    autoGainControl: true,  // Regola automaticamente il volume
-                    sampleRate: 48000,      // Sample rate più alto per migliore qualità
-                    channelCount: 1,        // Mono per speech recognition
-                    sampleSize: 16          // 16-bit audio
-                } 
-            });
+                    autoGainControl: true,
+                    channelCount: 1
+                }
+            };
+            
+            // Su desktop aggiungi opzioni avanzate
+            if (!isMobile) {
+                audioConstraints.audio.sampleRate = 48000;
+                audioConstraints.audio.sampleSize = 16;
+            } else {
+                console.log('📱 Configurazione audio mobile semplificata');
+            }
+            
+            const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
             
             // Reset variabili
             recordedChunks = [];
@@ -1868,9 +1900,21 @@
             speakers.clear();
             currentSpeaker = 1;
             
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
-            });
+            // Scegli il mimeType supportato dal browser
+            let mimeType = 'audio/webm;codecs=opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                // Fallback per browser che non supportano opus
+                if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    mimeType = 'audio/webm';
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                } else {
+                    mimeType = '';
+                }
+                console.log('⚠️ Opus non supportato, uso:', mimeType || 'default');
+            }
+            
+            mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
             
             mediaRecorder.ondataavailable = function(event) {
                 if (event.data.size > 0) {
@@ -1879,7 +1923,9 @@
             };
             
             mediaRecorder.onstop = function() {
-                recordedBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+                // Usa il tipo corretto del blob
+                const blobType = mimeType || 'audio/webm';
+                recordedBlob = new Blob(recordedChunks, { type: blobType });
                 const url = URL.createObjectURL(recordedBlob);
                 recordedAudio.src = url;
                 recordedAudioSection.style.display = 'block';
@@ -1940,7 +1986,22 @@
             
         } catch (err) {
             console.error('Errore accesso microfono:', err);
-            showStatus('❌ Errore accesso microfono: ' + err.message, 'error');
+            
+            // Messaggio di errore specifico per mobile
+            const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+            let errorMsg = '❌ Errore accesso microfono: ' + err.message;
+            
+            if (isMobile) {
+                if (err.name === 'NotAllowedError') {
+                    errorMsg = '❌ Permesso microfono negato. Vai nelle impostazioni del browser e consenti l\'accesso al microfono.';
+                } else if (err.name === 'NotFoundError') {
+                    errorMsg = '❌ Microfono non trovato. Verifica che il dispositivo abbia un microfono funzionante.';
+                } else if (location.protocol !== 'https:') {
+                    errorMsg = '⚠️ Su mobile è richiesto HTTPS per usare il microfono. Usa la funzione "Carica File" come alternativa.';
+                }
+            }
+            
+            showStatus(errorMsg, 'error');
             
             // Reset UI in caso di errore
             startBtn.disabled = false;
@@ -3029,6 +3090,56 @@
         saveCurrentSession(false);
     });
     
+    // Test diagnostico per mobile
+    const testDiagnosticBtn = document.getElementById('testDiagnosticBtn');
+    if (testDiagnosticBtn) {
+        testDiagnosticBtn.addEventListener('click', async function() {
+            const results = [];
+            results.push('🔍 TEST DIAGNOSTICO COMPLETO\n');
+            results.push('============================\n\n');
+            
+            // 1. Info browser
+            results.push('📱 Dispositivo: ' + ((/Android|iPhone|iPad/i.test(navigator.userAgent)) ? 'Mobile' : 'Desktop') + '\n');
+            results.push('🌐 User Agent: ' + navigator.userAgent + '\n');
+            results.push('🔒 Protocollo: ' + location.protocol + '\n\n');
+            
+            // 2. Supporto API
+            results.push('✅ API Disponibili:\n');
+            results.push('  • MediaDevices: ' + (!!navigator.mediaDevices ? '✅' : '❌') + '\n');
+            results.push('  • getUserMedia: ' + (!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? '✅' : '❌') + '\n');
+            results.push('  • SpeechRecognition: ' + (!!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) ? '✅' : '❌') + '\n');
+            results.push('  • MediaRecorder: ' + (!!window.MediaRecorder ? '✅' : '❌') + '\n\n');
+            
+            // 3. Test MediaRecorder formati
+            if (window.MediaRecorder) {
+                results.push('🎵 Formati MediaRecorder:\n');
+                const formats = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+                formats.forEach(fmt => {
+                    results.push('  • ' + fmt + ': ' + (MediaRecorder.isTypeSupported(fmt) ? '✅' : '❌') + '\n');
+                });
+                results.push('\n');
+            }
+            
+            // 4. Test accesso microfono
+            results.push('🎤 Test Microfono:\n');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                results.push('  ✅ Accesso microfono RIUSCITO\n');
+                results.push('  • Tracks: ' + stream.getTracks().length + '\n');
+                stream.getTracks().forEach(track => {
+                    results.push('  • ' + track.kind + ': ' + track.label + ' (enabled: ' + track.enabled + ')\n');
+                    track.stop();
+                });
+            } catch (err) {
+                results.push('  ❌ Errore: ' + err.name + ' - ' + err.message + '\n');
+            }
+            
+            // Mostra risultati
+            alert(results.join(''));
+            console.log(results.join(''));
+        });
+    }
+    
     languageSelect.addEventListener('change', function() {
         if (recognition) {
             recognition.lang = languageSelect.value;
@@ -3056,6 +3167,26 @@
     // ============================================
     
     window.addEventListener('load', function() {
+        // Mostra avviso mobile se necessario
+        const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+        const isHttps = location.protocol === 'https:';
+        const mobileWarning = document.getElementById('mobileHttpsWarning');
+        
+        if (isMobile && (!isHttps || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
+            if (mobileWarning) mobileWarning.style.display = 'block';
+            console.warn('⚠️ Rilevato dispositivo mobile senza supporto completo per registrazione');
+        }
+        
+        // Test diagnostico
+        console.log('🔍 Diagnostica sistema:', {
+            mobile: isMobile,
+            https: isHttps,
+            mediaDevices: !!navigator.mediaDevices,
+            getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+            speechRecognition: !!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window),
+            userAgent: navigator.userAgent
+        });
+        
         // Initialize database
         initDB().then(function() {
             console.log('Database inizializzato');
