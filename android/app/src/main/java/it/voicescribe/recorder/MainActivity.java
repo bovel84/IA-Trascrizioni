@@ -22,6 +22,7 @@ public final class MainActivity extends Activity {
     private WebView web;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService aiWorker = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
     private volatile boolean starting, retrying;
     private String key, model, language;
     private boolean pendingStart;
@@ -174,6 +175,17 @@ public final class MainActivity extends Activity {
         startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(next.type).putExtra(Intent.EXTRA_TITLE, next.name), 30);
     }
     public final class RecorderBridge {
+        @JavascriptInterface public void aiRequest(String id, String provider, String path, String apiKey, String body) {
+            if (!id.matches("[0-9]{1,12}")) return;
+            Runnable request = () -> {
+                try {
+                    AiHttp.Result result = AiHttp.request(provider, path, apiKey, body);
+                    aiReply(id, result.status, result.body, "");
+                } catch (Exception e) { aiReply(id, 0, "", "Richiesta AI non riuscita: controlla connessione, chiave e modello."); }
+            };
+            try { aiWorker.execute(request); }
+            catch (RejectedExecutionException e) { aiReply(id, 0, "", "Troppe richieste AI: attendi e riprova."); }
+        }
         @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang)); }
         @JavascriptInterface public void stop() { ui.post(() -> { if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP)); }); }
         @JavascriptInterface public void pause(boolean value) { if (RecordingService.recording) RecordingService.paused = value; }
@@ -222,6 +234,11 @@ public final class MainActivity extends Activity {
             });
         }
     }
+    private void aiReply(String id, int status, String body, String error) {
+        ui.post(() -> {
+            if (web != null) web.evaluateJavascript("window.nativeAiReply && window.nativeAiReply(" + JSONObject.quote(id) + "," + status + "," + JSONObject.quote(body) + "," + JSONObject.quote(error) + ")", null);
+        });
+    }
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == 10 && filePicker != null) { filePicker.onReceiveValue(result == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null); filePicker = null; }
@@ -247,6 +264,6 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         if (filePicker != null) filePicker.onReceiveValue(null);
         if (web != null) { web.removeJavascriptInterface("AndroidRecorder"); web.destroy(); web = null; }
-        worker.shutdown(); super.onDestroy();
+        worker.shutdown(); aiWorker.shutdownNow(); super.onDestroy();
     }
 }

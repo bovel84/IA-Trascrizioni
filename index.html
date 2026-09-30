@@ -72,8 +72,8 @@
         .api-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
         .api-box-title { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); }
         .api-box-link { font-size: 0.65rem; color: var(--accent); text-decoration: none; }
-        .api-box input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.75rem; }
-        .api-box input:focus { outline: none; border-color: var(--accent); }
+        .api-box input, #customLlmModel { width: 100%; min-width: 0; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.75rem; }
+        .api-box input:focus, #customLlmModel:focus { outline: none; border-color: var(--accent); }
         .api-box .saved { display: flex; align-items: center; gap: 0.25rem; color: var(--accent); font-size: 0.7rem; }
         .api-box .change-btn { background: none; border: none; color: var(--text-muted); font-size: 0.65rem; cursor: pointer; text-decoration: underline; margin-left: auto; }
         .api-save-btn { grid-column: span 2; padding: 0.625rem; border: none; border-radius: 10px; background: var(--accent); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
@@ -396,7 +396,7 @@
                 <div class="api-grid" id="apiGrid">
                     <div class="api-box">
                         <div class="api-box-header">
-                            <span class="api-box-title">🎤 WHISPER</span>
+                            <span class="api-box-title">🎤 GROQ WHISPER</span>
                             <a href="https://console.groq.com/keys" target="_blank" class="api-box-link">Ottieni</a>
                         </div>
                         <div id="whisperKeyBox"><input type="password" id="whisperKeyInput" placeholder="gsk_..."></div>
@@ -404,9 +404,15 @@
                     </div>
                     <div class="api-box">
                         <div class="api-box-header">
-                            <span class="api-box-title">🤖 LLAMA</span>
-                            <a href="https://console.groq.com/keys" target="_blank" class="api-box-link">Ottieni</a>
+                            <span class="api-box-title">🤖 PROVIDER AI</span>
+                            <a id="aiKeyLink" href="https://console.groq.com/keys" target="_blank" class="api-box-link">Ottieni</a>
                         </div>
+                        <select class="control-select" id="aiProviderSelect" aria-label="Provider AI" style="width:100%;min-width:0;margin-bottom:8px">
+                            <option value="groq">Groq</option>
+                            <option value="ollama">Ollama Cloud</option>
+                            <option value="nvidia">NVIDIA NIM</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
                         <div id="llamaKeyBox"><input type="password" id="llamaKeyInput" placeholder="gsk_..."></div>
                         <div id="llamaKeySaved" style="display: none;"><span class="saved">✓ Salvata</span><button class="change-btn" onclick="changeKey('llama')">Modifica</button></div>
                     </div>
@@ -427,6 +433,7 @@
                             <option value="openai/gpt-oss-20b">GPT-OSS 20B · velocissimo</option>
                             <option value="llama-3.3-70b-versatile">Llama 3.3 70B · enterprise</option>
                         </select>
+                        <input id="customLlmModel" type="text" placeholder="Oppure inserisci ID modello" aria-label="ID modello AI" style="margin-top:8px">
                     </div>
                 </div>
                 <button class="model-refresh" id="refreshModelsBtn">🔄 Verifica i modelli disponibili con la tua chiave</button>
@@ -1088,7 +1095,16 @@
         let pausedTime = 0, pauseStartTime = null; // Per gestire la pausa
         let savedRecordings = JSON.parse(localStorage.getItem('voicescribe_recordings') || '[]');
         let whisperKey = localStorage.getItem('groq_whisper_key') || '';
-        let llamaKey = localStorage.getItem('groq_llama_key') || '';
+        const AI_PROVIDERS = {
+            groq: { name: 'Groq', base: 'https://api.groq.com/openai/v1', keys: 'https://console.groq.com/keys', placeholder: 'gsk_...', models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile'] },
+            ollama: { name: 'Ollama Cloud', base: 'https://ollama.com/v1', keys: 'https://ollama.com/settings/keys', placeholder: 'Chiave API Ollama Cloud', models: ['gpt-oss:120b', 'gpt-oss:20b'] },
+            nvidia: { name: 'NVIDIA NIM', base: 'https://integrate.api.nvidia.com/v1', keys: 'https://build.nvidia.com', placeholder: 'nvapi-...', models: ['meta/llama-3.3-70b-instruct'] },
+            openrouter: { name: 'OpenRouter', base: 'https://openrouter.ai/api/v1', keys: 'https://openrouter.ai/settings/keys', placeholder: 'sk-or-v1-...', models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'] }
+        };
+        let aiProvider = localStorage.getItem('voicescribe_ai_provider') || 'groq';
+        if (!Object.prototype.hasOwnProperty.call(AI_PROVIDERS, aiProvider)) aiProvider = 'groq';
+        function aiStorage(kind) { return aiProvider === 'groq' ? (kind === 'key' ? 'groq_llama_key' : 'groq_llm_model') : `voicescribe_${aiProvider}_${kind}`; }
+        let llamaKey = localStorage.getItem(aiStorage('key')) || '';
         let wakeLock = null, backgroundMode = false;
         const CHUNK_INTERVAL = 2 * 60 * 1000;
         let currentSessionId = null, chunkCount = 0, chunkTimer = null, currentStream = null;
@@ -1102,7 +1118,7 @@
         // Groq deprecia i modelli nel tempo: la scelta e' salvata in localStorage
         // e puo' essere verificata con "Verifica i modelli disponibili".
         let sttModel = localStorage.getItem('groq_stt_model') || 'whisper-large-v3-turbo';
-        let llmModel = localStorage.getItem('groq_llm_model') || 'openai/gpt-oss-120b';
+        let llmModel = localStorage.getItem(aiStorage('model')) || AI_PROVIDERS[aiProvider].models[0];
 
         // ============ TRASCRIZIONE INCREMENTALE ============
         let liveQueue = [];          // chunk in attesa di trascrizione
@@ -1198,42 +1214,83 @@
             const stt = $('sttModelSelect'), llm = $('llmModelSelect');
             stt.value = sttModel;
             if (!stt.value) stt.value = 'whisper-large-v3-turbo';
-            llm.value = llmModel;
-            if (!llm.value) llm.value = 'openai/gpt-oss-120b';
+            updateProviderUI();
+            $('aiProviderSelect').onchange = () => {
+                aiProvider = $('aiProviderSelect').value;
+                localStorage.setItem('voicescribe_ai_provider', aiProvider);
+                llamaKey = localStorage.getItem(aiStorage('key')) || '';
+                llmModel = localStorage.getItem(aiStorage('model')) || AI_PROVIDERS[aiProvider].models[0];
+                updateProviderUI();
+            };
             sttModel = stt.value; llmModel = llm.value;
             stt.onchange = () => {
                 sttModel = stt.value; localStorage.setItem('groq_stt_model', sttModel);
                 showToast('🎤 ' + stt.options[stt.selectedIndex].text);
             };
             llm.onchange = () => {
-                llmModel = llm.value; localStorage.setItem('groq_llm_model', llmModel);
+                llmModel = llm.value; localStorage.setItem(aiStorage('model'), llmModel);
+                $('customLlmModel').value = '';
                 showToast('🤖 ' + llm.options[llm.selectedIndex].text);
             };
+            $('customLlmModel').onchange = () => {
+                const id = $('customLlmModel').value.trim();
+                if (!id) return;
+                llmModel = id; localStorage.setItem(aiStorage('model'), id);
+                fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])]);
+            };
             $('refreshModelsBtn').onclick = refreshAvailableModels;
+        }
+
+        function updateProviderUI() {
+            const provider = AI_PROVIDERS[aiProvider];
+            $('aiProviderSelect').value = aiProvider;
+            $('aiKeyLink').href = provider.keys;
+            $('llamaKeyInput').value = ''; $('llamaKeyInput').placeholder = provider.placeholder;
+            $('llamaKeyBox').style.display = llamaKey ? 'none' : 'block';
+            $('llamaKeySaved').style.display = llamaKey ? 'flex' : 'none';
+            $('saveKeysBtn').style.display = whisperKey && llamaKey ? 'none' : 'block';
+            fillModelSelect($('llmModelSelect'), [...new Set([llmModel, ...provider.models])]);
+            $('customLlmModel').value = '';
+        }
+
+        // Capture destination and key before awaiting: switching providers during a
+        // request never forwards another provider's credential or changes retries.
+        function aiRequest(provider, path, key, body) {
+            if (window.nativeAiRequest) return window.nativeAiRequest(provider, path, key, body);
+            return fetchWithTimeout(AI_PROVIDERS[provider].base + path, {
+                method: body == null ? 'GET' : 'POST',
+                headers: { Authorization: `Bearer ${key}`, ...(body == null ? {} : { 'Content-Type': 'application/json' }) },
+                ...(body == null ? {} : { body: JSON.stringify(body) })
+            }, 90000).catch(e => {
+                if (e.name === 'AbortError') throw e;
+                throw new Error('Connessione al provider non riuscita. Nella versione web il browser può bloccare il servizio; usa l’APK Android.');
+            });
         }
 
         // Groq deprecia i modelli nel tempo: interrogo l'endpoint /models con la
         // chiave dell'utente per mostrare solo i modelli realmente utilizzabili.
         async function refreshAvailableModels() {
-            const key = whisperKey || llamaKey;
+            const provider = aiProvider, key = llamaKey || (provider === 'groq' ? whisperKey : '');
             if (!key) return showToast('⚠️ Inserisci prima una chiave API');
             const btn = $('refreshModelsBtn');
             const originalText = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ Interrogo Groq...';
+            btn.disabled = true; btn.textContent = '⏳ Interrogo ' + AI_PROVIDERS[provider].name + '...';
             try {
-                const res = await fetchWithTimeout('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': `Bearer ${key}` } }, 20000);
+                const res = await aiRequest(provider, '/models', key);
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.error?.message || `Errore ${res.status}`);
-                const ids = (data.data || []).map(m => m.id);
-                const sttIds = ids.filter(id => /whisper/i.test(id));
-                const chatIds = ids.filter(id => /gpt-oss|llama|qwen|mistral|gemma|deepseek|kimi|minimax/i.test(id));
+                if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || `Errore ${res.status}`);
+                if (provider !== aiProvider) return;
+                const ids = (data.data || []).map(m => m.id).filter(id => typeof id === 'string');
+                const sttIds = provider === 'groq' ? ids.filter(id => /whisper/i.test(id)) : [];
+                const chatIds = ids.filter(id => !/whisper|embedding|embed-|tts|dall-e|moderation/i.test(id));
                 if (sttIds.length) {
                     fillModelSelect($('sttModelSelect'), sttIds);
                     sttModel = $('sttModelSelect').value; localStorage.setItem('groq_stt_model', sttModel);
                 }
                 if (chatIds.length) {
                     fillModelSelect($('llmModelSelect'), chatIds);
-                    llmModel = $('llmModelSelect').value; localStorage.setItem('groq_llm_model', llmModel);
+                    llmModel = $('llmModelSelect').value; localStorage.setItem(aiStorage('model'), llmModel);
+                    $('customLlmModel').value = '';
                 }
                 showToast(`✓ ${sttIds.length + chatIds.length} modelli disponibili`);
             } catch (e) {
@@ -1382,7 +1439,7 @@
             const wk = $('whisperKeyInput').value.trim();
             const lk = $('llamaKeyInput').value.trim();
             if (wk && wk.startsWith('gsk_')) { whisperKey = wk; localStorage.setItem('groq_whisper_key', wk); $('whisperKeyBox').style.display = 'none'; $('whisperKeySaved').style.display = 'flex'; }
-            if (lk && lk.startsWith('gsk_')) { llamaKey = lk; localStorage.setItem('groq_llama_key', lk); $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
+            if (lk) { llamaKey = lk; localStorage.setItem(aiStorage('key'), lk); $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
             if (whisperKey && llamaKey) $('saveKeysBtn').style.display = 'none';
             showToast('✓ Chiavi salvate');
         };
@@ -1735,9 +1792,10 @@
         // stessi parametri (max_completion_tokens / response_format), quindi in
         // caso di 400 si ritenta con varianti piu' conservative.
         async function groqChat({ messages, temperature = 0.3, maxTokens = 2048, jsonMode = false }) {
+            const provider = aiProvider, key = llamaKey;
             const base = { model: llmModel, messages, temperature };
             const variants = [];
-            variants.push({ ...base, max_completion_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
+            if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
             variants.push({ ...base, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
             if (jsonMode) variants.push({ ...base, max_tokens: maxTokens });
 
@@ -1745,11 +1803,7 @@
             for (const body of variants) {
                 let res, data;
                 try {
-                    res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${llamaKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    }, 90000);
+                    res = await aiRequest(provider, '/chat/completions', key, body);
                     data = await res.json().catch(() => ({}));
                 } catch (e) {
                     if (e.name === 'AbortError') throw new Error('Timeout della richiesta AI');
@@ -1757,7 +1811,7 @@
                     continue;
                 }
                 if (res.ok) return data;
-                lastError = data.error?.message || `Errore ${res.status}`;
+                lastError = (typeof data.error === 'string' ? data.error : data.error?.message) || `Errore ${res.status}`;
                 if (res.status !== 400) throw new Error(lastError);
             }
             throw new Error(lastError);
@@ -1859,7 +1913,7 @@
         }
 
         window.runAI = async (action) => {
-            if (!llamaKey) return showToast('Inserisci chiave Llama');
+            if (!llamaKey) return showToast('Inserisci la chiave di ' + AI_PROVIDERS[aiProvider].name);
             const transcriptText = transcriptEntries.map(e => `${e.speakerName}: ${e.text}`).join('\n');
             const fullText = transcriptText + (notesText ? '\n\nNOTE:\n' + notesText : '');
             if (!fullText.trim()) return showToast('Nessun contenuto');

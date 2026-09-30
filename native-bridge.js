@@ -1,4 +1,23 @@
 /* Android keeps recording/transcribing in the service; this file only updates the original UI. */
+// Network calls use fixed native destinations, without exposing keys to a proxy.
+if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'function') {
+    const pending = new Map(); let requestId = 0;
+    window.nativeAiReply = (id, status, text, error) => {
+        const request = pending.get(id); if (!request) return;
+        pending.delete(id); clearTimeout(request.timer);
+        if (error) request.reject(new Error(error));
+        else request.resolve({ ok: status >= 200 && status < 300, status, json: async () => JSON.parse(text) });
+    };
+    window.nativeAiRequest = (provider, path, key, body) => new Promise((resolve, reject) => {
+        const id = String(++requestId);
+        const timer = setTimeout(() => {
+            pending.delete(id); const error = new Error('Timeout della richiesta AI'); error.name = 'AbortError'; reject(error);
+        }, 110000);
+        pending.set(id, { resolve, reject, timer });
+        try { window.AndroidRecorder.aiRequest(id, provider, path, key, body == null ? '' : JSON.stringify(body)); }
+        catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
+    });
+}
 window.initNativeRecorder = function () {
     if (!window.AndroidRecorder || window.nativeRecorderReady) return;
     window.nativeRecorderReady = true;
