@@ -6,7 +6,10 @@ if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'funct
         const request = pending.get(id); if (!request) return;
         pending.delete(id); clearTimeout(request.timer);
         if (error) request.reject(new Error(error));
-        else request.resolve({ ok: status >= 200 && status < 300, status, json: async () => JSON.parse(text) });
+        else request.resolve({ ok: status >= 200 && status < 300, status, json: async () => {
+            try { return JSON.parse(text); }
+            catch (e) { return { error: text }; } // Preserve API denials for safe UI formatting.
+        } });
     };
     window.nativeAiRequest = (provider, path, key, body) => new Promise((resolve, reject) => {
         const id = String(++requestId);

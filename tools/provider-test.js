@@ -84,11 +84,29 @@ async function main() {
     const redacted = run("providerError('openrouter',403,{error:'Denied test_openrouter'},'test_openrouter')");
     check(!redacted.includes('test_openrouter'), 'credential echoed by provider is redacted');
     check(run("providerError('ollama',403,null,'test')").includes('HTTP 403'), 'empty forbidden response still has an actionable message');
+    check(run("normalizeAiModel('ollama','glm-5.3-flash:cloud')") === 'glm-5.3-flash', 'reported GLM cloud alias becomes the direct API ID');
+    check(run("normalizeAiModel('ollama','gpt-oss:120b-cloud')") === 'gpt-oss:120b', 'legacy cloud alias preserves parameter-size tag');
+    check(run("normalizeAiModel('openrouter','custom:cloud')") === 'custom:cloud', 'other provider IDs are unchanged');
+    ctx.nativeAiRequest = async (provider, path, key, body) => {
+        if (path === '/models') return { ok: true, status: 200, json: async () => ({ models: [{ name: 'glm-5.3-flash' }] }) };
+        check(body.model === 'glm-5.3-flash', 'Ollama chat sends the catalog ID without cloud suffix');
+        return { ok: true, status: 200, json: async () => ({ choices: [] }) };
+    };
+    run("localStorage.setItem('voicescribe_ollama_model','glm-5.3-flash:cloud'); $('aiProviderSelect').value = 'ollama'");
+    await run("$('aiProviderSelect').onchange()");
+    check(run('llmModel') === 'glm-5.3-flash' && ctx.localStorage.getItem('voicescribe_ollama_model') === 'glm-5.3-flash', 'saved Ollama alias migrates on provider selection');
+    run("$('customLlmModel').value = 'glm-5.3-flash:cloud'; $('customLlmModel').onchange()");
+    check(run('llmModel') === 'glm-5.3-flash', 'manual cloud alias is normalized before saving');
+    await run('groqChat({messages:[]})');
+    delete ctx.nativeAiRequest;
+    ctx.AndroidRecorder.aiRequest = id => ctx.nativeAiReply(id, 403, '<h1>Forbidden</h1> account access denied', '');
+    await assert.rejects(run('groqChat({messages:[]})'), /HTTP 403.*Forbidden.*account access denied/);
+    check(!ctx.__elements.get('aiProviderStatus').textContent.includes('<h1>'), 'non-JSON native 403 retains detail as plain text');
     // Older refreshes cannot overwrite a newer key, catalog or status.
     let finishOld;
     ctx.nativeAiRequest = () => new Promise(resolve => { finishOld = resolve; });
     const stale = run('refreshAvailableModels()');
-    ctx.nativeAiRequest = async () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'fresh/model' }] }) });
+    ctx.nativeAiRequest = async provider => ({ ok: true, status: 200, json: async () => provider === 'ollama' ? { models: [{ name: 'fresh/model' }] } : { data: [{ id: 'fresh/model' }] } });
     await run("$('llamaKeyInput').value = 'new_key'; $('saveKeysBtn').onclick()");
     finishOld({ ok: false, status: 403, json: async () => ({ error: 'old forbidden' }) });
     await stale;

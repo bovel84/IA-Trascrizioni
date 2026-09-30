@@ -1238,9 +1238,10 @@
                 showToast('🤖 ' + llm.options[llm.selectedIndex].text);
             };
             $('customLlmModel').onchange = () => {
-                const id = $('customLlmModel').value.trim();
+                const id = normalizeAiModel(aiProvider, $('customLlmModel').value);
                 if (!id) return;
                 llmModel = id; localStorage.setItem(aiStorage('model'), id);
+                $('customLlmModel').value = id;
                 fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])]);
             };
             $('refreshModelsBtn').onclick = refreshAvailableModels;
@@ -1248,6 +1249,8 @@
 
         function updateProviderUI() {
             modelRefreshVersion++;
+            const normalized = normalizeAiModel(aiProvider, llmModel);
+            if (normalized !== llmModel) { llmModel = normalized; localStorage.setItem(aiStorage('model'), llmModel); }
             const provider = AI_PROVIDERS[aiProvider];
             $('aiProviderSelect').value = aiProvider;
             $('aiKeyLink').href = provider.keys;
@@ -1263,10 +1266,15 @@
         }
 
         function catalogStorage(provider) { return `voicescribe_${provider}_models_cache_v1`; }
+        function normalizeAiModel(provider, model) {
+            // Direct cloud API IDs omit Ollama app/CLI cloud suffixes.
+            const id = String(model || '').trim();
+            return provider === 'ollama' ? id.replace(/(?::cloud|-cloud)$/i, '') : id;
+        }
         function readModelCatalog(provider) {
             try {
                 const ids = JSON.parse(localStorage.getItem(catalogStorage(provider)) || '[]');
-                return Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && id.length < 256).slice(0, 2000) : [];
+                return Array.isArray(ids) ? [...new Set(ids.filter(id => typeof id === 'string' && id.length < 256).map(id => normalizeAiModel(provider, id)))].slice(0, 2000) : [];
             } catch (e) { return []; }
         }
         function setProviderStatus(message, error = false) {
@@ -1840,7 +1848,7 @@
         // caso di 400 si ritenta con varianti piu' conservative.
         async function groqChat({ messages, temperature = 0.3, maxTokens = 2048, jsonMode = false }) {
             const provider = aiProvider, key = llamaKey;
-            const base = { model: llmModel, messages, temperature };
+            const base = { model: normalizeAiModel(provider, llmModel), messages, temperature };
             const variants = [];
             if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
             variants.push({ ...base, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
