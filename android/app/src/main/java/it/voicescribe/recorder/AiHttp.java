@@ -11,7 +11,9 @@ final class AiHttp {
         String base;
         switch (provider) {
             case "groq": base = "https://api.groq.com/openai/v1"; break;
-            case "ollama": base = "https://ollama.com/v1"; break;
+            case "ollama":
+                if ("/models".equals(path)) return "https://ollama.com/api/tags";
+                base = "https://ollama.com/v1"; break;
             case "nvidia": base = "https://integrate.api.nvidia.com/v1"; break;
             case "openrouter": base = "https://openrouter.ai/api/v1"; break;
             default: throw new IOException("Provider AI non valido");

@@ -437,6 +437,7 @@
                     </div>
                 </div>
                 <button class="model-refresh" id="refreshModelsBtn">🔄 Verifica i modelli disponibili con la tua chiave</button>
+                <p id="aiProviderStatus" role="status" style="font-size:0.75rem;color:var(--text-muted);margin:8px 0 0;overflow-wrap:anywhere">Inserisci la chiave del provider per aggiornare il catalogo.</p>
             </div>
 
             <!-- Tabs -->
@@ -1119,6 +1120,8 @@
         // e puo' essere verificata con "Verifica i modelli disponibili".
         let sttModel = localStorage.getItem('groq_stt_model') || 'whisper-large-v3-turbo';
         let llmModel = localStorage.getItem(aiStorage('model')) || AI_PROVIDERS[aiProvider].models[0];
+        let modelRefreshVersion = 0;
+        const MODEL_REFRESH_LABEL = '🔄 Verifica i modelli disponibili con la tua chiave';
 
         // ============ TRASCRIZIONE INCREMENTALE ============
         let liveQueue = [];          // chunk in attesa di trascrizione
@@ -1207,6 +1210,7 @@
             await checkAutosave();
             await checkRecoveredChunks();
             if (window.initNativeRecorder) window.initNativeRecorder();
+            if (llamaKey || (aiProvider === 'groq' && whisperKey)) refreshAvailableModels();
         }
 
         // ============ MODELLI AI ============
@@ -1215,12 +1219,13 @@
             stt.value = sttModel;
             if (!stt.value) stt.value = 'whisper-large-v3-turbo';
             updateProviderUI();
-            $('aiProviderSelect').onchange = () => {
+            $('aiProviderSelect').onchange = async () => {
                 aiProvider = $('aiProviderSelect').value;
                 localStorage.setItem('voicescribe_ai_provider', aiProvider);
                 llamaKey = localStorage.getItem(aiStorage('key')) || '';
                 llmModel = localStorage.getItem(aiStorage('model')) || AI_PROVIDERS[aiProvider].models[0];
                 updateProviderUI();
+                if (llamaKey || (aiProvider === 'groq' && whisperKey)) await refreshAvailableModels();
             };
             sttModel = stt.value; llmModel = llm.value;
             stt.onchange = () => {
@@ -1242,6 +1247,7 @@
         }
 
         function updateProviderUI() {
+            modelRefreshVersion++;
             const provider = AI_PROVIDERS[aiProvider];
             $('aiProviderSelect').value = aiProvider;
             $('aiKeyLink').href = provider.keys;
@@ -1249,15 +1255,46 @@
             $('llamaKeyBox').style.display = llamaKey ? 'none' : 'block';
             $('llamaKeySaved').style.display = llamaKey ? 'flex' : 'none';
             $('saveKeysBtn').style.display = whisperKey && llamaKey ? 'none' : 'block';
-            fillModelSelect($('llmModelSelect'), [...new Set([llmModel, ...provider.models])]);
+            const cached = readModelCatalog(aiProvider);
+            fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])]);
             $('customLlmModel').value = '';
+            $('refreshModelsBtn').disabled = false; $('refreshModelsBtn').textContent = MODEL_REFRESH_LABEL;
+            setProviderStatus(cached.length ? 'Catalogo salvato: aggiornamento in corso con la tua chiave.' : 'Lista iniziale: il catalogo viene aggiornato dopo il salvataggio della chiave.');
+        }
+
+        function catalogStorage(provider) { return `voicescribe_${provider}_models_cache_v1`; }
+        function readModelCatalog(provider) {
+            try {
+                const ids = JSON.parse(localStorage.getItem(catalogStorage(provider)) || '[]');
+                return Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && id.length < 256).slice(0, 2000) : [];
+            } catch (e) { return []; }
+        }
+        function setProviderStatus(message, error = false) {
+            $('aiProviderStatus').textContent = message;
+            $('aiProviderStatus').style.color = error ? 'var(--danger, #ef4444)' : 'var(--text-muted)';
+        }
+        function providerError(provider, status, data, key, model = '') {
+            data = data || {};
+            let detail = typeof data.error === 'string' ? data.error : data.error?.message || data.detail || data.message || '';
+            if (typeof detail !== 'string') detail = '';
+            // Provider messages may echo request fields: never display credentials.
+            if (key) detail = detail.split(key).join('[chiave nascosta]');
+            detail = detail.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 350);
+            const advice = {
+                401: 'Chiave non accettata: verifica che appartenga a questo provider.',
+                403: 'Accesso negato dal provider: verifica autorizzazioni della chiave, accesso al modello e piano/account.',
+                402: 'Credito o quota del provider insufficienti.',
+                429: 'Limite di richieste raggiunto: attendi e riprova.'
+            };
+            return `${AI_PROVIDERS[provider].name} · HTTP ${status}${model ? ' · ' + model : ''}: ${advice[status] || 'Richiesta non riuscita.'}${detail ? ' Dettaglio: ' + detail : ''}`;
         }
 
         // Capture destination and key before awaiting: switching providers during a
         // request never forwards another provider's credential or changes retries.
         function aiRequest(provider, path, key, body) {
             if (window.nativeAiRequest) return window.nativeAiRequest(provider, path, key, body);
-            return fetchWithTimeout(AI_PROVIDERS[provider].base + path, {
+            const url = provider === 'ollama' && path === '/models' ? 'https://ollama.com/api/tags' : AI_PROVIDERS[provider].base + path;
+            return fetchWithTimeout(url, {
                 method: body == null ? 'GET' : 'POST',
                 headers: { Authorization: `Bearer ${key}`, ...(body == null ? {} : { 'Content-Type': 'application/json' }) },
                 ...(body == null ? {} : { body: JSON.stringify(body) })
@@ -1272,15 +1309,18 @@
         async function refreshAvailableModels() {
             const provider = aiProvider, key = llamaKey || (provider === 'groq' ? whisperKey : '');
             if (!key) return showToast('⚠️ Inserisci prima una chiave API');
+            const version = ++modelRefreshVersion;
             const btn = $('refreshModelsBtn');
-            const originalText = btn.textContent;
             btn.disabled = true; btn.textContent = '⏳ Interrogo ' + AI_PROVIDERS[provider].name + '...';
+            setProviderStatus('Aggiornamento catalogo ' + AI_PROVIDERS[provider].name + '…');
             try {
                 const res = await aiRequest(provider, '/models', key);
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || `Errore ${res.status}`);
-                if (provider !== aiProvider) return;
-                const ids = (data.data || []).map(m => m.id).filter(id => typeof id === 'string');
+                if (version !== modelRefreshVersion) return;
+                if (!res.ok) throw new Error(providerError(provider, res.status, data, key));
+                const models = provider === 'ollama' ? (data.models || []) : (data.data || []);
+                if (!Array.isArray(models)) throw new Error('Formato catalogo non riconosciuto. Riprova l’aggiornamento.');
+                const ids = [...new Set(models.filter(m => m && m.active !== false && (!m.architecture?.output_modalities || m.architecture.output_modalities.includes('text'))).map(m => provider === 'ollama' ? (m.name || m.model) : m.id).filter(id => typeof id === 'string'))].sort();
                 const sttIds = provider === 'groq' ? ids.filter(id => /whisper/i.test(id)) : [];
                 const chatIds = ids.filter(id => !/whisper|embedding|embed-|tts|dall-e|moderation/i.test(id));
                 if (sttIds.length) {
@@ -1288,15 +1328,20 @@
                     sttModel = $('sttModelSelect').value; localStorage.setItem('groq_stt_model', sttModel);
                 }
                 if (chatIds.length) {
+                    localStorage.setItem(catalogStorage(provider), JSON.stringify(chatIds));
                     fillModelSelect($('llmModelSelect'), chatIds);
                     llmModel = $('llmModelSelect').value; localStorage.setItem(aiStorage('model'), llmModel);
                     $('customLlmModel').value = '';
                 }
-                showToast(`✓ ${sttIds.length + chatIds.length} modelli disponibili`);
+                if (!chatIds.length) throw new Error('Il provider non ha restituito modelli di testo. Controlla accesso e catalogo nel tuo account.');
+                setProviderStatus(`✓ Catalogo aggiornato: ${chatIds.length} modelli AI. L’accesso a ciascun modello dipende dal tuo account.`);
+                showToast(`✓ ${chatIds.length} modelli AI aggiornati`);
             } catch (e) {
+                if (version !== modelRefreshVersion) return;
+                setProviderStatus(e.message + ' Il catalogo non è stato aggiornato.', true);
                 showToast('⚠️ ' + e.message);
             } finally {
-                btn.disabled = false; btn.textContent = originalText;
+                if (version === modelRefreshVersion) { btn.disabled = false; btn.textContent = MODEL_REFRESH_LABEL; }
             }
         }
 
@@ -1435,13 +1480,15 @@
         }
 
         // API Keys
-        $('saveKeysBtn').onclick = () => {
+        $('saveKeysBtn').onclick = async () => {
             const wk = $('whisperKeyInput').value.trim();
-            const lk = $('llamaKeyInput').value.trim();
+            const lk = $('llamaKeyInput').value.trim().replace(/^Bearer\s+/i, '');
+            if (/\s/.test(lk)) { setProviderStatus('La chiave API contiene spazi o righe extra: incolla solo la chiave.', true); return; }
             if (wk && wk.startsWith('gsk_')) { whisperKey = wk; localStorage.setItem('groq_whisper_key', wk); $('whisperKeyBox').style.display = 'none'; $('whisperKeySaved').style.display = 'flex'; }
-            if (lk) { llamaKey = lk; localStorage.setItem(aiStorage('key'), lk); $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
+            if (lk) { llamaKey = lk; localStorage.setItem(aiStorage('key'), lk); localStorage.removeItem(catalogStorage(aiProvider)); $('llamaKeyInput').value = ''; $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
             if (whisperKey && llamaKey) $('saveKeysBtn').style.display = 'none';
             showToast('✓ Chiavi salvate');
+            if (lk || (wk && aiProvider === 'groq')) await refreshAvailableModels();
         };
 
         window.changeKey = type => {
@@ -1811,7 +1858,8 @@
                     continue;
                 }
                 if (res.ok) return data;
-                lastError = (typeof data.error === 'string' ? data.error : data.error?.message) || `Errore ${res.status}`;
+                lastError = providerError(provider, res.status, data, key, base.model);
+                if (provider === aiProvider) setProviderStatus(lastError, true);
                 if (res.status !== 400) throw new Error(lastError);
             }
             throw new Error(lastError);
