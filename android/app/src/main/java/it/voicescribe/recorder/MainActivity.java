@@ -1,89 +1,111 @@
 package it.voicescribe.recorder;
 
 import android.Manifest;
-import android.app.Activity;
+import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
-import android.text.InputType;
-import android.widget.*;
+import android.webkit.*;
+import android.widget.Toast;
+import org.json.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
+import java.util.*;
 import java.util.concurrent.*;
-import java.util.zip.*;
 
+/** Original VoiceScribe UI; the microphone belongs exclusively to the native service. */
 public final class MainActivity extends Activity {
-    private EditText key, model, language;
-    private TextView state, transcript;
-    private Button start, stop, pause, retry, export;
-    private Spinner sessions;
+    private static final String PAGE = "https://appassets.androidplatform.net/assets/index.html";
+    private WebView web;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private volatile boolean retrying;
+    private volatile boolean starting, retrying;
+    private String key, model, language;
     private boolean pendingStart;
-    private File exportSession;
-    private final Runnable refresh = new Runnable() {
-        public void run() { refreshText(); ui.postDelayed(this, 2000); }
-    };
+    private ValueCallback<Uri[]> filePicker;
+    private File download;
+    private final Deque<Download> downloads = new ArrayDeque<>();
+    private boolean exporting;
+
     public void onCreate(Bundle saved) {
         super.onCreate(saved);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(24, 32, 24, 24);
-        scroll.addView(layout); setContentView(scroll);
-        label(layout, "VoiceScribe Audio", 24);
-        label(layout, "Registrazione Android anche a schermo bloccato. Avvia qui, poi premi Home o blocca il telefono. L'audio viene inviato a Groq per la trascrizione.", 16);
-        key = input(layout, "Chiave Groq (non salvata su disco)", ""); key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        key.setSaveEnabled(false); key.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO);
-        model = input(layout, "Modello Whisper", "whisper-large-v3-turbo");
-        language = input(layout, "Lingua (es. it, en)", "it");
-        start = button(layout, "Registra", this::requestStart);
-        pause = button(layout, "Pausa / Riprendi", () -> {
-            if (RecordingService.recording) { RecordingService.paused = !RecordingService.paused; refreshText(); }
+        web = new WebView(this); web.setBackgroundColor(0xff0a0a0f); setContentView(web);
+        web.setOnApplyWindowInsetsListener((view, insets) -> {
+            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
         });
-        stop = button(layout, "Ferma", () -> startService(new Intent(this, RecordingService.class).setAction(RecordingService.STOP)));
-        state = label(layout, "Pronto", 16);
-        label(layout, "Sessioni salvate", 18);
-        sessions = new Spinner(this); layout.addView(sessions); reloadSessions();
-        sessions.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) { refreshText(); }
-            public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        WebSettings settings = web.getSettings();
+        settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false); settings.setAllowContentAccess(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        web.addJavascriptInterface(new RecorderBridge(), "AndroidRecorder");
+        web.setWebViewClient(new WebViewClient() {
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (PAGE.equals(request.getUrl().toString())) return false;
+                if (request.isForMainFrame() && "https".equals(request.getUrl().getScheme()))
+                    startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl()));
+                return true;
+            }
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                if (!"https".equals(url.getScheme()) || !"appassets.androidplatform.net".equals(url.getHost())) return null;
+                String path = url.getPath();
+                try {
+                    if (path != null && path.matches("/assets/(index\\.html|native-bridge\\.js|icon\\.svg|manifest\\.webmanifest|vendor/(jspdf\\.umd\\.min\\.js|chart\\.umd\\.js))")) {
+                        String type = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".svg") ? "image/svg+xml" : "application/json";
+                        Map<String,String> headers = new HashMap<>();
+                        headers.put("Content-Security-Policy", "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://api.groq.com; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'none'; object-src 'none'; base-uri 'none'");
+                        return new WebResourceResponse(type, "UTF-8", 200, "OK", headers, getAssets().open(path.substring(8)));
+                    }
+                } catch (IOException ignored) { }
+                return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+            }
         });
-        retry = button(layout, "Riprova segmenti non trascritti", this::retry);
-        export = button(layout, "Esporta sessione (ZIP: audio + testo)", () -> {
-            exportSession = selectedSession(); if (exportSession == null) return;
-            Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE);
-            save.putExtra(Intent.EXTRA_TITLE, exportSession.getName() + ".zip"); startActivityForResult(save, 20);
+        web.setWebChromeClient(new WebChromeClient() {
+            public void onPermissionRequest(PermissionRequest request) { request.deny(); }
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this).setMessage(message).setPositiveButton("OK", (d,w) -> result.confirm()).setOnCancelListener(d -> result.cancel()).show(); return true;
+            }
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this).setMessage(message).setPositiveButton("Sì", (d,w) -> result.confirm()).setNegativeButton("No", (d,w) -> result.cancel()).setOnCancelListener(d -> result.cancel()).show(); return true;
+            }
+            public boolean onJsPrompt(WebView view, String url, String message, String value, JsPromptResult result) {
+                android.widget.EditText input = new android.widget.EditText(MainActivity.this); input.setText(value);
+                new AlertDialog.Builder(MainActivity.this).setMessage(message).setView(input).setPositiveButton("OK", (d,w) -> result.confirm(input.getText().toString())).setNegativeButton("Annulla", (d,w) -> result.cancel()).setOnCancelListener(d -> result.cancel()).show(); return true;
+            }
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (filePicker != null) filePicker.onReceiveValue(null);
+                filePicker = callback;
+                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*"), 10); return true;
+            }
         });
-        button(layout, "Impostazioni batteria dell'app", () -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
-        label(layout, "Se il produttore interrompe il servizio, controlla Batteria nelle impostazioni dell'app. Non è richiesta alcuna esenzione automatica. Forza arresto e revoca del microfono interrompono la sessione.", 14);
-        transcript = label(layout, "", 16); transcript.setTextIsSelectable(true);
-        if (saved != null) { model.setText(saved.getString("model", "whisper-large-v3-turbo")); language.setText(saved.getString("language", "it")); }
+        web.loadUrl(PAGE);
     }
-    private TextView label(LinearLayout layout, String text, int size) {
-        TextView view = new TextView(this); view.setText(text); view.setTextSize(size); view.setPadding(0, 12, 0, 12); layout.addView(view); return view;
+    private void toast(String text) { Toast.makeText(this, text, Toast.LENGTH_LONG).show(); }
+    private void startError(String message) {
+        starting = false; pendingStart = false; RecordingService.status = message;
+        if (web != null) web.evaluateJavascript("window.nativeRecorderError && window.nativeRecorderError(" + JSONObject.quote(message) + ")", null);
     }
-    private EditText input(LinearLayout layout, String hint, String value) {
-        EditText view = new EditText(this); view.setHint(hint); view.setText(value); view.setSingleLine(true); layout.addView(view); return view;
-    }
-    private Button button(LinearLayout layout, String text, Runnable action) {
-        Button view = new Button(this); view.setText(text); view.setOnClickListener(v -> action.run()); layout.addView(view); return view;
-    }
-    private boolean credentials() {
-        if (key.getText().toString().trim().isEmpty() || model.getText().toString().trim().isEmpty() || !language.getText().toString().trim().matches("[a-z]{2}")) {
-            Toast.makeText(this, "Inserisci chiave, modello e lingua di due lettere", Toast.LENGTH_LONG).show(); return false;
-        }
-        return true;
-    }
-    private void requestStart() {
-        if (RecordingService.active || retrying || !credentials()) return;
-        java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+    private void requestStart(String apiKey, String selectedModel, String lang) {
+        if (RecordingService.active || starting || retrying) return;
+        if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare il microfono"); return; }
+        if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
+        key = apiKey; model = selectedModel; language = lang; starting = true;
+        ArrayList<String> permissions = new ArrayList<>();
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.POST_NOTIFICATIONS);
-        if (!permissions.isEmpty()) { requestPermissions(permissions.toArray(new String[0]), 10); return; }
+        if (!permissions.isEmpty()) { requestPermissions(permissions.toArray(new String[0]), 20); return; }
+        begin();
+    }
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request != 20) return;
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { startError("Permesso microfono negato"); return; }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            toast("Notifiche negate: usa Ferma nell'app; servizio visibile in App attive");
         pendingStart = true;
         if (hasWindowFocus()) { pendingStart = false; begin(); }
     }
@@ -91,76 +113,140 @@ public final class MainActivity extends Activity {
         super.onWindowFocusChanged(focused);
         if (focused && pendingStart) { pendingStart = false; begin(); }
     }
-    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
-        super.onRequestPermissionsResult(request, permissions, results);
-        if (request != 10) return;
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { state.setText("Permesso microfono negato"); return; }
-        // Notification permission is optional for FGS; Android still shows it in active apps.
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-            Toast.makeText(this, "Notifiche negate: servizio visibile in App attive; Ferma dall'app", Toast.LENGTH_LONG).show();
-        pendingStart = true;
-        if (hasWindowFocus()) { pendingStart = false; begin(); }
-    }
     private void begin() {
-        if (RecordingService.active || isFinishing() || !hasWindowFocus()) { state.setText("Torna nell'app e premi Registra"); return; }
-        Intent intent = new Intent(this, RecordingService.class).putExtra("key", key.getText().toString().trim())
-            .putExtra("model", model.getText().toString().trim()).putExtra("language", language.getText().toString().trim());
-        try { startForegroundService(intent); start.setEnabled(false); ui.postDelayed(() -> { reloadSessions(); refreshText(); }, 500); }
-        catch (Exception e) { state.setText("Avvio non consentito: " + e.getMessage()); }
+        if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app e premi Registra"); return; }
+        try {
+            startForegroundService(new Intent(this, RecordingService.class).putExtra("key", key).putExtra("model", model).putExtra("language", language));
+            ui.postDelayed(() -> { starting = false; key = null; }, 400);
+        } catch (Exception e) { startError("Avvio non consentito: " + e.getMessage()); }
     }
-    private File selectedSession() {
-        Object name = sessions.getSelectedItem(); return name == null ? null : new File(getFilesDir(), name.toString());
+    private File session(String id) throws IOException {
+        if (id == null || !id.matches("session-[0-9]{13}")) throw new IOException("Sessione non valida");
+        File dir = new File(getFilesDir(), id);
+        if (!dir.isDirectory()) throw new IOException("Sessione non trovata");
+        return dir;
     }
-    private void reloadSessions() {
-        String[] names = getFilesDir().list((dir, name) -> name.startsWith("session-") && new File(dir, name).isDirectory());
-        if (names == null) names = new String[0]; Arrays.sort(names, java.util.Collections.reverseOrder());
-        sessions.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names));
+    private String latest() { return getSharedPreferences("native", 0).getString("latest", ""); }
+    private JSONObject snapshot(String id) throws Exception {
+        File dir = session(id); JSONArray entries = new JSONArray(); long size = 0;
+        int pending = 0; File[] files = Transcriber.segments(dir);
+        for (File wav : files) {
+            size += Math.max(0, wav.length() - 44);
+            if (Transcriber.result(wav).exists()) {
+                String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
+                entries.put(new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text));
+            } else pending++;
+        }
+        File[] partials = dir.listFiles((d,n) -> n.endsWith(".part"));
+        if (partials != null) for (File partial : partials) size += Math.max(0, partial.length() - 44);
+        return new JSONObject().put("sessionId", id).put("entries", entries).put("elapsedMs", size * 1000 / WavFile.BYTES_PER_SECOND).put("chunkCount", files.length).put("pending", pending);
     }
-    private void refreshText() {
-        if (state == null) return;
-        state.setText(RecordingService.paused ? "In pausa (microfono aperto, campioni scartati)" : RecordingService.status);
-        start.setEnabled(!RecordingService.active && !retrying); stop.setEnabled(RecordingService.recording);
-        pause.setEnabled(RecordingService.recording); retry.setEnabled(!RecordingService.active && !retrying);
-        export.setEnabled(!RecordingService.active && !retrying && selectedSession() != null);
-        try { transcript.setText(Transcriber.transcript(selectedSession())); }
-        catch (Exception e) { transcript.setText("Lettura sessione fallita: " + e.getMessage()); }
+    private void repair(File dir) throws IOException {
+        if (RecordingService.active && dir.getName().equals(latest())) return;
+        File[] files = dir.listFiles((d,n) -> n.endsWith(".part"));
+        if (files != null) for (File file : files) {
+            WavFile.repair(file);
+            if (!file.renameTo(new File(file.getPath().replace(".part", ".wav")))) throw new IOException("Recupero audio fallito");
+        }
     }
-    private void retry() {
-        File session = selectedSession(); if (session == null || RecordingService.active || retrying || !credentials()) return;
-        String apiKey = key.getText().toString().trim(), selectedModel = model.getText().toString().trim(), lang = language.getText().toString().trim();
-        retrying = true; refreshText();
-        worker.execute(() -> {
+    private File combinedAudio(String id) throws IOException {
+        File dir = session(id); repair(dir); File[] files = Transcriber.segments(dir);
+        if (files.length == 0) throw new IOException("Attendi il primo segmento o ferma la registrazione");
+        File out = File.createTempFile("voicescribe-", ".wav", getCacheDir());
+        try (WavFile wav = new WavFile(out)) {
+            byte[] buffer = new byte[8192];
+            for (File file : files) try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
+                input.seek(44); int n; while ((n = input.read(buffer)) > 0) wav.write(buffer, n);
+            }
+        }
+        return out;
+    }
+    private static final class Download {
+        final File file; final String name, type;
+        Download(File file, String name, String type) { this.file = file; this.name = name; this.type = type; }
+    }
+    private void offerDownload(File file, String name, String type) {
+        downloads.add(new Download(file, name, type)); if (!exporting) nextDownload();
+    }
+    private void nextDownload() {
+        Download next = downloads.poll(); if (next == null) { exporting = false; return; }
+        exporting = true; download = next.file;
+        startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(next.type).putExtra(Intent.EXTRA_TITLE, next.name), 30);
+    }
+    public final class RecorderBridge {
+        @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang)); }
+        @JavascriptInterface public void stop() { ui.post(() -> { if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP)); }); }
+        @JavascriptInterface public void pause(boolean value) { if (RecordingService.recording) RecordingService.paused = value; }
+        @JavascriptInterface public String state() {
             try {
-                // Process termination may leave an open WAV. Repair before requeueing.
-                File[] partials = session.listFiles((dir, name) -> name.endsWith(".part"));
-                if (partials != null) for (File file : partials) {
-                    WavFile.repair(file);
-                    if (!file.renameTo(new File(file.getPath().replace(".part", ".wav")))) throw new IOException("Recupero audio fallito");
-                }
-                for (File wav : Transcriber.segments(session)) Transcriber.transcribe(wav, apiKey, selectedModel, lang);
-                RecordingService.status = "Sessione recuperata e trascritta";
-            } catch (Exception e) { RecordingService.status = "Audio conservato · " + e.getMessage(); }
-            finally { retrying = false; ui.post(this::refreshText); }
-        });
+                String id = latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
+                return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
+                    .put("starting", starting).put("retrying", retrying).put("level", RecordingService.level).put("status", RecordingService.status).toString();
+            } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
+        }
+        @JavascriptInterface public String sessions() {
+            JSONArray data = new JSONArray(); File[] dirs = getFilesDir().listFiles(f -> f.isDirectory() && f.getName().matches("session-[0-9]{13}"));
+            if (dirs != null) { Arrays.sort(dirs, Comparator.comparing(File::getName).reversed()); for (File dir : dirs) try { data.put(snapshot(dir.getName())); } catch (Exception ignored) { } }
+            return data.toString();
+        }
+        @JavascriptInterface public void retry(String id, String apiKey, String selectedModel, String lang) {
+            ui.post(() -> {
+                if (RecordingService.active || retrying || !hasWindowFocus()) return;
+                retrying = true;
+                worker.execute(() -> {
+                    try {
+                        File dir = session(id); repair(dir);
+                        for (File wav : Transcriber.segments(dir)) Transcriber.transcribe(wav, apiKey, selectedModel, lang);
+                        RecordingService.status = "Sessione recuperata e trascritta";
+                    } catch (Exception e) { RecordingService.status = "Audio conservato · " + e.getMessage(); }
+                    finally { retrying = false; }
+                });
+            });
+        }
+        @JavascriptInterface public void batterySettings() { ui.post(() -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())))); }
+        @JavascriptInterface public void exportAudio(String id) {
+            worker.execute(() -> {
+                try { File file = combinedAudio(id); ui.post(() -> offerDownload(file, "voicescribe_" + id + ".wav", "audio/wav")); }
+                catch (Exception e) { ui.post(() -> toast(e.getMessage())); }
+            });
+        }
+        @JavascriptInterface public void download(String name, String type, String base64) {
+            if (base64.length() > 64 * 1024 * 1024) { ui.post(() -> toast("Export troppo grande")); return; }
+            worker.execute(() -> {
+                try {
+                    byte[] data = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                    File file = File.createTempFile("export-", ".tmp", getCacheDir()); Files.write(file.toPath(), data);
+                    String safeName = name.replaceAll("[^a-zA-Z0-9._-]", "_");
+                    ui.post(() -> offerDownload(file, safeName, type.isEmpty() ? "application/octet-stream" : type));
+                } catch (Exception e) { ui.post(() -> toast("Export fallito: " + e.getMessage())); }
+            });
+        }
     }
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != 20 || result != RESULT_OK || data == null || exportSession == null) return;
-        File session = exportSession; Uri destination = data.getData();
-        worker.execute(() -> {
-            try (OutputStream out = getContentResolver().openOutputStream(destination); ZipOutputStream zip = new ZipOutputStream(out)) {
-                for (File wav : Transcriber.segments(session)) { zip.putNextEntry(new ZipEntry(wav.getName())); Files.copy(wav.toPath(), zip); zip.closeEntry(); }
-                zip.putNextEntry(new ZipEntry("trascrizione.txt")); zip.write(Transcriber.transcript(session).getBytes(StandardCharsets.UTF_8)); zip.closeEntry();
-                ui.post(() -> Toast.makeText(this, "Sessione esportata", Toast.LENGTH_LONG).show());
-            } catch (Exception e) { ui.post(() -> Toast.makeText(this, "Export fallito: " + e.getMessage(), Toast.LENGTH_LONG).show()); }
-        });
+        if (request == 10 && filePicker != null) { filePicker.onReceiveValue(result == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null); filePicker = null; }
+        if (request == 30) {
+            File file = download; download = null;
+            if (result == RESULT_OK && data != null && data.getData() != null && file != null) {
+                Uri destination = data.getData();
+                worker.execute(() -> {
+                    try (OutputStream out = getContentResolver().openOutputStream(destination)) { Files.copy(file.toPath(), out); ui.post(() -> toast("File salvato")); }
+                    catch (Exception e) { ui.post(() -> toast("Salvataggio fallito: " + e.getMessage())); }
+                    finally { file.delete(); }
+                });
+            } else if (file != null) file.delete();
+            nextDownload();
+        }
     }
-    protected void onSaveInstanceState(Bundle saved) {
-        // Do not persist the API key in Android's saved activity state.
-        saved.putString("model", model.getText().toString()); saved.putString("language", language.getText().toString());
-        super.onSaveInstanceState(saved);
+    public void onBackPressed() { web.evaluateJavascript("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))", null); moveTaskToBack(true); }
+    protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
+    protected void onPause() {
+        if (web != null) { web.evaluateJavascript("typeof autosaveNow === 'function' && autosaveNow()", null); web.onPause(); }
+        super.onPause();
     }
-    protected void onResume() { super.onResume(); if (sessions != null) reloadSessions(); ui.post(refresh); }
-    protected void onPause() { ui.removeCallbacks(refresh); super.onPause(); }
-    protected void onDestroy() { worker.shutdown(); super.onDestroy(); }
+    protected void onDestroy() {
+        if (filePicker != null) filePicker.onReceiveValue(null);
+        if (web != null) { web.removeJavascriptInterface("AndroidRecorder"); web.destroy(); web = null; }
+        worker.shutdown(); super.onDestroy();
+    }
 }

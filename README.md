@@ -111,10 +111,12 @@ Se ti interessano, si possono riportare nella versione attuale.
 - La trascrizione non separa automaticamente le persone in una conversazione.
 - Un nuovo avvio di registrazione azzera l'audio precedente della sessione corrente (la trascrizione resta): salva il progetto prima di ricominciare.
 
-## Registrazione sul cellulare a schermo spento
+## App Android con grafica originale e schermo spento
 
-La PWA non può garantire cattura del microfono o trascrizione continua a schermo bloccato. L’opzione web mantiene lo schermo attivo finché la pagina è visibile: non abilita un servizio Android. Sono stati rimossi i tentativi di mantenimento tramite audio artificiale.
+L’APK **VoiceScribe Pro 1.1** include lo stesso `index.html` della PWA: tema, schede, appunti, disegno, AI, progetti ed export. `native-bridge.js` collega l’interfaccia al foreground service Android, così registrazione e trascrizione continuano indipendentemente dalla pagina. I progetti conservano il riferimento ai WAV nativi e il testo modificato.
 
-Per Android è stata aggiunta l’app nativa **VoiceScribe Audio** in `android/`: foreground service microphone con notifica e Ferma, WAV persistenti e trascrizione Groq indipendenti dalla schermata. Ha una schermata dedicata, archivi separati dalla PWA ed export ZIP; analisi e appunti restano nella PWA. Non è un aggiornamento automatico dell’app installata dal browser.
+VoiceScribe Pro (`it.voicescribe.pro`) si installa accanto alla precedente VoiceScribe Audio, mantenendo disponibili i dati della vecchia app. I due archivi non vengono migrati automaticamente.
 
-Vedere [android/README.md](android/README.md) per compilazione, file modificati, limitazioni e prove sul telefono. La verifica web passa 59 controlli nel DOM simulato; i sorgenti Java compilano contro Android 35 e passano 3 test WAV. La build APK e la prova reale Android a schermo bloccato restano necessarie.
+Il workflow GitHub **Android APK** genera l’APK installabile ed esegue 59 controlli web, 22 controlli del collegamento Android e 3 test WAV. La registrazione a schermo bloccato va comunque provata sul dispositivo dopo l’aggiornamento.
+
+Vedere [android/README.md](android/README.md) per build, installazione, file cambiati e test. La PWA aperta nel browser conserva i limiti del browser sul microfono in background: il servizio è disponibile solo nell’APK.

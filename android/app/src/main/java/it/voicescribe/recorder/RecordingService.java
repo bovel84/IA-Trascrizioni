@@ -12,6 +12,7 @@ public final class RecordingService extends Service {
     static final String STOP = "it.voicescribe.STOP";
     static volatile boolean active, recording, paused;
     static volatile String status = "Pronto";
+    static volatile double level;
     private volatile boolean stopping;
     private volatile String captureIssue;
     private volatile AudioRecord audio;
@@ -31,7 +32,7 @@ public final class RecordingService extends Service {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, RecordingService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Builder(this, "recording")
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("VoiceScribe Audio")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("VoiceScribe Pro")
             .setContentText(text).setContentIntent(open).setOngoing(true)
             .addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_pause), "Ferma", stop).build()).build();
     }
@@ -54,6 +55,7 @@ public final class RecordingService extends Service {
             if (key == null || key.trim().isEmpty()) throw new IOException("Chiave Groq mancante");
             session = new File(getFilesDir(), "session-" + System.currentTimeMillis());
             if (!session.mkdir()) throw new IOException("Impossibile creare la sessione");
+            getSharedPreferences("native", 0).edit().putString("latest", session.getName()).apply();
             active = recording = true; paused = false; stopping = false;
             // AudioRecord delivers PCM to application code: that thread must keep writing
             // and closing segments while the CPU would otherwise sleep. No screen lock.
@@ -94,6 +96,9 @@ public final class RecordingService extends Service {
                 int n = audio.read(buf, 0, buf.length, AudioRecord.READ_BLOCKING);
                 if (n < 0) throw new IOException("Registrazione interrotta (AudioRecord " + n + ")");
                 if (n == 0) continue;
+                int peak = 0;
+                for (int i = 0; i + 1 < n; i += 2) peak = Math.max(peak, Math.abs((short) ((buf[i] & 255) | (buf[i + 1] << 8))));
+                level = paused ? 0 : peak / 32768.0;
                 if (paused) {
                     if (wav != null) { wav.close(); wav = null; submit(finalizeSegment(partial)); partial = null; segmentBytes = 0; }
                     continue;
@@ -111,6 +116,7 @@ public final class RecordingService extends Service {
         } catch (Exception e) { failure = "Registrazione interrotta: " + e.getMessage(); }
         finally {
             recording = false; paused = false;
+            level = 0;
             if (audio != null) {
                 try { audio.stop(); } catch (Exception ignored) { }
                 audio.release(); audio = null;

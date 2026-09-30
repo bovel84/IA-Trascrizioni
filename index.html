@@ -346,8 +346,9 @@
         @keyframes bgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
         /* Modelli AI configurabili */
-        .model-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: end; }
-        .model-box { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+        .model-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; align-items: end; }
+        .model-box { display: flex; min-width: 0; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+        .model-box .control-select { width: 100%; min-width: 0; max-width: 100%; }
         .model-refresh { width: 100%; margin-top: 0.6rem; padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-secondary); font-family: inherit; font-size: 0.7rem; font-weight: 600; cursor: pointer; }
         .model-refresh:active { transform: scale(0.99); }
 
@@ -368,6 +369,7 @@
         /* Drawing preview in saved items */
         .drawing-preview { width: 50px; height: 50px; border-radius: 8px; background: white; object-fit: cover; }
     </style>
+    <script src="native-bridge.js"></script>
 </head>
 <body>
     <div class="bg-warning" id="bgWarning">SCHERMO ATTIVO · A SCHERMO BLOCCATO LA PWA PUÒ INTERROMPERSI</div>
@@ -812,6 +814,11 @@
         }
 
         async function handleVisibilityChange() {
+            if (window.AndroidRecorder) {
+                if (document.visibilityState === 'hidden') autosaveNow();
+                else if (window.syncNativeRecorder) window.syncNativeRecorder();
+                return;
+            }
             if (document.visibilityState === 'visible') {
                 if (isRecording && audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
                 if (isRecording && backgroundMode && !wakeLock && 'wakeLock' in navigator) {
@@ -1183,6 +1190,7 @@
 
             await checkAutosave();
             await checkRecoveredChunks();
+            if (window.initNativeRecorder) window.initNativeRecorder();
         }
 
         // ============ MODELLI AI ============
@@ -1269,7 +1277,8 @@
                 notes: notesText,
                 chart: chartData,
                 concept: conceptMapData,
-                savedAt: Date.now()
+                savedAt: Date.now(),
+                nativeAudioSession: window.nativeAudioSession || null
             };
         }
 
@@ -1296,6 +1305,7 @@
         }
 
         function restoreSnapshot(s) {
+            window.nativeAudioSession = s.nativeAudioSession || null;
             transcriptEntries = Array.isArray(s.entries) ? s.entries : [];
             if (Array.isArray(s.speakers) && s.speakers.length) {
                 const clean = s.speakers.filter(x => typeof x === 'string' && x.trim()).slice(0, 5);
@@ -1329,7 +1339,7 @@
         }
 
         function registerServiceWorker() {
-            if (!('serviceWorker' in navigator)) return;
+            if (window.AndroidRecorder || !('serviceWorker' in navigator)) return;
             if (!/^https?:$/.test(location.protocol)) return; // il SW non funziona da file://
             navigator.serviceWorker.register('sw.js').catch(() => {});
         }
@@ -1669,6 +1679,7 @@
         // Load audio file
         window.loadAudioFile = () => $('audioFileInput').click();
         $('audioFileInput').onchange = async (e) => {
+            if (window.AndroidRecorder && (isRecording || isProcessing)) return showToast('Ferma prima la registrazione');
             const file = e.target.files[0]; if (!file) return;
             if (!whisperKey) { showToast('⚠️ Inserisci chiave Whisper'); e.target.value = ''; return; }
             showToast(`📁 Caricato: ${file.name}`);
@@ -1680,6 +1691,7 @@
                 else showToast('⚠️ Nessun testo riconosciuto');
             } catch (err) { showToast('⚠️ ' + err.message); }
             audioBlob = file;
+            window.nativeAudioSession = null;
             try { await clearChunksFromDB(AUDIO_SESSION); } catch (err) {}
             showProgress(false); isProcessing = false; updateUI();
             scheduleAutosave(true);
@@ -2271,7 +2283,8 @@
         window.confirmSaveSession = async () => {
             const name = $('sessionNameInput').value.trim(); if (!name) return;
             const sessionId = Date.now();
-            const audio = await ensureAudio();
+            const nativeAudioSession = window.AndroidRecorder ? window.nativeAudioSession : null;
+            const audio = nativeAudioSession ? null : await ensureAudio();
             if (audio) { try { await saveSessionAudio(sessionId, audio); } catch (e) {} }
             const drawingData = drawingHistory.length > 0 ? getCanvasDataUrl() : null;
             if (drawingData) { try { await saveSessionDrawing(sessionId, drawingData); } catch (e) {} }
@@ -2283,7 +2296,7 @@
                 // sessione live continua a essere modificata
                 entries: transcriptEntries.map(entry => ({ ...entry })),
                 speakers: [...speakers], notes: notesText,
-                hasAudio: !!audio, hasDrawing: drawingHistory.length > 0, hasNotes: !!notesText,
+                hasAudio: !!audio || !!nativeAudioSession, nativeAudioSession, hasDrawing: drawingHistory.length > 0, hasNotes: !!notesText,
                 hasChart: !!chartImg, hasMap: !!mapImg, chart: chartData, concept: conceptMapData, chartImage: chartImg, mapImage: mapImg
             };
             savedRecordings.push(record);
@@ -2334,6 +2347,7 @@
 
         window.loadRec = async (id) => {
             const r = savedRecordings.find(x => x.id === id); if (!r) return;
+            window.nativeAudioSession = window.AndroidRecorder ? (r.nativeAudioSession || null) : null;
             transcriptEntries = (Array.isArray(r.entries) ? r.entries : []).map(entry => ({
                 ...entry,
                 offsetMs: typeof entry.offsetMs === 'number' ? entry.offsetMs : parseDuration(entry.time)
@@ -2347,7 +2361,7 @@
             $('notesCharCount').textContent = notesText.length;
 
             // Load audio (da IndexedDB, non da localStorage)
-            audioBlob = r.hasAudio ? await getSessionAudio(id) : null;
+            audioBlob = r.hasAudio && !window.nativeAudioSession ? await getSessionAudio(id) : null;
 
             // Load drawing: entra nella history, cosi' non sparisce al primo ridisegno
             drawingHistory = [];
@@ -2417,6 +2431,7 @@
             if (!transcriptEntries.length && !notesText && drawingHistory.length === 0) return showToast('Già vuoto');
             if (!confirm('Cancellare tutto il contenuto corrente?')) return;
             transcriptEntries = []; audioBlob = null; notesText = '';
+            window.nativeAudioSession = null;
             $('timer').textContent = '00:00';
             $('notesTextarea').value = '';
             $('notesCharCount').textContent = '0';

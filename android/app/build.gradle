@@ -4,11 +4,23 @@ android {
     namespace 'it.voicescribe.recorder'
     compileSdk 35
     defaultConfig {
-        applicationId 'it.voicescribe.recorder'
+        applicationId 'it.voicescribe.pro'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
+def webAssets = layout.buildDirectory.dir('generated/voicescribeAssets')
+tasks.register('syncVoiceScribeAssets', Copy) {
+    from(rootProject.projectDir.parentFile) {
+        include 'index.html', 'native-bridge.js', 'icon.svg', 'manifest.webmanifest'
+    }
+    into(webAssets)
+    filesMatching('index.html') {
+        filter { line -> line.replace('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'vendor/jspdf.umd.min.js').replace('https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js', 'vendor/chart.umd.js') }
+    }
+}
+android.sourceSets.main.assets.srcDir(webAssets)
+tasks.named('preBuild').configure { dependsOn('syncVoiceScribeAssets') }

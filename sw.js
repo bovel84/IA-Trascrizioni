@@ -4,12 +4,13 @@
  * ovviamente online). Funziona solo se la pagina e' servita in http(s):
  * aprendo il file con file:// il browser non registra i service worker.
  */
-const CACHE = 'voicescribe-v2';
+const CACHE = 'voicescribe-v3';
 
 // App shell + librerie da CDN (jsPDF e Chart.js vengono messe in cache al primo avvio)
 const APP_SHELL = [
     './',
     './index.html',
+    './native-bridge.js',
     './manifest.webmanifest',
     './icon.svg',
     'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
