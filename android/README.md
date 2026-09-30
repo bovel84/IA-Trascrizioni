@@ -44,7 +44,7 @@ Aprire `android/` in Android Studio con JDK 17 e SDK 35, oppure:
 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Il workflow **Android APK** su GitHub Actions esegue build e test e pubblica l'APK debug installabile in **VoiceScribe-Audio-APK**. È avviabile manualmente da Actions e si attiva con modifiche al codice Android, HTML o adapter. La chiave debug viene conservata nella cache Actions per consentire aggiornamenti delle build di prova; se la cache viene rimossa, una build potrà avere un certificato diverso. Per distribuzione stabile occorre una chiave release privata gestita separatamente.
+Il workflow **Android APK** su GitHub Actions esegue build e test e pubblica l'APK debug installabile in **VoiceScribe-Audio-APK**. È avviabile manualmente da Actions e si attiva con modifiche al codice Android, HTML o adapter. La firma debug è temporanea per ogni build: APK di esecuzioni diverse possono avere certificati differenti e richiedere reinstallazione (esportare i dati prima). Nessuna chiave di firma viene conservata nella cache o nel repository. Per aggiornamenti stabili occorre una chiave release privata configurata con autorizzazione esplicita.
 
 Controlli: sintassi/ID, **59 test web**, **22 test adapter Android simulato**, **3 test JVM WAV**; sorgenti compilati contro API 35. Anteprima grafica verificata a 390×844, senza scorrimento orizzontale. Questi controlli non sono una prova fisica del nuovo APK sul telefono.
 
@@ -67,6 +67,6 @@ Controlli: sintassi/ID, **59 test web**, **22 test adapter Android simulato**, *
 - `app/src/main/assets/vendor/`: versioni già usate di jsPDF 2.5.1 e Chart.js 4.4.2.
 - `../sw.js`: nuova cache con adapter per la versione web.
 - `../tools/native-bridge-test.js`: regressioni di UI/servizio/progetti/export.
-- `../.github/workflows/android-apk.yml`: build aggiornata, test web/adapter, cache firma debug.
+- `../.github/workflows/android-apk.yml`: build aggiornata, test web/adapter e firma di prova standard.
 
 Riferimenti: [contenuti locali WebView](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content), [bridge JavaScript](https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges), [servizio microphone](https://developer.android.com/develop/background-work/services/fgs/service-types#microphone).
