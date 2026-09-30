@@ -44,7 +44,7 @@ Web app in **un unico file HTML** per registrare audio, trascriverlo (Groq Whisp
 - Retry automatico con backoff su errori di rete, `429` e `5xx`; timeout a 90" per chiamata.
 - L'audio resta **solo su IndexedDB** (nessuna doppia copia in RAM): le sessioni lunghe non esauriscono più la memoria del browser.
 - Sessioni interrotte: all'avvio viene proposto il recupero dei chunk rimasti; a fine sessione i chunk passano a `current_audio` e non vengono più riproposti.
-- Pausa/riprendi, background mode con wake lock, visualizzatore, contatori.
+- Pausa/riprendi, opzione mantieni schermo attivo (solo pagina visibile), visualizzatore, contatori.
 
 **Trascrizione (workflow)**
 - Ricerca nella trascrizione con evidenziazione dei risultati.
@@ -71,7 +71,7 @@ Web app in **un unico file HTML** per registrare audio, trascriverlo (Groq Whisp
 
 ```powershell
 node tools/check-app.js     # controlli statici (sintassi JS, id, feature presenti)
-node tools/smoke-test.js    # test end-to-end (50 controlli) in DOM simulato
+node tools/smoke-test.js    # test end-to-end (59 controlli) in DOM simulato
 node --check sw.js          # sintassi del service worker
 ```
 
@@ -110,3 +110,11 @@ Se ti interessano, si possono riportare nella versione attuale.
 - La diarizzazione (chi parla) è **manuale**: si cambia speaker con un tocco durante la registrazione.
 - La trascrizione non separa automaticamente le persone in una conversazione.
 - Un nuovo avvio di registrazione azzera l'audio precedente della sessione corrente (la trascrizione resta): salva il progetto prima di ricominciare.
+
+## Registrazione sul cellulare a schermo spento
+
+La PWA non può garantire cattura del microfono o trascrizione continua a schermo bloccato. L’opzione web mantiene lo schermo attivo finché la pagina è visibile: non abilita un servizio Android. Sono stati rimossi i tentativi di mantenimento tramite audio artificiale.
+
+Per Android è stata aggiunta l’app nativa **VoiceScribe Audio** in `android/`: foreground service microphone con notifica e Ferma, WAV persistenti e trascrizione Groq indipendenti dalla schermata. Ha una schermata dedicata, archivi separati dalla PWA ed export ZIP; analisi e appunti restano nella PWA. Non è un aggiornamento automatico dell’app installata dal browser.
+
+Vedere [android/README.md](android/README.md) per compilazione, file modificati, limitazioni e prove sul telefono. La verifica web passa 59 controlli nel DOM simulato; i sorgenti Java compilano contro Android 35 e passano 3 test WAV. La build APK e la prova reale Android a schermo bloccato restano necessarie.

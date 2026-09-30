@@ -201,6 +201,30 @@ async function main() {
     check('retry con backoff attivo', /attempt < 2/.test(String(ev('transcribeBlob.toString()'))));
     check('beforeunload registrato', /beforeunload/.test(String(ev('setupLifecycleGuards.toString()'))));
 
+    // Screen lock / background lifecycle and recording rotation races.
+    await run('startRecording()');
+    const beforeRace = ev('chunkCount');
+    await run('Promise.all([rotateChunk(), stopRecording()])');
+    check('Ferma durante rotazione non riavvia il microfono',
+        ev('!isRecording && mediaRecorder.state === "inactive" && chunkCount') === beforeRace);
+    check('segmento della rotazione salvato dopo Ferma',
+        (await run('getChunksFromDB(AUDIO_SESSION)')).length === 1);
+
+    await run('startRecording()');
+    await run('(async () => { const rotating = rotateChunk(); togglePause(); await rotating; })()');
+    check('Pausa durante rotazione non riavvia il recorder', ev('isPaused && mediaRecorder.state === "inactive"'));
+    run('togglePause()');
+    check('Riprendi dopo rotazione riapre il recorder', ev('!isPaused && mediaRecorder.state === "recording"'));
+    run("document.visibilityState = 'hidden';");
+    await run('handleVisibilityChange()');
+    check('passaggio in background salva la bozza', ctx.localStorage.getItem('voicescribe_autosave') !== null);
+    check('background non ferma volontariamente la cattura', ev('isRecording && mediaRecorder.state === "recording"'));
+    run('currentStream.getAudioTracks()[0].end()');
+    for (let i = 0; i < 20 && ev('isProcessing'); i++) await wait(50);
+    check('revoca/interruzione microfono chiude la sessione', ev('!isRecording && !isProcessing'));
+    check('audio recuperabile dopo interruzione microfono', (await run('getChunksFromDB(AUDIO_SESSION)')).length === 2);
+    check('nessun audio artificiale per mantenere attiva la pagina', !/createToneDataURL|createOscillator\(|Tieni volume alto/.test(html));
+
     clearTimeout(watchdog);
 }
 

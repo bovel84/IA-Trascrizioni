@@ -168,7 +168,12 @@ function createEnvironment({ html, onFetch } = {}) {
         document: documentStub,
         navigator: {
             userAgent: 'smoke-test',
-            mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) },
+            mediaDevices: { getUserMedia: async () => {
+                const track = { kind: 'audio', _events: {}, stop() {},
+                    addEventListener(type, fn) { this._events[type] = fn; },
+                    end() { this._events.ended?.(); } };
+                return { getTracks: () => [track], getAudioTracks: () => [track] };
+            } },
             clipboard: { writeText: async () => {} },
             serviceWorker: { register: async () => ({}) },
             wakeLock: { request: async () => ({ release() {} }) }

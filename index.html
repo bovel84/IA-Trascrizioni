@@ -370,7 +370,7 @@
     </style>
 </head>
 <body>
-    <div class="bg-warning" id="bgWarning">🔴 REGISTRAZIONE IN BACKGROUND - NON CHIUDERE L'APP</div>
+    <div class="bg-warning" id="bgWarning">SCHERMO ATTIVO · A SCHERMO BLOCCATO LA PWA PUÒ INTERROMPERSI</div>
     <div class="app-container">
         <header class="header">
             <div class="header-content">
@@ -444,8 +444,8 @@
                 <div class="settings-card">
                     <div class="setting-row">
                         <div class="setting-info">
-                            <h4>🔒 Schermo Spento</h4>
-                            <p>Salva chunk ogni 2 min</p>
+                            <h4>💡 Mantieni schermo attivo</h4>
+                            <p>Per schermo bloccato usa l’app Android nativa</p>
                         </div>
                         <label class="toggle-switch">
                             <input type="checkbox" id="backgroundToggle">
@@ -641,7 +641,6 @@
     </div>
 
     <div class="toast" id="toast"></div>
-    <audio id="keepAliveAudio" loop></audio>
     <input type="file" id="audioFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg">
 
     <script>
@@ -802,65 +801,31 @@
 
     <script>
         // ============ BACKGROUND MODE ============
-        let bgAudioContext = null, bgOscillator = null, bgGain = null, bgInterval = null, notificationPermission = false;
-
-        async function startAggressiveBackground() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                const perm = await Notification.requestPermission();
-                notificationPermission = perm === 'granted';
-            } else notificationPermission = Notification.permission === 'granted';
-            if (notificationPermission) new Notification('🎙️ VoiceScribe Registra', { body: 'Registrazione in corso...', tag: 'voicescribe-recording', requireInteraction: true, silent: true });
-            try {
-                bgAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                if (bgAudioContext.state === 'suspended') await bgAudioContext.resume();
-                bgOscillator = bgAudioContext.createOscillator();
-                bgGain = bgAudioContext.createGain();
-                bgOscillator.type = 'sine';
-                bgOscillator.frequency.setValueAtTime(1, bgAudioContext.currentTime);
-                bgGain.gain.setValueAtTime(0.001, bgAudioContext.currentTime);
-                bgOscillator.connect(bgGain);
-                bgGain.connect(bgAudioContext.destination);
-                bgOscillator.start();
-            } catch (e) {}
-            bgInterval = setInterval(() => { if (bgAudioContext && bgAudioContext.state === 'suspended') bgAudioContext.resume(); }, 1000);
-            const audio = $('keepAliveAudio'); audio.src = createToneDataURL(); audio.volume = 0.01; audio.play().catch(() => {});
+        // A screen wake lock only prevents automatic screen sleep while visible.
+        // A PWA cannot promise microphone access with the screen locked.
+        async function startScreenAwakeSupport() {
             document.addEventListener('visibilitychange', handleVisibilityChange);
-            if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: 'VoiceScribe', artist: 'Registrazione...', album: 'VoiceScribe Pro' }); navigator.mediaSession.playbackState = 'playing'; }
         }
 
-        function stopAggressiveBackground() {
-            if (bgOscillator) { try { bgOscillator.stop(); } catch(e) {} bgOscillator = null; }
-            if (bgAudioContext) { bgAudioContext.close().catch(() => {}); bgAudioContext = null; }
-            if (bgInterval) { clearInterval(bgInterval); bgInterval = null; }
-            $('keepAliveAudio').pause(); $('keepAliveAudio').src = '';
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        function stopScreenAwakeSupport() {
+            // Lifecycle listener remains installed for interruption warnings.
         }
 
-        function handleVisibilityChange() {
+        async function handleVisibilityChange() {
             if (document.visibilityState === 'visible') {
-                if (isRecording && bgAudioContext && bgAudioContext.state === 'suspended') bgAudioContext.resume().catch(() => {});
                 if (isRecording && audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
-                if (backgroundMode && 'wakeLock' in navigator) navigator.wakeLock.request('screen').then(wl => { wakeLock = wl; }).catch(() => {});
-            } else if (document.visibilityState === 'hidden') {
-                if (backgroundMode) {
-                    if (bgAudioContext && bgAudioContext.state === 'suspended') bgAudioContext.resume().catch(() => {});
-                    const audio = $('keepAliveAudio'); if (audio && audio.paused) audio.play().catch(() => {});
+                if (isRecording && backgroundMode && !wakeLock && 'wakeLock' in navigator) {
+                    try {
+                        const lock = await navigator.wakeLock.request('screen');
+                        if (!isRecording || !backgroundMode) { await lock.release(); return; }
+                        wakeLock = lock;
+                        lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+                    } catch (e) { showToast('Schermo attivo non disponibile'); }
                 }
-                if (isRecording && audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+            } else if (isRecording) {
+                autosaveNow();
+                showToast('La registrazione web può interrompersi in background. Per schermo bloccato usa VoiceScribe Audio per Android.');
             }
-        }
-
-        function createToneDataURL() {
-            const sampleRate = 8000, duration = 10, samples = sampleRate * duration;
-            const buffer = new ArrayBuffer(44 + samples * 2);
-            const view = new DataView(buffer);
-            const writeString = (offset, string) => { for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i)); };
-            writeString(0, 'RIFF'); view.setUint32(4, 36 + samples * 2, true); writeString(8, 'WAVE'); writeString(12, 'fmt ');
-            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-            writeString(36, 'data'); view.setUint32(40, samples * 2, true);
-            for (let i = 0; i < samples; i++) { const t = i / sampleRate; view.setInt16(44 + i * 2, Math.sin(2 * Math.PI * 100 * t) * 0.01 * 32767, true); }
-            return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
         }
     </script>
 
@@ -1357,6 +1322,7 @@
                 e.returnValue = '';
                 return '';
             });
+            document.addEventListener('visibilitychange', handleVisibilityChange);
             window.addEventListener('pagehide', () => { if (isRecording || transcriptEntries.length) autosaveNow(); });
             // rete di sicurezza: bozza salvata ogni 30 secondi
             setInterval(() => { if (isRecording || transcriptEntries.length || notesText) autosaveNow(); }, 30000);
@@ -1420,15 +1386,15 @@
         // Background Mode
         async function enableBackgroundMode() {
             backgroundMode = true; $('bgBadge').style.display = 'flex'; $('bgWarning').classList.add('active');
-            if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
-            await startAggressiveBackground();
-            showToast('🔒 Background attivo');
+            await handleVisibilityChange();
+            await startScreenAwakeSupport();
+            showToast('💡 Schermo attivo richiesto; il blocco manuale può interrompere la PWA');
         }
 
         function disableBackgroundMode() {
             backgroundMode = false; $('bgBadge').style.display = 'none'; $('bgWarning').classList.remove('active');
             if (wakeLock) { wakeLock.release(); wakeLock = null; }
-            stopAggressiveBackground();
+            stopScreenAwakeSupport();
         }
 
         // Speakers
@@ -1456,14 +1422,8 @@
         // ============ RECORDING ============
         async function startRecording() {
             if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
-            if ($('backgroundToggle').checked) {
-                if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
-                showToast('🔊 Tieni volume alto!');
-                await new Promise(r => setTimeout(r, 1000));
-            }
             try {
                 currentStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
-                if ($('backgroundToggle').checked) await enableBackgroundMode();
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 audioContext.createMediaStreamSource(currentStream).connect(analyser);
@@ -1475,18 +1435,36 @@
                 await clearCurrentAudio();
                 await clearChunksFromDB(REC_SESSION);
                 isRecording = true;
+                currentStream.getAudioTracks().forEach(track => track.addEventListener('ended', () => {
+                    if (isRecording) { showToast('Microfono interrotto dal sistema: salvo i segmenti disponibili'); stopRecording().catch(e => showToast(e.message)); }
+                }, { once: true }));
+                if ($('backgroundToggle').checked) await enableBackgroundMode();
                 startNewChunk();
                 chunkTimer = setInterval(() => { if (isRecording && !isPaused) rotateChunk(); }, CHUNK_INTERVAL);
                 updateUI(); updateSpeakerChips(); startTimer(); startVisualizer();
-            } catch (e) { showToast('⚠️ ' + e.message); }
+            } catch (e) {
+                isRecording = false;
+                if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+                if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+                if (backgroundMode) disableBackgroundMode();
+                updateUI(); showToast('⚠️ ' + e.message);
+            }
         }
 
+        let chunkRotationPromise = null;
         function startNewChunk() {
             const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
             mediaRecorder = new MediaRecorder(currentStream, { mimeType: mime, audioBitsPerSecond: 32000 });
             let chunkData = [];
             const chunkOffset = elapsedMs();
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunkData.push(e.data); };
+            mediaRecorder.onerror = e => {
+                showToast('Registrazione interrotta: ' + (e.error?.message || 'errore microfono'));
+                // MediaRecorder emits final data and stop after error; save those first.
+                mediaRecorder.addEventListener('stop', () => {
+                    if (isRecording) stopRecording().catch(error => showToast(error.message));
+                }, { once: true });
+            };
             // Handler sincrono: assegna lastChunkSaved prima che stopRecording lo attenda
             mediaRecorder.onstop = () => {
                 if (!chunkData.length) { lastChunkSaved = Promise.resolve(); return; }
@@ -1512,16 +1490,25 @@
         }
 
         async function rotateChunk() {
-            if (!mediaRecorder || mediaRecorder.state === 'inactive' || isPaused) return;
-            mediaRecorder.stop();
-            await new Promise(r => setTimeout(r, 100));
-            startNewChunk();
+            if (chunkRotationPromise || !isRecording || !mediaRecorder || mediaRecorder.state === 'inactive' || isPaused) return;
+            const recorder = mediaRecorder;
+            chunkRotationPromise = new Promise(resolve => {
+                recorder.addEventListener('stop', resolve, { once: true });
+                recorder.stop();
+            });
+            try {
+                await chunkRotationPromise;
+                // Stop/pause may have been requested while the stop event was pending.
+                if (isRecording && !isPaused) startNewChunk();
+            } finally { chunkRotationPromise = null; }
         }
 
         async function stopRecording() {
             if (!isRecording) return;
             if (chunkTimer) { clearInterval(chunkTimer); chunkTimer = null; }
             isRecording = false; isProcessing = true; isPaused = false;
+            if (chunkRotationPromise) await chunkRotationPromise;
+            await lastChunkSaved;
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 const stopped = new Promise(resolve => mediaRecorder.addEventListener('stop', resolve, { once: true }));
                 mediaRecorder.stop();
@@ -1560,6 +1547,8 @@
                     mediaRecorder.resume();
                 }
 
+                // Pause during rotation can leave the recorder inactive.
+                if (!chunkRotationPromise && mediaRecorder?.state === 'inactive') startNewChunk();
                 // Resume chunk timer
                 if (!chunkTimer) {
                     chunkTimer = setInterval(() => { if (isRecording && !isPaused) rotateChunk(); }, CHUNK_INTERVAL);
