@@ -61,6 +61,15 @@ async function main() {
     state.elapsedMs = 240000; state.chunkCount = 2;
     run("document.visibilityState = 'visible'; syncNativeRecorder();");
     check('return from background imports missed segments with offsets', run('transcriptEntries.length') === 2 && run('transcriptEntries[1].offsetMs') === 120000);
+    // Native auto archive must not erase manual corrections or resurrect deleted phrases.
+    run("const auto = savedRecordings.find(r => r.nativeAuto); auto.entries[0].text = 'Archivio corretto'; auto.entries.splice(1, 1);");
+    state.entries.push({ nativeSegmentId: 'session-1790766000000/000000240000.wav', offsetMs: 240000, text: 'Terza frase' });
+    state.elapsedMs = 270000; state.chunkCount = 3;
+    run('syncNativeRecorder()');
+    check('native archive preserves manual transcript corrections', run("savedRecordings.find(r => r.nativeAuto).entries[0].text") === 'Archivio corretto');
+    check('native archive preserves deletions while adding new segments',
+        run("savedRecordings.find(r => r.nativeAuto).entries.length") === 2 &&
+        run("savedRecordings.find(r => r.nativeAuto).entries[1].text") === 'Terza frase');
     await run('stopRecording()');
     check('Stop delegates to service rather than browser recorder', calls.some(c => c[0] === 'stop'));
     state.active = false; state.recording = false; state.status = 'Sessione salvata e trascritta';
