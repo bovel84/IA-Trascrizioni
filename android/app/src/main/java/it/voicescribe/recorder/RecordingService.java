@@ -13,6 +13,7 @@ public final class RecordingService extends Service {
     static volatile boolean active, recording, paused;
     static volatile String status = "Pronto";
     static volatile double level;
+    private static final long SEGMENT_SECONDS = 30L; // First transcript appears sooner than after a 2-minute segment.
     private volatile boolean stopping;
     private volatile String captureIssue;
     private volatile AudioRecord audio;
@@ -90,7 +91,7 @@ public final class RecordingService extends Service {
                     }
                 }
             });
-            announce("Registrazione in corso · puoi bloccare lo schermo");
+            announce("Registrazione in corso · schermo bloccabile · segmenti da 30 s");
             byte[] buf = new byte[4096];
             while (recording) {
                 int n = audio.read(buf, 0, buf.length, AudioRecord.READ_BLOCKING);
@@ -108,7 +109,7 @@ public final class RecordingService extends Service {
                     partial = new File(session, offset + ".part"); wav = new WavFile(partial);
                 }
                 wav.write(buf, n); totalBytes += n; segmentBytes += n;
-                if (segmentBytes >= WavFile.BYTES_PER_SECOND * 120L) {
+                if (segmentBytes >= WavFile.BYTES_PER_SECOND * SEGMENT_SECONDS) {
                     wav.close(); wav = null;
                     submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
                 }
