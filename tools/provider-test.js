@@ -78,6 +78,17 @@ async function main() {
     await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
     check(ctx.__elements.get('llmModelSelect').value === run('llmModel') &&
         run('llmModel') === 'new/chat-model', 'provider switch selects persisted model rather than previous provider model');
+    // A manual model ID is authoritative: the dropdown must not keep displaying the old model.
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    run("$('customLlmModel').value = 'glm-5.3-flash'; $('customLlmModel').onchange()");
+    check(ctx.__elements.get('llmModelSelect').value === 'glm-5.3-flash' &&
+        run('llmModel') === 'glm-5.3-flash',
+        'manually entered model is also selected visibly in the dropdown');
+    const forbidden = run("providerError('ollama',403,{error:'403 403 Forbidden'},'safe_test_key','glm-5.3-flash')");
+    check(forbidden.includes('ollama.com/settings/keys') &&
+        forbidden.includes('glm-5.3-flash') &&
+        !forbidden.includes('Dettaglio: 403 403 Forbidden'),
+        'Ollama 403 shows actionable guidance without duplicated gateway text');
     // A decommissioned model must not trigger the optional-parameter fallback.
     const badCalls = [];
     ctx.nativeAiRequest = async (provider, path, key, body) => {
