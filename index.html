@@ -1315,7 +1315,7 @@
                 429: 'Limite di richieste raggiunto: attendi e riprova.'
             };
             // Some gateways return "403 403 Forbidden" as unstructured text.
-            if (status === 403 && /^\\s*(?:403\\s*){1,2}(?:forbidden)?\\s*$/i.test(detail)) detail = '';
+            if (status === 403 && /^\s*(?:403\s*){1,2}(?:forbidden)?\s*$/i.test(detail)) detail = '';
             return `${AI_PROVIDERS[provider].name} · HTTP ${status}${model ? ' · ' + model : ''}: ${advice[status] || 'Richiesta non riuscita.'}${detail ? ' Dettaglio: ' + detail : ''}`;
         }
 
