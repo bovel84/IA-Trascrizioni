@@ -1,8 +1,8 @@
-# Provider AI — VoiceScribe Pro 1.6
+# Provider AI — VoiceScribe Pro 1.7
 
 Il menu **Provider AI** aggiunge Ollama Cloud, NVIDIA NIM e OpenRouter a Groq per riassunti, analisi, grafici, mappe e chat. La registrazione nativa a schermo spento e la trascrizione Whisper usano ancora la chiave Groq nel riquadro sinistro.
 
-## Verifica chiave e modello (1.6)
+## Verifica chiave e modello (1.7)
 
 - Se scegli **Groq**, puoi inserire una sola chiave `gsk_...` nel campo **Groq Whisper**: vale anche per i comandi AI quando non è indicata una chiave Groq LLM specifica. Nessun altro provider eredita questa chiave.
 - Se scegli **Ollama Cloud**, **NVIDIA NIM** o **OpenRouter**, inserisci la rispettiva chiave nel campo **Provider AI**; ciascuna viene conservata separatamente.
@@ -29,7 +29,7 @@ La versione 1.4 corregge gli alias Ollama destinati all'app o al terminale: `glm
 
 Le risposte native di errore non JSON conservano ora il dettaglio come testo, senza renderizzare HTML. Un errore 403 persistente deve essere verificato nel portale Ollama in base al dettaglio ricevuto; l'app non aggira restrizioni del servizio.
 
-Ollama usa il catalogo cloud ufficiale `https://ollama.com/api/tags`, letto come `models[].name`; la chat usa `https://ollama.com/v1/chat/completions`. Groq, NVIDIA e OpenRouter usano i rispettivi `/models`, letti come `data[].id`. I modelli disattivati e quelli dichiarati senza output testuale vengono esclusi. Una lista pubblica non prova che la chiave possa usare tutti i modelli: la risposta della richiesta di analisi resta determinante.
+Ollama ora usa il catalogo pubblico `https://ollama.com/v1/models`, letto come `data[].id` e **senza header Authorization**: serve per vedere i modelli, non per verificare la chiave. La chat usa `https://ollama.com/v1/chat/completions` con la chiave Bearer. Questo evita i 403 che possono verificarsi inviando credenziali al catalogo non autenticato. Groq, NVIDIA e OpenRouter usano i rispettivi `/models`, letti come `data[].id`. I modelli disattivati e quelli dichiarati senza output testuale vengono esclusi. Una lista pubblica non prova che la chiave possa usare tutti i modelli: la risposta della richiesta di analisi resta determinante.
 
 Sotto il pulsante di aggiornamento resta visibile il risultato o l'errore, compreso il provider e il dettaglio restituito dal servizio. HTTP 403 indica accesso negato: verifica nel portale del provider che la chiave sia del servizio selezionato, che l'account sia abilitato all'API e che il modello sia incluso nel tuo piano/permessi. L'app non può rimuovere un divieto imposto dal provider. HTTP 401 indica una chiave non accettata; HTTP 402 e 429 indicano problemi di credito o limiti di richieste. Non vengono fatti tentativi su provider diversi e le chiavi eventualmente ripetute nei dettagli del servizio vengono nascoste.
 
