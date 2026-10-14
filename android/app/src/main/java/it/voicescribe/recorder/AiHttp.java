@@ -18,6 +18,9 @@ final class AiHttp {
         }
         return base + path;
     }
+    static boolean isPublicCatalog(String provider, String path) {
+        return "ollama".equals(provider) && "/models".equals(path);
+    }
     static final class Result {
         final int status; final String body;
         Result(int status, String body) { this.status = status; this.body = body; }
@@ -25,7 +28,7 @@ final class AiHttp {
     static Result request(String provider, String path, String key, String body) throws IOException {
         String endpoint = endpoint(provider, path);
         // Ollama's model catalog is public; never send the user's API key there.
-        boolean publicCatalog = "ollama".equals(provider) && "/models".equals(path);
+        boolean publicCatalog = isPublicCatalog(provider, path);
         if (key == null || (!publicCatalog && key.isEmpty()) || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
             throw new IOException("Chiave o richiesta AI non valida");
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
