@@ -48,7 +48,17 @@ window.initNativeRecorder = function () {
                     hasAudio: true, hasNotes: false, hasDrawing: false, hasChart: false, hasMap: false };
                 savedRecordings.push(record);
             }
-            record.entries = (state.entries || []).map(entryFromNative);
+            // Merge newly transcribed segments only: never overwrite user corrections
+            // or resurrect segments the user deliberately deleted from this archive.
+            if (!Array.isArray(record.entries)) record.entries = [];
+            const imported = new Set(Array.isArray(record.nativeImportedSegmentIds)
+                ? record.nativeImportedSegmentIds : record.entries.map(e => e.nativeSegmentId).filter(Boolean));
+            for (const entry of state.entries || []) {
+                if (!entry.nativeSegmentId || imported.has(entry.nativeSegmentId)) continue;
+                record.entries.push(entryFromNative(entry));
+                imported.add(entry.nativeSegmentId);
+            }
+            record.nativeImportedSegmentIds = [...imported];
             record.duration = formatDuration(state.elapsedMs || 0);
             changed = true;
         }
@@ -117,7 +127,8 @@ window.initNativeRecorder = function () {
         if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
         if (isRecording || isProcessing) return;
         audioBlob = null; startRequested = true; isProcessing = true; updateUI();
-        bridge.start(whisperKey, sttModel, $('languageSelect').value);
+        try { bridge.start(whisperKey, sttModel, $('languageSelect').value); }
+        catch (error) { window.nativeRecorderError('Impossibile avviare il servizio Android: ' + (error.message || 'errore sconosciuto')); }
     };
     stopRecording = async function () { bridge.stop(); };
     window.togglePause = () => { if (isRecording) { bridge.pause(!isPaused); isPaused = !isPaused; updateUI(); } };
