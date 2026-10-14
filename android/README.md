@@ -1,6 +1,6 @@
 # VoiceScribe Pro Android — grafica originale e schermo spento
 
-L'APK 1.1 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
+L'APK 1.5 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
 
 La registrazione non è eseguita dalla pagina: `native-bridge.js` collega i pulsanti al servizio Android già presente. Il servizio continua a catturare WAV e trascrivere su Groq con schermo bloccato. La pagina sincronizza timer, stato, livello audio e nuovi risultati quando è visibile. Tornare dal background non reinserisce frasi già importate o annulla modifiche al testo.
 
@@ -25,7 +25,7 @@ Eliminare un progetto non cancella i WAV nativi condivisi con altri progetti. Ca
 ## Registrazione a schermo spento
 
 - Servizio non esportato, tipo **microphone**, permessi `RECORD_AUDIO`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`; avvio solo da azione nella schermata visibile.
-- PCM mono 16 bit/16 kHz con `AudioRecord`, segmenti WAV di circa 120 s, cattura indipendente da WebView e timer JavaScript. Circa 115 MB/ora di audio.
+- PCM mono 16 bit/16 kHz con `AudioRecord`, segmenti WAV di circa 30 s, cattura indipendente da WebView e timer JavaScript. Circa 115 MB/ora di audio.
 - `PARTIAL_WAKE_LOCK` durante cattura e completamento della coda: mantiene il thread PCM attivo, senza tenere acceso lo schermo. Rilasciato su completamento/errori/distruzione del servizio. Nessun audio artificiale.
 - Trascrizione su thread separato, timeout di rete e retry per errori transitori. Senza rete/nel risparmio energetico l'audio resta conservato, ma l'arrivo del testo remoto può essere ritardato.
 - Pausa chiude il segmento e scarta campioni; il microfono rimane aperto. Timestamp relativi all'audio, pause escluse.
@@ -52,7 +52,7 @@ Controlli: sintassi/ID, **59 test web**, **22 test adapter Android simulato**, *
 
 1. Verificare tema, tutte le schede, note/disegno, progetto salvato/riaperto e PDF/WAV esportati.
 2. Registrare oltre 4 minuti; poi registrare 10 minuti con schermo bloccato pronunciando frasi riconoscibili ogni minuto. Riaprire e ascoltare il WAV: devono esserci le frasi prima, durante e dopo il blocco.
-3. Provare Home/ritorno, rotazione, Pausa/Riprendi e Ferma dalla notifica. La trascrizione non deve duplicarsi, il servizio non deve dipendere dalla pagina.
+3. Provare Home/ritorno, rotazione, Pausa/Riprendi e Ferma dalla notifica. La trascrizione non deve duplicarsi, il servizio non deve dipendere dalla pagina. Il primo risultato arriva dopo il primo segmento (circa 30 secondi) e la risposta del provider; premendo Ferma viene inviato anche il segmento più breve.
 4. Disattivare la rete, fermare, riattivare e usare Riprova. Verificare recupero dell'audio e TXT mancanti.
 5. Provare chiamata, revoca microfono e forza arresto; verificare recupero dei `.part`, nessuna ripartenza abusiva. Ripetere scollegati dal caricatore/in risparmio energetico.
 
