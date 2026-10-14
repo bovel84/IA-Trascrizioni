@@ -28,6 +28,15 @@ async function main() {
     check(uploadedFile && uploadedFile.name === 'audio.wav', 'imported WAV uses correct filename and type for Groq');
     ctx.fetch = originalFetch;
     run("whisperKey = 'gsk_audio'");
+    // One Groq key must work for both Whisper and chat, without copying it
+    // to the separate LLM slot or leaking it to another provider.
+    run("llamaKey = ''; localStorage.removeItem('groq_llama_key'); updateProviderUI()");
+    check(run("activeAiKey()") === 'gsk_audio', 'single Groq Whisper key also enables LLM');
+    await run("groqChat({messages:[{role:'user',content:'Prova'}]})");
+    check(calls.at(-1).options.headers.Authorization === 'Bearer gsk_audio', 'Groq LLM uses shared Whisper credential');
+    await run("testSelectedLlm()");
+    check(ctx.__elements.get('aiProviderStatus').textContent.includes('risponde correttamente'),
+        'manual lightweight test confirms real LLM response');
     const bases = { groq: 'https://api.groq.com/openai/v1', ollama: 'https://ollama.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', openrouter: 'https://openrouter.ai/api/v1' };
     for (const [provider, base] of Object.entries(bases)) {
         await run(`$('aiProviderSelect').value = '${provider}'; $('aiProviderSelect').onchange()`);
@@ -51,6 +60,25 @@ async function main() {
         check(run('llamaKey') === 'test_' + provider && run('llmModel') === 'new/chat-model', provider + ' restores separate settings');
         check(run('readModelCatalog(aiProvider).includes("new/chat-model")'), provider + ' retains refreshed catalog');
     }
+    // A decommissioned model must not trigger the optional-parameter fallback.
+    const badCalls = [];
+    ctx.nativeAiRequest = async (provider, path, key, body) => {
+        badCalls.push({ provider, path, key, body });
+        return { ok: false, status: 400, json: async () => ({ error: { message: 'Model not found' } }) };
+    };
+    await assert.rejects(run('groqChat({messages:[]})'), /Model not found/);
+    check(badCalls.length === 1, 'unknown model does not waste calls on retries');
+    const fallbackCalls = [];
+    ctx.nativeAiRequest = async (provider, path, key, body) => {
+        fallbackCalls.push({ provider, path, key, body });
+        if (body.temperature !== undefined)
+            return { ok: false, status: 400, json: async () => ({ error: { message: 'temperature is not supported for this model' } }) };
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'OK' } }] }) };
+    };
+    await run('groqChat({messages:[]})');
+    check(fallbackCalls.length >= 2 && fallbackCalls.at(-1).body.temperature === undefined,
+        'reasoning model retries without unsupported temperature');
+    delete ctx.nativeAiRequest;
     // Race and 400 fallback: switch UI while first request is in flight.
     const attempts = [];
     ctx.nativeAiRequest = async (provider, path, key, body) => {
