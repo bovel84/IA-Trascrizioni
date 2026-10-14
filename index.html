@@ -1207,9 +1207,16 @@
                 scheduleAutosave();
             });
 
+            // Native microphone controls must initialize before draft-recovery prompts.
+            if (window.AndroidRecorder && window.initNativeRecorder) {
+                try { window.initNativeRecorder(); }
+                catch (error) {
+                    console.error('Android recorder initialization failed', error);
+                    showToast('Registratore Android non inizializzato: riapri l’app');
+                }
+            }
             await checkAutosave();
-            await checkRecoveredChunks();
-            if (window.initNativeRecorder) window.initNativeRecorder();
+            if (!window.AndroidRecorder) await checkRecoveredChunks();
             if (llamaKey || (aiProvider === 'groq' && whisperKey)) refreshAvailableModels();
         }
 
@@ -1545,6 +1552,7 @@
         async function startRecording() {
             if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
             try {
+                if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microfono non disponibile: usa HTTPS o l’APK Android per registrare.');
                 currentStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
@@ -1758,7 +1766,9 @@
 
         async function transcribeBlob(blob, attempt = 0) {
             const form = new FormData();
-            form.append('file', blob, 'audio.webm');
+            // Imported WAV/MP3/M4A files must keep their real format; never label them WebM.
+            const filename = typeof blob?.name === 'string' && blob.name ? blob.name : `audio.${extFromMime(blob?.type || '')}`;
+            form.append('file', blob, filename);
             form.append('model', sttModel);
             form.append('language', $('languageSelect').value);
             form.append('temperature', '0');
