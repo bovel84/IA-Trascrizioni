@@ -51,7 +51,8 @@
         }
         .header-content { display: flex; align-items: center; justify-content: space-between; }
         .logo { display: flex; align-items: center; gap: 0.75rem; }
-        .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+        .logo-icon { width: 40px; height: 40px; border-radius: 12px; overflow: hidden; flex: 0 0 40px; background: #151a2d; }
+        .logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
         .logo-text { font-weight: 700; font-size: 1.25rem; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header-badges { display: flex; gap: 0.5rem; align-items: center; }
 
@@ -377,7 +378,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <div class="logo-icon">🎙️</div>
+                    <div class="logo-icon"><img src="icon.svg" alt="" aria-hidden="true"></div>
                     <span class="logo-text">VoiceScribe</span>
                 </div>
                 <div class="header-badges">
@@ -1254,7 +1255,8 @@
                 if (!id) return;
                 llmModel = id; localStorage.setItem(aiStorage('model'), id);
                 $('customLlmModel').value = id;
-                fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])]);
+                fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])], id);
+                setProviderStatus('Modello selezionato: ' + id + '. Premi Prova modello per verificare l’accesso.');
             };
             $('refreshModelsBtn').onclick = refreshAvailableModels;
             $('testLlmBtn').onclick = testSelectedLlm;
@@ -1306,10 +1308,14 @@
             detail = detail.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 350);
             const advice = {
                 401: 'Chiave non accettata: verifica che appartenga a questo provider.',
-                403: 'Accesso negato dal provider: verifica autorizzazioni della chiave, accesso al modello e piano/account.',
+                403: provider === 'ollama'
+                    ? 'Ollama Cloud ha rifiutato la generazione. Il catalogo pubblico non verifica l’accesso: controlla la chiave su ollama.com/settings/keys e autorizzazioni/limiti dell’account. Se la chiave è corretta, prova un’altra rete: anche un blocco del gateway può causare 403.'
+                    : 'Accesso negato dal provider: verifica autorizzazioni della chiave, accesso al modello e piano/account.',
                 402: 'Credito o quota del provider insufficienti.',
                 429: 'Limite di richieste raggiunto: attendi e riprova.'
             };
+            // Some gateways return "403 403 Forbidden" as unstructured text.
+            if (status === 403 && /^\\s*(?:403\\s*){1,2}(?:forbidden)?\\s*$/i.test(detail)) detail = '';
             return `${AI_PROVIDERS[provider].name} · HTTP ${status}${model ? ' · ' + model : ''}: ${advice[status] || 'Richiesta non riuscita.'}${detail ? ' Dettaglio: ' + detail : ''}`;
         }
 
