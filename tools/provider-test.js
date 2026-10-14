@@ -19,6 +19,14 @@ async function main() {
     for (const match of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) run(match[1]);
     await run('init()');
     check(run('llamaKey') === 'gsk_existing' && run('llmModel') === 'openai/gpt-oss-20b', 'existing Groq key and model retained');
+    const originalFetch = ctx.fetch; let uploadedFile;
+    ctx.fetch = async (url, options) => {
+        uploadedFile = options.body.get('file');
+        return { ok: true, status: 200, json: async () => ({ text: 'ciao' }) };
+    };
+    await run("transcribeBlob(new Blob(['test'], { type: 'audio/wav' }))");
+    check(uploadedFile && uploadedFile.name === 'audio.wav', 'imported WAV uses correct filename and type for Groq');
+    ctx.fetch = originalFetch;
     run("whisperKey = 'gsk_audio'");
     const bases = { groq: 'https://api.groq.com/openai/v1', ollama: 'https://ollama.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', openrouter: 'https://openrouter.ai/api/v1' };
     for (const [provider, base] of Object.entries(bases)) {
