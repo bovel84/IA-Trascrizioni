@@ -1,6 +1,14 @@
-# Provider AI — VoiceScribe Pro 1.4
+# Provider AI — VoiceScribe Pro 1.6
 
 Il menu **Provider AI** aggiunge Ollama Cloud, NVIDIA NIM e OpenRouter a Groq per riassunti, analisi, grafici, mappe e chat. La registrazione nativa a schermo spento e la trascrizione Whisper usano ancora la chiave Groq nel riquadro sinistro.
+
+## Verifica chiave e modello (1.6)
+
+- Se scegli **Groq**, puoi inserire una sola chiave `gsk_...` nel campo **Groq Whisper**: vale anche per i comandi AI quando non è indicata una chiave Groq LLM specifica. Nessun altro provider eredita questa chiave.
+- Se scegli **Ollama Cloud**, **NVIDIA NIM** o **OpenRouter**, inserisci la rispettiva chiave nel campo **Provider AI**; ciascuna viene conservata separatamente.
+- **Salva Chiavi** memorizza il valore sul dispositivo: non certifica l'accesso all'API. **Verifica i modelli disponibili** recupera il catalogo; **Prova modello LLM selezionato** esegue una piccola richiesta reale, volontaria, e segnala successo o il motivo di errore. La prova può consumare una quantità minima di quota/credito.
+- Le richieste LLM riprovano con parametri compatibili soltanto quando un HTTP 400 segnala una limitazione sui parametri facoltativi; 401/403, nomi modello invalidi e altri errori non vengono ripetuti automaticamente. Un HTTP 200 senza testo non viene trattato come un risultato valido.
+- Nell'APK le chiamate passano da Android; sul web possono essere bloccate dal CORS del provider. Nessuna chiave viene inserita nel repository o in test automatici.
 
 ## Uso sul telefono
 
