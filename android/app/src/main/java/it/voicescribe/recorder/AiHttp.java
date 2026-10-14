@@ -11,9 +11,7 @@ final class AiHttp {
         String base;
         switch (provider) {
             case "groq": base = "https://api.groq.com/openai/v1"; break;
-            case "ollama":
-                if ("/models".equals(path)) return "https://ollama.com/api/tags";
-                base = "https://ollama.com/v1"; break;
+            case "ollama": base = "https://ollama.com/v1"; break;
             case "nvidia": base = "https://integrate.api.nvidia.com/v1"; break;
             case "openrouter": base = "https://openrouter.ai/api/v1"; break;
             default: throw new IOException("Provider AI non valido");
@@ -26,12 +24,14 @@ final class AiHttp {
     }
     static Result request(String provider, String path, String key, String body) throws IOException {
         String endpoint = endpoint(provider, path);
-        if (key.isEmpty() || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
+        // Ollama's model catalog is public; never send the user's API key there.
+        boolean publicCatalog = "ollama".equals(provider) && "/models".equals(path);
+        if (key == null || (!publicCatalog && key.isEmpty()) || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
             throw new IOException("Chiave o richiesta AI non valida");
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
         conn.setInstanceFollowRedirects(false);
         conn.setConnectTimeout(15000); conn.setReadTimeout(90000);
-        conn.setRequestProperty("Authorization", "Bearer " + key);
+        if (!publicCatalog) conn.setRequestProperty("Authorization", "Bearer " + key);
         try {
             if ("/chat/completions".equals(path)) {
                 conn.setRequestMethod("POST"); conn.setDoOutput(true);
