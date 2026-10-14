@@ -1903,10 +1903,14 @@
             const provider = aiProvider, key = activeAiKey();
             if (!key) throw new Error('Inserisci la chiave di ' + AI_PROVIDERS[provider].name);
             const base = { model: normalizeAiModel(provider, llmModel), messages, temperature };
+            const jsonOptions = jsonMode ? { response_format: { type: 'json_object' } } : {};
             const variants = [];
-            if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
-            variants.push({ ...base, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
+            if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...jsonOptions });
+            variants.push({ ...base, max_tokens: maxTokens, ...jsonOptions });
             if (jsonMode) variants.push({ ...base, max_tokens: maxTokens });
+            // Some reasoning models reject temperature and/or token settings.
+            variants.push({ model: base.model, messages, max_tokens: maxTokens });
+            variants.push({ model: base.model, messages });
 
             let lastError = 'Errore AI';
             for (const body of variants) {
@@ -1923,6 +1927,12 @@
                 lastError = providerError(provider, res.status, data, key, base.model);
                 if (provider === aiProvider) setProviderStatus(lastError, true);
                 if (res.status !== 400) throw new Error(lastError);
+                // Retry only for rejected optional parameters, not invalid models or keys.
+                const detail = String(typeof data.error === 'string' ? data.error :
+                    data.error?.message || data.message || data.detail || '');
+                if (!/(temperature|response_format|json_object|max_tokens|max_completion_tokens|sampling|top_p)/i.test(detail) ||
+                    !/(unsupported|not supported|unknown|unrecognized|not allowed|invalid|not permitted|not available)/i.test(detail))
+                    throw new Error(lastError);
             }
             throw new Error(lastError);
         }
@@ -2049,7 +2059,10 @@
                     maxTokens: jsonMode ? 1024 : 2048,
                     jsonMode
                 });
-                const content = data.choices?.[0]?.message?.content || '';
+                const raw = data.choices?.[0]?.message?.content;
+                const content = typeof raw === 'string' ? raw :
+                    Array.isArray(raw) ? raw.filter(p => p.type === 'text').map(p => p.text || '').join('\n') : '';
+                if (!content.trim()) throw new Error('Il provider ha risposto senza testo. Verifica modello, limiti di output e compatibilità.');
                 if (action === 'chart') {
                     const parsed = extractJSON(content);
                     if (!parsed) throw new Error('Il modello non ha restituito un grafico valido');
