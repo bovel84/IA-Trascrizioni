@@ -1273,7 +1273,7 @@
             $('llamaKeySaved').style.display = hasAiKey ? 'flex' : 'none';
             $('saveKeysBtn').style.display = whisperKey && hasAiKey ? 'none' : 'block';
             const cached = readModelCatalog(aiProvider);
-            fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])]);
+            fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])], llmModel);
             $('customLlmModel').value = '';
             $('refreshModelsBtn').disabled = false; $('refreshModelsBtn').textContent = MODEL_REFRESH_LABEL;
             setProviderStatus(!hasAiKey ? 'Inserisci una chiave API per usare i modelli LLM.' :
@@ -1348,12 +1348,12 @@
                 const sttIds = provider === 'groq' ? ids.filter(id => /whisper/i.test(id)) : [];
                 const chatIds = ids.filter(id => !/whisper|embedding|embed-|tts|dall-e|moderation/i.test(id));
                 if (sttIds.length) {
-                    fillModelSelect($('sttModelSelect'), sttIds);
+                    fillModelSelect($('sttModelSelect'), sttIds, sttModel);
                     sttModel = $('sttModelSelect').value; localStorage.setItem('groq_stt_model', sttModel);
                 }
                 if (chatIds.length) {
                     localStorage.setItem(catalogStorage(provider), JSON.stringify(chatIds));
-                    fillModelSelect($('llmModelSelect'), chatIds);
+                    fillModelSelect($('llmModelSelect'), chatIds, llmModel);
                     llmModel = $('llmModelSelect').value; localStorage.setItem(aiStorage('model'), llmModel);
                     $('customLlmModel').value = '';
                 }
@@ -1381,7 +1381,7 @@
             try {
                 const data = await groqChat({
                     messages: [{ role: 'user', content: 'Rispondi soltanto OK.' }],
-                    maxTokens: 32
+                    maxTokens: 128
                 });
                 const answer = data.choices?.[0]?.message?.content;
                 if (typeof answer !== 'string' || !answer.trim())
@@ -1395,10 +1395,9 @@
             }
         }
 
-        function fillModelSelect(select, ids) {
-            const current = select.value;
+        function fillModelSelect(select, ids, preferred = select.value) {
             select.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
-            select.value = ids.includes(current) ? current : ids[0];
+            select.value = ids.includes(preferred) ? preferred : (ids[0] || '');
         }
 
         // ============ AUDIO CORRENTE (solo su IndexedDB) ============
