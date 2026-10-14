@@ -1,6 +1,6 @@
 # VoiceScribe Pro Android — grafica originale e schermo spento
 
-L'APK 1.6 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
+L'APK 1.7 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
 
 La registrazione non è eseguita dalla pagina: `native-bridge.js` collega i pulsanti al servizio Android già presente. Il servizio continua a catturare WAV e trascrivere su Groq con schermo bloccato. La pagina sincronizza timer, stato, livello audio e nuovi risultati quando è visibile. Tornare dal background non reinserisce frasi già importate o annulla modifiche al testo.
 
