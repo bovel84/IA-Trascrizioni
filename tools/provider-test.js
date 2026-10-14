@@ -10,7 +10,6 @@ async function main() {
     const calls = [];
     const ctx = createEnvironment({ html, onFetch: (url, options) => {
         calls.push({ url, options });
-        if (/\/api\/tags$/.test(url)) return { models: [{ name: 'new/chat-model' }] };
         return /\/models$/.test(url) ? { data: [{ id: 'new/chat-model' }, { id: 'whisper-large-v3' }] } : { choices: [{ message: { content: 'Risposta di prova' } }] };
     } });
     ctx.localStorage.setItem('groq_llama_key', 'gsk_existing');
@@ -42,8 +41,10 @@ async function main() {
         await run(`$('aiProviderSelect').value = '${provider}'; $('aiProviderSelect').onchange()`);
         if (provider !== 'groq') check(run('llamaKey') === '', provider + ' never inherits another key');
         await run(`$('llamaKeyInput').value = 'test_${provider}'; $('saveKeysBtn').onclick()`);
-        check(calls.at(-1).url === (provider === 'ollama' ? 'https://ollama.com/api/tags' : base + '/models'), provider + ' saving key refreshes models automatically');
+        check(calls.at(-1).url === base + '/models', provider + ' saving key refreshes models automatically');
         check(run('llamaKey') === 'test_' + provider, provider + ' accepts its key format');
+        if (provider === 'ollama') check(!('Authorization' in calls.at(-1).options.headers),
+            'Ollama public catalog never sends the saved API key');
         run(`$('customLlmModel').value = 'custom/${provider}'; $('customLlmModel').onchange()`);
         await run("groqChat({messages:[{role:'user',content:'Prova'}]})");
         const call = calls.at(-1);
@@ -51,7 +52,9 @@ async function main() {
         check(call.options.headers.Authorization === 'Bearer test_' + provider, provider + ' sends only its own key');
         check(JSON.parse(call.options.body).model === 'custom/' + provider, provider + ' sends selected model');
         await run('refreshAvailableModels()');
-        check(calls.at(-1).url === (provider === 'ollama' ? 'https://ollama.com/api/tags' : base + '/models'), provider + ' refreshes its model list');
+        check(calls.at(-1).url === base + '/models', provider + ' refreshes its model list');
+        if (provider === 'ollama') check(!('Authorization' in calls.at(-1).options.headers),
+            'Ollama catalog refresh never forwards credentials');
         if (provider !== 'groq') check(run('sttModel') === 'whisper-large-v3', provider + ' does not change Whisper model');
         check(run('whisperKey') === 'gsk_audio', provider + ' does not change recording key');
     }
@@ -60,6 +63,14 @@ async function main() {
         check(run('llamaKey') === 'test_' + provider && run('llmModel') === 'new/chat-model', provider + ' restores separate settings');
         check(run('readModelCatalog(aiProvider).includes("new/chat-model")'), provider + ' retains refreshed catalog');
     }
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    await run("llamaKey = ''; refreshAvailableModels()");
+    check(calls.at(-1).url === 'https://ollama.com/v1/models' &&
+        !('Authorization' in calls.at(-1).options.headers),
+        'Ollama public catalog can refresh without an API key');
+    check(ctx.__elements.get('aiProviderStatus').textContent.includes('Catalogo pubblico Ollama') &&
+        ctx.__elements.get('aiProviderStatus').textContent.includes('NON è ancora verificato'),
+        'Ollama public model list is not misrepresented as verified chat access');
     // Switching providers must show the stored model even when the prior model
     // is also available in the next provider's cached catalog.
     run("localStorage.setItem('voicescribe_ollama_model', 'new/chat-model'); localStorage.setItem('voicescribe_ollama_models_cache_v1', JSON.stringify(['new/chat-model','openai/gpt-oss-20b']));");
