@@ -437,6 +437,7 @@
                     </div>
                 </div>
                 <button class="model-refresh" id="refreshModelsBtn">🔄 Verifica i modelli disponibili con la tua chiave</button>
+                <button class="model-refresh" id="testLlmBtn" type="button">🧪 Prova modello LLM selezionato</button>
                 <p id="aiProviderStatus" role="status" style="font-size:0.75rem;color:var(--text-muted);margin:8px 0 0;overflow-wrap:anywhere">Inserisci la chiave del provider per aggiornare il catalogo.</p>
             </div>
 
@@ -1106,6 +1107,10 @@
         if (!Object.prototype.hasOwnProperty.call(AI_PROVIDERS, aiProvider)) aiProvider = 'groq';
         function aiStorage(kind) { return aiProvider === 'groq' ? (kind === 'key' ? 'groq_llama_key' : 'groq_llm_model') : `voicescribe_${aiProvider}_${kind}`; }
         let llamaKey = localStorage.getItem(aiStorage('key')) || '';
+        // Whisper and chat can share the same Groq key; other providers never inherit it.
+        function activeAiKey(provider = aiProvider) {
+            return provider === 'groq' ? (llamaKey || whisperKey) : llamaKey;
+        }
         let wakeLock = null, backgroundMode = false;
         const CHUNK_INTERVAL = 2 * 60 * 1000;
         let currentSessionId = null, chunkCount = 0, chunkTimer = null, currentStream = null;
@@ -1252,6 +1257,7 @@
                 fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])]);
             };
             $('refreshModelsBtn').onclick = refreshAvailableModels;
+            $('testLlmBtn').onclick = testSelectedLlm;
         }
 
         function updateProviderUI() {
@@ -1262,14 +1268,17 @@
             $('aiProviderSelect').value = aiProvider;
             $('aiKeyLink').href = provider.keys;
             $('llamaKeyInput').value = ''; $('llamaKeyInput').placeholder = provider.placeholder;
-            $('llamaKeyBox').style.display = llamaKey ? 'none' : 'block';
-            $('llamaKeySaved').style.display = llamaKey ? 'flex' : 'none';
-            $('saveKeysBtn').style.display = whisperKey && llamaKey ? 'none' : 'block';
+            const hasAiKey = !!activeAiKey();
+            $('llamaKeyBox').style.display = hasAiKey ? 'none' : 'block';
+            $('llamaKeySaved').style.display = hasAiKey ? 'flex' : 'none';
+            $('saveKeysBtn').style.display = whisperKey && hasAiKey ? 'none' : 'block';
             const cached = readModelCatalog(aiProvider);
             fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])]);
             $('customLlmModel').value = '';
             $('refreshModelsBtn').disabled = false; $('refreshModelsBtn').textContent = MODEL_REFRESH_LABEL;
-            setProviderStatus(cached.length ? 'Catalogo salvato: aggiornamento in corso con la tua chiave.' : 'Lista iniziale: il catalogo viene aggiornato dopo il salvataggio della chiave.');
+            setProviderStatus(!hasAiKey ? 'Inserisci una chiave API per usare i modelli LLM.' :
+                (aiProvider === 'groq' && !llamaKey ? 'Groq: uso la chiave Whisper anche per l’AI. Premi Prova modello per verificare.' :
+                (cached.length ? 'Catalogo salvato: usa Prova modello per verificare l’accesso.' : 'Chiave memorizzata: verifica il modello con Prova modello.')));
         }
 
         function catalogStorage(provider) { return `voicescribe_${provider}_models_cache_v1`; }
@@ -1322,7 +1331,7 @@
         // Groq deprecia i modelli nel tempo: interrogo l'endpoint /models con la
         // chiave dell'utente per mostrare solo i modelli realmente utilizzabili.
         async function refreshAvailableModels() {
-            const provider = aiProvider, key = llamaKey || (provider === 'groq' ? whisperKey : '');
+            const provider = aiProvider, key = activeAiKey();
             if (!key) return showToast('⚠️ Inserisci prima una chiave API');
             const version = ++modelRefreshVersion;
             const btn = $('refreshModelsBtn');
@@ -1357,6 +1366,32 @@
                 showToast('⚠️ ' + e.message);
             } finally {
                 if (version === modelRefreshVersion) { btn.disabled = false; btn.textContent = MODEL_REFRESH_LABEL; }
+            }
+        }
+
+        // A catalog response alone does not prove that the chosen model accepts chat requests.
+        // This action is always user-initiated and uses a tiny prompt to limit provider cost.
+        async function testSelectedLlm() {
+            const provider = aiProvider, model = normalizeAiModel(provider, llmModel);
+            if (!activeAiKey()) return setProviderStatus('Inserisci la chiave AI per verificare il modello.', true);
+            if (!model) return setProviderStatus('Seleziona prima un modello LLM.', true);
+            const btn = $('testLlmBtn');
+            btn.disabled = true; btn.textContent = '⏳ Verifico ' + model + '...';
+            setProviderStatus('Prova reale del modello ' + model + ' in corso…');
+            try {
+                const data = await groqChat({
+                    messages: [{ role: 'user', content: 'Rispondi soltanto OK.' }],
+                    maxTokens: 32
+                });
+                const answer = data.choices?.[0]?.message?.content;
+                if (typeof answer !== 'string' || !answer.trim())
+                    throw new Error('Il provider ha risposto ma non ha restituito testo. Verifica la compatibilità del modello.');
+                if (aiProvider === provider && llmModel === model)
+                    setProviderStatus('✓ ' + AI_PROVIDERS[provider].name + ' · ' + model + ' risponde correttamente.');
+            } catch (error) {
+                if (aiProvider === provider) setProviderStatus(error.message || 'Verifica LLM fallita', true);
+            } finally {
+                btn.disabled = false; btn.textContent = '🧪 Prova modello LLM selezionato';
             }
         }
 
@@ -1496,13 +1531,21 @@
 
         // API Keys
         $('saveKeysBtn').onclick = async () => {
-            const wk = $('whisperKeyInput').value.trim();
+            const wk = $('whisperKeyInput').value.trim().replace(/^Bearer\s+/i, '');
             const lk = $('llamaKeyInput').value.trim().replace(/^Bearer\s+/i, '');
-            if (/\s/.test(lk)) { setProviderStatus('La chiave API contiene spazi o righe extra: incolla solo la chiave.', true); return; }
-            if (wk && wk.startsWith('gsk_')) { whisperKey = wk; localStorage.setItem('groq_whisper_key', wk); $('whisperKeyBox').style.display = 'none'; $('whisperKeySaved').style.display = 'flex'; }
-            if (lk) { llamaKey = lk; localStorage.setItem(aiStorage('key'), lk); localStorage.removeItem(catalogStorage(aiProvider)); $('llamaKeyInput').value = ''; $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
-            if (whisperKey && llamaKey) $('saveKeysBtn').style.display = 'none';
-            showToast('✓ Chiavi salvate');
+            if (/\s/.test(lk) || /\s/.test(wk)) {
+                setProviderStatus('La chiave contiene spazi o righe extra: incolla solo la chiave API.', true); return;
+            }
+            if (wk && !wk.startsWith('gsk_')) {
+                setProviderStatus('Whisper richiede una chiave Groq valida (prefisso gsk_).', true); return;
+            }
+            if (!wk && !lk) {
+                setProviderStatus('Nessuna nuova chiave inserita.', true); return;
+            }
+            if (wk) { whisperKey = wk; localStorage.setItem('groq_whisper_key', wk); $('whisperKeyInput').value = ''; $('whisperKeyBox').style.display = 'none'; $('whisperKeySaved').style.display = 'flex'; }
+            if (lk) { llamaKey = lk; localStorage.setItem(aiStorage('key'), lk); localStorage.removeItem(catalogStorage(aiProvider)); $('llamaKeyInput').value = ''; }
+            updateProviderUI();
+            showToast('✓ Chiave memorizzata; verifica l’accesso con Prova modello');
             if (lk || (wk && aiProvider === 'groq')) await refreshAvailableModels();
         };
 
@@ -1857,7 +1900,8 @@
         // stessi parametri (max_completion_tokens / response_format), quindi in
         // caso di 400 si ritenta con varianti piu' conservative.
         async function groqChat({ messages, temperature = 0.3, maxTokens = 2048, jsonMode = false }) {
-            const provider = aiProvider, key = llamaKey;
+            const provider = aiProvider, key = activeAiKey();
+            if (!key) throw new Error('Inserisci la chiave di ' + AI_PROVIDERS[provider].name);
             const base = { model: normalizeAiModel(provider, llmModel), messages, temperature };
             const variants = [];
             if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) });
@@ -1979,7 +2023,7 @@
         }
 
         window.runAI = async (action) => {
-            if (!llamaKey) return showToast('Inserisci la chiave di ' + AI_PROVIDERS[aiProvider].name);
+            if (!activeAiKey()) return showToast('Inserisci la chiave di ' + AI_PROVIDERS[aiProvider].name);
             const transcriptText = transcriptEntries.map(e => `${e.speakerName}: ${e.text}`).join('\n');
             const fullText = transcriptText + (notesText ? '\n\nNOTE:\n' + notesText : '');
             if (!fullText.trim()) return showToast('Nessun contenuto');
