@@ -60,6 +60,13 @@ async function main() {
         check(run('llamaKey') === 'test_' + provider && run('llmModel') === 'new/chat-model', provider + ' restores separate settings');
         check(run('readModelCatalog(aiProvider).includes("new/chat-model")'), provider + ' retains refreshed catalog');
     }
+    // Switching providers must show the stored model even when the prior model
+    // is also available in the next provider's cached catalog.
+    run("localStorage.setItem('voicescribe_ollama_model', 'new/chat-model'); localStorage.setItem('voicescribe_ollama_models_cache_v1', JSON.stringify(['new/chat-model','openai/gpt-oss-20b']));");
+    run("llmModel = 'openai/gpt-oss-20b'; $('llmModelSelect').value = 'openai/gpt-oss-20b';");
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    check(ctx.__elements.get('llmModelSelect').value === run('llmModel') &&
+        run('llmModel') === 'new/chat-model', 'provider switch selects persisted model rather than previous provider model');
     // A decommissioned model must not trigger the optional-parameter fallback.
     const badCalls = [];
     ctx.nativeAiRequest = async (provider, path, key, body) => {
