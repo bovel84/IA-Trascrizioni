@@ -1276,7 +1276,7 @@
             fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])], llmModel);
             $('customLlmModel').value = '';
             $('refreshModelsBtn').disabled = false; $('refreshModelsBtn').textContent = MODEL_REFRESH_LABEL;
-            setProviderStatus(!hasAiKey ? 'Inserisci una chiave API per usare i modelli LLM.' :
+            setProviderStatus(!hasAiKey ? (aiProvider === 'ollama' ? 'Catalogo Ollama pubblico: premi Verifica i modelli; per eseguire un modello inserisci la chiave API.' : 'Inserisci una chiave API per usare i modelli LLM.') :
                 (aiProvider === 'groq' && !llamaKey ? 'Groq: uso la chiave Whisper anche per l’AI. Premi Prova modello per verificare.' :
                 (cached.length ? 'Catalogo salvato: usa Prova modello per verificare l’accesso.' : 'Chiave memorizzata: verifica il modello con Prova modello.')));
         }
@@ -1317,10 +1317,12 @@
         // request never forwards another provider's credential or changes retries.
         function aiRequest(provider, path, key, body) {
             if (window.nativeAiRequest) return window.nativeAiRequest(provider, path, key, body);
-            const url = provider === 'ollama' && path === '/models' ? 'https://ollama.com/api/tags' : AI_PROVIDERS[provider].base + path;
+            const publicCatalog = provider === 'ollama' && path === '/models';
+            const url = AI_PROVIDERS[provider].base + path;
             return fetchWithTimeout(url, {
                 method: body == null ? 'GET' : 'POST',
-                headers: { Authorization: `Bearer ${key}`, ...(body == null ? {} : { 'Content-Type': 'application/json' }) },
+                // Public catalog: Authorization on GET can trigger a provider/proxy HTTP 403.
+                headers: { ...(publicCatalog ? {} : { Authorization: `Bearer ${key}` }), ...(body == null ? {} : { 'Content-Type': 'application/json' }) },
                 ...(body == null ? {} : { body: JSON.stringify(body) })
             }, 90000).catch(e => {
                 if (e.name === 'AbortError') throw e;
@@ -1332,7 +1334,7 @@
         // chiave dell'utente per mostrare solo i modelli realmente utilizzabili.
         async function refreshAvailableModels() {
             const provider = aiProvider, key = activeAiKey();
-            if (!key) return showToast('⚠️ Inserisci prima una chiave API');
+            if (!key && provider !== 'ollama') return showToast('⚠️ Inserisci prima una chiave API');
             const version = ++modelRefreshVersion;
             const btn = $('refreshModelsBtn');
             btn.disabled = true; btn.textContent = '⏳ Interrogo ' + AI_PROVIDERS[provider].name + '...';
@@ -1342,9 +1344,9 @@
                 const data = await res.json().catch(() => ({}));
                 if (version !== modelRefreshVersion) return;
                 if (!res.ok) throw new Error(providerError(provider, res.status, data, key));
-                const models = provider === 'ollama' ? (data.models || []) : (data.data || []);
+                const models = data.data || (provider === 'ollama' ? data.models : []) || [];
                 if (!Array.isArray(models)) throw new Error('Formato catalogo non riconosciuto. Riprova l’aggiornamento.');
-                const ids = [...new Set(models.filter(m => m && m.active !== false && (!m.architecture?.output_modalities || m.architecture.output_modalities.includes('text'))).map(m => provider === 'ollama' ? (m.name || m.model) : m.id).filter(id => typeof id === 'string'))].sort();
+                const ids = [...new Set(models.filter(m => m && m.active !== false && (!m.architecture?.output_modalities || m.architecture.output_modalities.includes('text'))).map(m => m.id || (provider === 'ollama' ? (m.name || m.model) : null)).filter(id => typeof id === 'string'))].sort();
                 const sttIds = provider === 'groq' ? ids.filter(id => /whisper/i.test(id)) : [];
                 const chatIds = ids.filter(id => !/whisper|embedding|embed-|tts|dall-e|moderation/i.test(id));
                 if (sttIds.length) {
@@ -1358,7 +1360,9 @@
                     $('customLlmModel').value = '';
                 }
                 if (!chatIds.length) throw new Error('Il provider non ha restituito modelli di testo. Controlla accesso e catalogo nel tuo account.');
-                setProviderStatus(`✓ Catalogo aggiornato: ${chatIds.length} modelli AI. L’accesso a ciascun modello dipende dal tuo account.`);
+                setProviderStatus(provider === 'ollama'
+                    ? `✓ Catalogo pubblico Ollama: ${chatIds.length} modelli. L'accesso con la chiave NON è ancora verificato: premi Prova modello LLM selezionato.`
+                    : `✓ Catalogo aggiornato: ${chatIds.length} modelli AI. L’accesso a ciascun modello dipende dal tuo account.`);
                 showToast(`✓ ${chatIds.length} modelli AI aggiornati`);
             } catch (e) {
                 if (version !== modelRefreshVersion) return;
