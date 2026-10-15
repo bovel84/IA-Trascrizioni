@@ -198,7 +198,8 @@
         .insight-card { background: var(--bg-card); border-radius: 14px; padding: 0.9rem; border: 1px solid var(--border); box-shadow: 0 10px 24px rgba(0,0,0,0.28); display: flex; flex-direction: column; gap: 0.5rem; }
         .insight-card h4 { margin: 0; font-size: 0.9rem; letter-spacing: 0.03em; color: var(--text-secondary); text-transform: uppercase; }
         .insight-meta { font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
-        .chart-wrapper { position: relative; width: 100%; height: 220px; }
+        .chart-wrapper { position: relative; width: 100%; min-width: 0; height: 220px; }
+        .chart-wrapper canvas { display: block; max-width: 100%; }
         .concept-map { width: 100%; height: 220px; border-radius: 12px; background: linear-gradient(145deg, rgba(255,255,255,0.02), rgba(124,58,237,0.08)); border: 1px dashed var(--border); }
         .concept-node { fill: rgba(0,212,170,0.2); stroke: var(--accent); stroke-width: 1.2; }
         .concept-label { font-size: 12px; fill: var(--text-primary); text-anchor: middle; }
@@ -482,6 +483,7 @@
         .ai-btn { border:1px solid var(--border); background:var(--bg-secondary); border-radius:12px; min-height:104px; box-shadow:none; padding:16px 10px; font-size:13px; }
         .ai-btn-icon { background:#26392d; color:var(--accent); border:0; font-size:13px; width:32px; height:32px; border-radius:9px; }
         .ai-btn-label { font-size:10px; }.stat-value { font-size:25px; color:var(--accent); }.stat-label { font-size:11px; }
+        .insight-card { min-width:0; }
         .insight-card h4 { text-transform:none; font-size:14px; letter-spacing:0; }.insight-meta { font-size:11px; }
         .export-section { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
         .export-card { color:var(--text-primary); text-align:left; border:1px solid var(--border); background:var(--bg-secondary); border-radius:13px; padding:20px; min-width:0; }
