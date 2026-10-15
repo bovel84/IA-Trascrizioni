@@ -43,10 +43,11 @@ async function main() {
     check('Record delegates microphone to the native service', calls[0]?.[0] === 'start' && calls[0][1] === 'gsk_test' && calls[0][3] === 'it');
     check('permission/start wait uses original processing UI', run('isProcessing'));
     state = { ...state, active: true, recording: true, sessionId: 'session-1790766000000', elapsedMs: 120000, chunkCount: 1, pending: 0,
-        entries: [{ nativeSegmentId: 'session-1790766000000/000000000000.wav', offsetMs: 0, text: 'Prima frase' }] };
+        entries: [{ nativeSegmentId: 'session-1790766000000/000000000000.wav', offsetMs: 0, text: 'Prima frase', speaker: 2, speakerName: 'Persona 2' }] };
     run('syncNativeRecorder()');
     check('original recording button reflects native state', ctx.__elements.get('recordBtn').classList.contains('recording'));
     check('native transcript appears in the original transcript panel', run('transcriptEntries.length') === 1 && run('transcriptEntries[0].text') === 'Prima frase');
+    check('native capture preserves selected speaker rather than arrival-time selection', run('transcriptEntries[0].speaker') === 2);
     check('timer uses captured audio duration', ctx.__elements.get('timer').textContent === '02:00');
     run('syncNativeRecorder(); syncNativeRecorder();');
     check('repeated refresh does not duplicate transcript entries', run('transcriptEntries.length') === 1);
@@ -61,6 +62,16 @@ async function main() {
     state.elapsedMs = 240000; state.chunkCount = 2;
     run("document.visibilityState = 'visible'; syncNativeRecorder();");
     check('return from background imports missed segments with offsets', run('transcriptEntries.length') === 2 && run('transcriptEntries[1].offsetMs') === 120000);
+    check('older unlabeled audio stays unassigned instead of claiming speaker one', run('transcriptEntries[1].speaker') === 0);
+    // Native auto archive must not erase manual corrections or resurrect deleted phrases.
+    run("const auto = savedRecordings.find(r => r.nativeAuto); auto.entries[0].text = 'Archivio corretto'; auto.entries.splice(1, 1);");
+    state.entries.push({ nativeSegmentId: 'session-1790766000000/000000240000.wav', offsetMs: 240000, text: 'Terza frase' });
+    state.elapsedMs = 270000; state.chunkCount = 3;
+    run('syncNativeRecorder()');
+    check('native archive preserves manual transcript corrections', run("savedRecordings.find(r => r.nativeAuto).entries[0].text") === 'Archivio corretto');
+    check('native archive preserves deletions while adding new segments',
+        run("savedRecordings.find(r => r.nativeAuto).entries.length") === 2 &&
+        run("savedRecordings.find(r => r.nativeAuto).entries[1].text") === 'Terza frase');
     await run('stopRecording()');
     check('Stop delegates to service rather than browser recorder', calls.some(c => c[0] === 'stop'));
     state.active = false; state.recording = false; state.status = 'Sessione salvata e trascritta';
@@ -87,6 +98,11 @@ async function main() {
     run("const detachedPdf = new HTMLAnchorElement(); detachedPdf.download = 'documento.pdf'; detachedPdf.href = 'blob:test-pdf'; detachedPdf.dispatchEvent({ type: 'click' });");
     for (let i = 0; i < 20 && !calls.some(c => c[0] === 'download'); i++) await new Promise(resolve => setTimeout(resolve, 10));
     check('jsPDF detached synthetic download reaches Android save dialog with the file bytes', calls.some(c => c[0] === 'download' && c[1] === 'documento.pdf' && c[2] === 'application/pdf' && c[3] === 'UERG'));
+    run(`window.nativeAudioSession = '${state.sessionId}'; window.nativeDiarizedSession = window.nativeAudioSession;`);
+    const diarizedCount = run('transcriptEntries.length');
+    state.entries.push({ nativeSegmentId: state.sessionId + '/late.wav', offsetMs: 300000, text: 'Late raw transcript' });
+    run('syncNativeRecorder()');
+    check('raw native refresh cannot duplicate an already diarized session', run('transcriptEntries.length') === diarizedCount);
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

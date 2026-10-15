@@ -243,7 +243,8 @@ function createEnvironment({ html, onFetch } = {}) {
             resume() { this.state = 'recording'; }
         },
         AudioContext: class {
-            constructor() { this.state = 'running'; this.currentTime = 0; }
+            constructor() { this.state = 'running'; this.currentTime = 0; this.sampleRate = 16000; }
+            async decodeAudioData() { return { length: 2, numberOfChannels: 1, getChannelData: () => new Float32Array([0, 0.5]) }; }
             createAnalyser() { return { fftSize: 256, frequencyBinCount: 128, getByteFrequencyData() {}, connect() {} }; }
             createMediaStreamSource() { return { connect() {} }; }
             createOscillator() { return { type: '', frequency: { setValueAtTime() {} }, connect() {}, start() {}, stop() {} }; }

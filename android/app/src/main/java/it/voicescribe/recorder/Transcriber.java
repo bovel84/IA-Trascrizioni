@@ -42,17 +42,26 @@ final class Transcriber {
         conn.setRequestMethod("POST"); conn.setDoOutput(true);
         conn.setRequestProperty("Authorization", "Bearer " + key);
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-        conn.setChunkedStreamingMode(8192);
+        // Groq and some reverse proxies reject multipart uploads with chunked transfer encoding.
+        // The WAV is already stored on disk: stream it with a known Content-Length, without buffering the audio.
+        ByteArrayOutputStream prefix = new ByteArrayOutputStream();
+        field(prefix, boundary, "model", model); field(prefix, boundary, "language", language);
+        field(prefix, boundary, "response_format", "json"); field(prefix, boundary, "temperature", "0");
+        bytes(prefix, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
+        byte[] suffix = ("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8);
+        conn.setFixedLengthStreamingMode((long) prefix.size() + wav.length() + suffix.length);
         try {
             try (OutputStream out = conn.getOutputStream()) {
-                field(out, boundary, "model", model); field(out, boundary, "language", language);
-                field(out, boundary, "response_format", "json"); field(out, boundary, "temperature", "0");
-                bytes(out, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
-                Files.copy(wav.toPath(), out); bytes(out, "\r\n--" + boundary + "--\r\n");
+                prefix.writeTo(out);
+                Files.copy(wav.toPath(), out);
+                out.write(suffix);
             }
             int code = conn.getResponseCode();
             if (code == 429 || code >= 500) throw new Retryable("Groq HTTP " + code);
-            if (code < 200 || code >= 300) throw new IOException("Groq HTTP " + code + ": controlla chiave e modello");
+            if (code < 200 || code >= 300) {
+                String detail = errorDetail(conn);
+                throw new IOException("Groq HTTP " + code + (detail.isEmpty() ? ": controlla chiave, formato e modello" : ": " + detail));
+            }
             ByteArrayOutputStream body = new ByteArrayOutputStream();
             try (InputStream input = conn.getInputStream()) {
                 byte[] buf = new byte[8192]; int n;
@@ -68,6 +77,18 @@ final class Transcriber {
         } catch (SocketTimeoutException | ConnectException | UnknownHostException e) {
             throw new Retryable("Rete non disponibile o timeout");
         } finally { conn.disconnect(); }
+    }
+    private static String errorDetail(HttpURLConnection conn) {
+        try (InputStream stream = conn.getErrorStream()) {
+            if (stream == null) return "";
+            byte[] buffer = new byte[4096];
+            int length = stream.read(buffer);
+            if (length <= 0) return "";
+            JSONObject response = new JSONObject(new String(buffer, 0, length, StandardCharsets.UTF_8));
+            JSONObject error = response.optJSONObject("error");
+            String detail = error == null ? response.optString("message", "") : error.optString("message", "");
+            return detail.length() > 220 ? detail.substring(0, 220) : detail;
+        } catch (Exception ignored) { return ""; }
     }
     private static void field(OutputStream out, String b, String name, String value) throws IOException {
         bytes(out, "--" + b + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + value + "\r\n");

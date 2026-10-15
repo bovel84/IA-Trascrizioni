@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <!-- Main capsule and sound-to-text ticks -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M256,135 C237.2,135 222,150.2 222,169 L222,252 C222,270.8 237.2,286 256,286 C274.8,286 290,270.8 290,252 L290,169 C290,150.2 274.8,135 256,135 Z"/>
+    <path android:fillColor="#601A58B2"
+        android:pathData="M245,180 L267,180 Q271,180 271,184 Q271,188 267,188 L245,188 Q241,188 241,184 Q241,180 245,180 Z
+                          M245,202 L267,202 Q271,202 271,206 Q271,210 267,210 L245,210 Q241,210 241,206 Q241,202 245,202 Z
+                          M245,224 L267,224 Q271,224 271,228 Q271,232 267,232 L245,232 Q241,232 241,228 Q241,224 245,224 Z"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="20"
+        android:strokeLineCap="round"
+        android:pathData="M181,241 C181,284 214,317 256,317 C298,317 331,284 331,241"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="20"
+        android:strokeLineCap="round"
+        android:pathData="M256,318 L256,367 M211,367 L301,367"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#CCFFFFFF" android:strokeWidth="14"
+        android:strokeLineCap="round"
+        android:pathData="M147,204 L147,260 M365,204 L365,260"/>
+</vector>

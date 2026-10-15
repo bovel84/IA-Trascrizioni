@@ -10,7 +10,6 @@ async function main() {
     const calls = [];
     const ctx = createEnvironment({ html, onFetch: (url, options) => {
         calls.push({ url, options });
-        if (/\/api\/tags$/.test(url)) return { models: [{ name: 'new/chat-model' }] };
         return /\/models$/.test(url) ? { data: [{ id: 'new/chat-model' }, { id: 'whisper-large-v3' }] } : { choices: [{ message: { content: 'Risposta di prova' } }] };
     } });
     ctx.localStorage.setItem('groq_llama_key', 'gsk_existing');
@@ -19,14 +18,33 @@ async function main() {
     for (const match of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) run(match[1]);
     await run('init()');
     check(run('llamaKey') === 'gsk_existing' && run('llmModel') === 'openai/gpt-oss-20b', 'existing Groq key and model retained');
+    const originalFetch = ctx.fetch; let uploadedFile;
+    ctx.fetch = async (url, options) => {
+        uploadedFile = options.body.get('file');
+        return { ok: true, status: 200, json: async () => ({ text: 'ciao' }) };
+    };
+    await run("transcribeBlob(new Blob(['test'], { type: 'audio/wav' }))");
+    check(uploadedFile && uploadedFile.name === 'audio.wav', 'imported WAV uses correct filename and type for Groq');
+    ctx.fetch = originalFetch;
     run("whisperKey = 'gsk_audio'");
+    // One Groq key must work for both Whisper and chat, without copying it
+    // to the separate LLM slot or leaking it to another provider.
+    run("llamaKey = ''; localStorage.removeItem('groq_llama_key'); updateProviderUI()");
+    check(run("activeAiKey()") === 'gsk_audio', 'single Groq Whisper key also enables LLM');
+    await run("groqChat({messages:[{role:'user',content:'Prova'}]})");
+    check(calls.at(-1).options.headers.Authorization === 'Bearer gsk_audio', 'Groq LLM uses shared Whisper credential');
+    await run("testSelectedLlm()");
+    check(ctx.__elements.get('aiProviderStatus').textContent.includes('risponde correttamente'),
+        'manual lightweight test confirms real LLM response');
     const bases = { groq: 'https://api.groq.com/openai/v1', ollama: 'https://ollama.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', openrouter: 'https://openrouter.ai/api/v1' };
     for (const [provider, base] of Object.entries(bases)) {
         await run(`$('aiProviderSelect').value = '${provider}'; $('aiProviderSelect').onchange()`);
         if (provider !== 'groq') check(run('llamaKey') === '', provider + ' never inherits another key');
         await run(`$('llamaKeyInput').value = 'test_${provider}'; $('saveKeysBtn').onclick()`);
-        check(calls.at(-1).url === (provider === 'ollama' ? 'https://ollama.com/api/tags' : base + '/models'), provider + ' saving key refreshes models automatically');
+        check(calls.at(-1).url === base + '/models', provider + ' saving key refreshes models automatically');
         check(run('llamaKey') === 'test_' + provider, provider + ' accepts its key format');
+        if (provider === 'ollama') check(!('Authorization' in calls.at(-1).options.headers),
+            'Ollama public catalog never sends the saved API key');
         run(`$('customLlmModel').value = 'custom/${provider}'; $('customLlmModel').onchange()`);
         await run("groqChat({messages:[{role:'user',content:'Prova'}]})");
         const call = calls.at(-1);
@@ -34,7 +52,9 @@ async function main() {
         check(call.options.headers.Authorization === 'Bearer test_' + provider, provider + ' sends only its own key');
         check(JSON.parse(call.options.body).model === 'custom/' + provider, provider + ' sends selected model');
         await run('refreshAvailableModels()');
-        check(calls.at(-1).url === (provider === 'ollama' ? 'https://ollama.com/api/tags' : base + '/models'), provider + ' refreshes its model list');
+        check(calls.at(-1).url === base + '/models', provider + ' refreshes its model list');
+        if (provider === 'ollama') check(!('Authorization' in calls.at(-1).options.headers),
+            'Ollama catalog refresh never forwards credentials');
         if (provider !== 'groq') check(run('sttModel') === 'whisper-large-v3', provider + ' does not change Whisper model');
         check(run('whisperKey') === 'gsk_audio', provider + ' does not change recording key');
     }
@@ -43,6 +63,51 @@ async function main() {
         check(run('llamaKey') === 'test_' + provider && run('llmModel') === 'new/chat-model', provider + ' restores separate settings');
         check(run('readModelCatalog(aiProvider).includes("new/chat-model")'), provider + ' retains refreshed catalog');
     }
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    await run("llamaKey = ''; refreshAvailableModels()");
+    check(calls.at(-1).url === 'https://ollama.com/v1/models' &&
+        !('Authorization' in calls.at(-1).options.headers),
+        'Ollama public catalog can refresh without an API key');
+    check(ctx.__elements.get('aiProviderStatus').textContent.includes('Catalogo pubblico Ollama') &&
+        ctx.__elements.get('aiProviderStatus').textContent.includes('NON è ancora verificato'),
+        'Ollama public model list is not misrepresented as verified chat access');
+    // Switching providers must show the stored model even when the prior model
+    // is also available in the next provider's cached catalog.
+    run("localStorage.setItem('voicescribe_ollama_model', 'new/chat-model'); localStorage.setItem('voicescribe_ollama_models_cache_v1', JSON.stringify(['new/chat-model','openai/gpt-oss-20b']));");
+    run("llmModel = 'openai/gpt-oss-20b'; $('llmModelSelect').value = 'openai/gpt-oss-20b';");
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    check(ctx.__elements.get('llmModelSelect').value === run('llmModel') &&
+        run('llmModel') === 'new/chat-model', 'provider switch selects persisted model rather than previous provider model');
+    // A manual model ID is authoritative: the dropdown must not keep displaying the old model.
+    await run("$('aiProviderSelect').value = 'ollama'; $('aiProviderSelect').onchange()");
+    run("$('customLlmModel').value = 'glm-5.3-flash'; $('customLlmModel').onchange()");
+    check(ctx.__elements.get('llmModelSelect').value === 'glm-5.3-flash' &&
+        run('llmModel') === 'glm-5.3-flash',
+        'manually entered model is also selected visibly in the dropdown');
+    const forbidden = run("providerError('ollama',403,{error:'403 403 Forbidden'},'safe_test_key','glm-5.3-flash')");
+    check(forbidden.includes('ollama.com/settings/keys') &&
+        forbidden.includes('glm-5.3-flash') &&
+        !forbidden.includes('Dettaglio: 403 403 Forbidden'),
+        'Ollama 403 shows actionable guidance without duplicated gateway text');
+    // A decommissioned model must not trigger the optional-parameter fallback.
+    const badCalls = [];
+    ctx.nativeAiRequest = async (provider, path, key, body) => {
+        badCalls.push({ provider, path, key, body });
+        return { ok: false, status: 400, json: async () => ({ error: { message: 'Model not found' } }) };
+    };
+    await assert.rejects(run('groqChat({messages:[]})'), /Model not found/);
+    check(badCalls.length === 1, 'unknown model does not waste calls on retries');
+    const fallbackCalls = [];
+    ctx.nativeAiRequest = async (provider, path, key, body) => {
+        fallbackCalls.push({ provider, path, key, body });
+        if (body.temperature !== undefined)
+            return { ok: false, status: 400, json: async () => ({ error: { message: 'temperature is not supported for this model' } }) };
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'OK' } }] }) };
+    };
+    await run('groqChat({messages:[]})');
+    check(fallbackCalls.length >= 2 && fallbackCalls.at(-1).body.temperature === undefined,
+        'reasoning model retries without unsupported temperature');
+    delete ctx.nativeAiRequest;
     // Race and 400 fallback: switch UI while first request is in flight.
     const attempts = [];
     ctx.nativeAiRequest = async (provider, path, key, body) => {

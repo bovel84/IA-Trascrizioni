@@ -11,14 +11,15 @@ final class AiHttp {
         String base;
         switch (provider) {
             case "groq": base = "https://api.groq.com/openai/v1"; break;
-            case "ollama":
-                if ("/models".equals(path)) return "https://ollama.com/api/tags";
-                base = "https://ollama.com/v1"; break;
+            case "ollama": base = "https://ollama.com/v1"; break;
             case "nvidia": base = "https://integrate.api.nvidia.com/v1"; break;
             case "openrouter": base = "https://openrouter.ai/api/v1"; break;
             default: throw new IOException("Provider AI non valido");
         }
         return base + path;
+    }
+    static boolean isPublicCatalog(String provider, String path) {
+        return "ollama".equals(provider) && "/models".equals(path);
     }
     static final class Result {
         final int status; final String body;
@@ -26,12 +27,18 @@ final class AiHttp {
     }
     static Result request(String provider, String path, String key, String body) throws IOException {
         String endpoint = endpoint(provider, path);
-        if (key.isEmpty() || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
+        // Ollama's model catalog is public; never send the user's API key there.
+        boolean publicCatalog = isPublicCatalog(provider, path);
+        if (key == null || (!publicCatalog && key.isEmpty()) || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
             throw new IOException("Chiave o richiesta AI non valida");
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
         conn.setInstanceFollowRedirects(false);
         conn.setConnectTimeout(15000); conn.setReadTimeout(90000);
-        conn.setRequestProperty("Authorization", "Bearer " + key);
+        // Identify our client and explicitly request JSON. Authorization is still required
+        // for model inference; these headers do not bypass account permissions.
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("User-Agent", "VoiceScribePro/1.8 (Android)");
+        if (!publicCatalog) conn.setRequestProperty("Authorization", "Bearer " + key);
         try {
             if ("/chat/completions".equals(path)) {
                 conn.setRequestMethod("POST"); conn.setDoOutput(true);
