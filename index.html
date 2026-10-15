@@ -495,8 +495,18 @@
                 </div>
 
                 <div class="speaker-quick-select">
-                    <div class="section-title">👤 Speaker</div>
+                    <div class="section-title">👤 Partecipanti</div>
                     <div class="speaker-chips" id="speakerChips"></div>
+                    <p class="retranscribe-info">Seleziona chi parla durante la registrazione. ✎ rinomina tutte le sue frasi.</p>
+                    <details style="margin-top:0.8rem">
+                        <summary>Riconoscimento automatico delle voci</summary>
+                        <p class="retranscribe-info">A registrazione conclusa, invia l’audio a Deepgram per distinguere le voci. Richiede una chiave Deepgram e credito API; Groq e la chiave del modello chat non sono utilizzati. I nomi reali si assegnano manualmente.</p>
+                        <label for="diarizationKey">Chiave API Deepgram (solo per questa apertura)</label>
+                        <input id="diarizationKey" type="password" class="modal-input" autocomplete="off" placeholder="Chiave Deepgram">
+                        <button class="model-refresh" onclick="$('diarizationFileInput').click()">Distingui le voci da un file audio</button>
+                        <button class="model-refresh" id="diarizeBtn" onclick="diarizeMeeting()">Distingui le voci nell’audio</button>
+                        <p id="diarizationStatus" role="status" class="retranscribe-info"></p>
+                    </details>
                     <div class="language-row">
                         <label>Lingua:</label>
                         <select class="control-select" id="languageSelect">
@@ -652,7 +662,19 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="assignSpeakerModal">
+        <div class="modal">
+            <h2 class="modal-title">Chi ha pronunciato questa frase?</h2>
+            <label for="entrySpeakerSelect">Partecipante</label>
+            <select id="entrySpeakerSelect" class="modal-input"></select>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="$('assignSpeakerModal').classList.remove('active')">Annulla</button>
+                <button class="modal-btn confirm" onclick="confirmEntrySpeaker()">Assegna</button>
+            </div>
+        </div>
+    </div>
     <div class="toast" id="toast"></div>
+    <input type="file" id="diarizationFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg" hidden>
     <input type="file" id="audioFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg">
 
     <script>
@@ -681,12 +703,12 @@
             });
         }
 
-        async function saveChunkToDB(chunk, sessionId) {
+        async function saveChunkToDB(chunk, sessionId, metadata = {}) {
             if (!db) await initDB();
             return new Promise((resolve, reject) => {
                 const tx = db.transaction('audioChunks', 'readwrite');
                 const store = tx.objectStore('audioChunks');
-                const request = store.add({ sessionId, chunk, timestamp: Date.now() });
+                const request = store.add({ ...metadata, sessionId, chunk, timestamp: Date.now() });
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
@@ -1146,7 +1168,7 @@
         function loadSpeakers() {
             try {
                 const s = JSON.parse(localStorage.getItem('voicescribe_speakers') || '[]');
-                const clean = Array.isArray(s) ? s.filter(x => typeof x === 'string' && x.trim()).slice(0, 5) : [];
+                const clean = Array.isArray(s) ? s.filter(x => typeof x === 'string' && x.trim()).slice(0, 32) : [];
                 if (clean.length) return clean;
             } catch (e) {}
             return ['Persona 1', 'Persona 2'];
@@ -1413,12 +1435,40 @@
         // ============ AUDIO CORRENTE (solo su IndexedDB) ============
         // I chunk restano in IndexedDB: si evita di tenere in RAM una seconda
         // copia dell'audio (su sessioni lunghe faceva esaurire la memoria).
+        async function assembleRecordedAudio(chunks) {
+            // MediaRecorder is restarted for each chunk. Concatenating independent
+            // WebM containers can make a server transcribe only the first container.
+            const context = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const parts = []; let bytes = 0;
+            try {
+                for (const item of chunks) {
+                    const decoded = await context.decodeAudioData(await item.chunk.arrayBuffer());
+                    bytes += decoded.length * 2;
+                    if (bytes > 128 * 1024 * 1024) throw new Error('Audio troppo lungo per la memoria del browser. Usa la registrazione nativa Android per questa riunione.');
+                    const pcm = new ArrayBuffer(decoded.length * 2), view = new DataView(pcm);
+                    const channels = Array.from({ length: decoded.numberOfChannels }, (_, i) => decoded.getChannelData(i));
+                    for (let i = 0; i < decoded.length; i++) {
+                        const sample = Math.max(-1, Math.min(1, channels.reduce((sum, channel) => sum + channel[i], 0) / channels.length));
+                        view.setInt16(i*2, Math.round(sample * (sample < 0 ? 32768 : 32767)), true);
+                    }
+                    parts.push(pcm);
+                }
+                const header = new ArrayBuffer(44), view = new DataView(header);
+                const write = (offset, text) => { for (let i=0; i<text.length; i++) view.setUint8(offset+i, text.charCodeAt(i)); };
+                write(0,'RIFF'); view.setUint32(4,bytes+36,true); write(8,'WAVE'); write(12,'fmt ');
+                view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+                view.setUint32(24,context.sampleRate,true); view.setUint32(28,context.sampleRate*2,true);
+                view.setUint16(32,2,true); view.setUint16(34,16,true); write(36,'data'); view.setUint32(40,bytes,true);
+                return new Blob([header, ...parts], { type: 'audio/wav' });
+            } finally { await context.close(); }
+        }
+
         async function ensureAudio() {
             if (audioBlob) return audioBlob;
             try {
                 const chunks = await getChunksFromDB(AUDIO_SESSION);
-                if (chunks.length) audioBlob = new Blob(chunks.map(c => c.chunk), { type: chunks[0].chunk?.type || 'audio/webm' });
-            } catch (e) {}
+                if (chunks.length) audioBlob = chunks.length === 1 ? chunks[0].chunk : await assembleRecordedAudio(chunks);
+            } catch (e) { showToast(e.message || 'Impossibile leggere l’audio'); throw e; }
             return audioBlob;
         }
 
@@ -1439,6 +1489,7 @@
                 chart: chartData,
                 concept: conceptMapData,
                 savedAt: Date.now(),
+                nativeDiarizedSession: window.nativeDiarizedSession || null,
                 nativeAudioSession: window.nativeAudioSession || null
             };
         }
@@ -1467,9 +1518,10 @@
 
         function restoreSnapshot(s) {
             window.nativeAudioSession = s.nativeAudioSession || null;
+            window.nativeDiarizedSession = s.nativeDiarizedSession || null;
             transcriptEntries = Array.isArray(s.entries) ? s.entries : [];
             if (Array.isArray(s.speakers) && s.speakers.length) {
-                const clean = s.speakers.filter(x => typeof x === 'string' && x.trim()).slice(0, 5);
+                const clean = s.speakers.filter(x => typeof x === 'string' && x.trim()).slice(0, 32);
                 if (clean.length) speakers = clean;
             }
             notesText = s.notes || '';
@@ -1487,7 +1539,7 @@
         // ============ PROTEZIONE DA CHIUSURA ACCIDENTALE ============
         function setupLifecycleGuards() {
             window.addEventListener('beforeunload', (e) => {
-                if (!isRecording && !isProcessing && !liveQueue.length) return;
+                if (!isRecording && !isProcessing && !diarizationBusy && !liveQueue.length) return;
                 autosaveNow();
                 e.preventDefault();
                 e.returnValue = '';
@@ -1524,7 +1576,7 @@
                 showProgress(true, `Trascrivo chunk ${i + 1}/${chunks.length}...`, (i / chunks.length) * 100);
                 try {
                     const text = await transcribeBlob(chunks[i].chunk);
-                    if (text) addEntry(text, Math.max(0, (chunks[i].timestamp || t0) - t0));
+                    if (text) addEntry(text, Number.isFinite(chunks[i].offsetMs) ? chunks[i].offsetMs : Math.max(0, (chunks[i].timestamp || t0) - t0), chunks[i].participant || { speaker: 0, speakerName: 'Non assegnato' });
                 } catch (e) {}
             }
             await moveChunksSession(REC_SESSION, AUDIO_SESSION);
@@ -1583,9 +1635,11 @@
             const c = $('speakerChips'); c.innerHTML = '';
             speakers.forEach((name, i) => {
                 const chip = document.createElement('button');
-                chip.className = `speaker-chip speaker-${i+1} ${i+1 === currentSpeaker ? 'active' : ''} ${isRecording && i+1 === currentSpeaker ? 'recording-active' : ''}`;
-                chip.textContent = name; chip.onclick = () => { currentSpeaker = i+1; updateSpeakerChips(); if (isRecording) showToast(`👤 ${name}`); };
+                chip.className = `speaker-chip speaker-${i%5+1} ${i+1 === currentSpeaker ? 'active' : ''} ${isRecording && i+1 === currentSpeaker ? 'recording-active' : ''}`;
+                chip.textContent = name; chip.onclick = () => selectSpeaker(i+1);
                 c.appendChild(chip);
+                const rename = document.createElement('button'); rename.className = 'speaker-chip'; rename.textContent = '✎';
+                rename.setAttribute('aria-label', `Rinomina ${name}`); rename.onclick = () => renameSpeaker(i+1); c.appendChild(rename);
             });
             const add = document.createElement('button'); add.className = 'speaker-chip add'; add.textContent = '+';
             add.onclick = () => $('speakerModal').classList.add('active'); c.appendChild(add);
@@ -1594,14 +1648,119 @@
         window.confirmAddSpeaker = () => {
             const name = $('newSpeakerInput').value.trim();
             if (!name) return showToast('⚠️ Inserisci un nome');
-            if (speakers.length >= 5) { $('speakerModal').classList.remove('active'); return showToast('⚠️ Massimo 5 speaker'); }
-            speakers.push(name); currentSpeaker = speakers.length;
+            if (speakers.length >= 32) { $('speakerModal').classList.remove('active'); return showToast('⚠️ Massimo 32 partecipanti'); }
+            speakers.push(name); selectSpeaker(speakers.length);
             saveSpeakers(); updateSpeakerChips(); scheduleAutosave();
             $('speakerModal').classList.remove('active'); $('newSpeakerInput').value = '';
         };
 
+        let diarizationBusy = false, assigningEntry = null;
+        function selectSpeaker(id) {
+            currentSpeaker = id;
+            if (window.AndroidRecorder?.selectSpeaker) window.AndroidRecorder.selectSpeaker(id, speakers[id-1]);
+            else if (isRecording) rotateChunk(true).catch(e => showToast(e.message));
+            updateSpeakerChips();
+        }
+        function renameSpeaker(id) {
+            const value = prompt('Nome del partecipante (aggiorna tutte le sue frasi):', speakers[id-1]);
+            if (value === null || !value.trim()) return;
+            const name = value.trim().slice(0, 80); speakers[id-1] = name;
+            transcriptEntries.forEach(e => { if (e.speaker === id) e.speakerName = name; });
+            // Update queued snapshots as well as the active native capture.
+            [...liveQueue, ...failedChunks].forEach(item => { if (item.speaker?.speaker === id) item.speaker.speakerName = name; });
+            if (currentSpeaker === id && window.AndroidRecorder?.selectSpeaker) window.AndroidRecorder.selectSpeaker(id, name);
+            saveSpeakers(); refreshTranscript(); updateSpeakerChips(); scheduleAutosave(true);
+        }
+        window.chooseEntrySpeaker = index => {
+            assigningEntry = transcriptEntries[index]; if (!assigningEntry) return;
+            $('entrySpeakerSelect').innerHTML = '<option value="0">Non assegnato</option>' + speakers.map((name, i) => `<option value="${i+1}">${escapeHtml(name)}</option>`).join('');
+            $('entrySpeakerSelect').value = String(assigningEntry.speaker || 0);
+            $('assignSpeakerModal').classList.add('active');
+        };
+        window.confirmEntrySpeaker = () => {
+            if (!transcriptEntries.includes(assigningEntry)) return;
+            const id = Number($('entrySpeakerSelect').value);
+            if (!Number.isInteger(id) || id < 0 || id > speakers.length) return;
+            Object.assign(assigningEntry, { speaker: id, speakerName: speakers[id-1] || 'Non assegnato', speakerSource: 'manual', speakerReview: false });
+            assigningEntry = null; $('assignSpeakerModal').classList.remove('active'); refreshTranscript(); scheduleAutosave(true);
+        };
+        // A whole recording is analysed in one request: speaker IDs from separate
+        // requests must never be treated as stable voice identities.
+        function parseMeetingSpeakers(data) {
+            const utterances = data?.results?.utterances;
+            if (!Array.isArray(utterances) || !utterances.length) throw new Error('Nessuna voce riconosciuta: trascrizione originale conservata.');
+            const ids = new Map(), names = [];
+            const entries = utterances.map(u => {
+                if (typeof u.transcript !== 'string' || !u.transcript.trim() || !Number.isFinite(u.start) || !Number.isFinite(u.end) || u.start < 0 || u.end <= u.start) throw new Error('Risposta audio incompleta: originale conservato.');
+                const known = Number.isInteger(u.speaker) && u.speaker >= 0;
+                if (known && !ids.has(u.speaker)) {
+                    if (names.length >= 32) throw new Error('Troppe voci rilevate: originale conservato.');
+                    ids.set(u.speaker, names.length + 1); names.push(`Voce ${names.length+1}`);
+                }
+                const id = known ? ids.get(u.speaker) : 0;
+                const confidence = (u.words || []).map(w => w.speaker_confidence).filter(n => Number.isFinite(n) && n >= 0 && n <= 1);
+                const score = confidence.length ? confidence.reduce((a,b) => a+b,0)/confidence.length : null;
+                const offsetMs = Math.round(u.start*1000);
+                return { speaker: id, speakerName: names[id-1] || 'Non assegnato', text: u.transcript.trim(), offsetMs,
+                    endMs: Math.round(u.end*1000), time: formatDuration(offsetMs), timestamp: Date.now(),
+                    speakerSource: 'audio', speakerConfidence: score, speakerReview: !known || score === null || score < 0.65 };
+            }).sort((a,b) => a.offsetMs-b.offsetMs);
+            if (!names.length) throw new Error('Il servizio non ha restituito etichette vocali: originale conservato.');
+            return { entries, speakers: names };
+        }
+        function meetingIdentity() {
+            return JSON.stringify([window.nativeAudioSession, transcriptEntries, speakers]);
+        }
+        $('diarizationFileInput').onchange = async e => {
+            const file = e.target.files[0]; e.target.value = '';
+            if (file) await diarizeMeeting(file);
+        };
+        window.diarizeMeeting = async (file = null) => {
+            if (isRecording || isProcessing || liveProcessing || diarizationBusy) return showToast('Ferma la registrazione e attendi la trascrizione.');
+            const key = $('diarizationKey').value.trim();
+            if (!key) return showToast('Inserisci una chiave Deepgram nel riquadro delle voci.');
+            if (!confirm('Inviare l’audio corrente a Deepgram? Il servizio può addebitare il costo API. Al termine potrai scegliere se applicare la nuova trascrizione con le voci.')) return;
+            diarizationBusy = true; $('diarizeBtn').disabled = true;
+            const identity = meetingIdentity();
+            const sourceAudio = audioBlob;
+            $('diarizationStatus').textContent = 'Analisi delle voci in corso… per riunioni lunghe può richiedere diversi minuti.';
+            try {
+                let data;
+                const language = $('languageSelect').value || 'it';
+                if (!file && window.nativeAudioSession && window.nativeDiarizeMeeting) {
+                    data = await window.nativeDiarizeMeeting(window.nativeAudioSession, key, language);
+                } else {
+                    const blob = file || await ensureAudio();
+                    if (!blob?.size) throw new Error('Nessun audio disponibile: registra o importa un file.');
+                    if (blob.size > 2_000_000_000) throw new Error('Audio troppo grande (massimo 2 GB).');
+                    const res = await fetchWithTimeout('https://api.deepgram.com/v1/listen?model=nova-3&diarize_model=v2&utterances=true&smart_format=true&language=' + encodeURIComponent(language), {
+                        method: 'POST', headers: { Authorization: `Token ${key}`, 'Content-Type': blob.type || 'application/octet-stream' }, body: blob
+                    }, 660000);
+                    if (!res.ok) throw new Error(`Deepgram HTTP ${res.status}: controlla chiave, credito e formato audio.`);
+                    data = await res.json();
+                }
+                const result = parseMeetingSpeakers(data);
+                if (identity !== meetingIdentity() || (sourceAudio && sourceAudio !== audioBlob)) throw new Error('Il progetto è cambiato durante l’analisi. Le modifiche sono state conservate; riprova sul progetto desiderato.');
+                if (!confirm(`Rilevate ${result.speakers.length} voci, ${result.entries.length} interventi. Sostituire il testo corrente? Eventuali correzioni manuali verranno sostituite; i progetti già salvati restano disponibili.`)) {
+                    $('diarizationStatus').textContent = 'Analisi non applicata; testo originale conservato.'; return;
+                }
+                if (file) {
+                    audioBlob = file; window.nativeAudioSession = null;
+                    await clearChunksFromDB(AUDIO_SESSION);
+                }
+                window.nativeDiarizedSession = window.nativeAudioSession || null;
+                transcriptEntries = result.entries; speakers = result.speakers; currentSpeaker = 1;
+                saveSpeakers(); refreshTranscript(); updateSpeakerChips(); scheduleAutosave(true);
+                const uncertain = result.entries.filter(e => e.speakerReview).length;
+                $('diarizationStatus').textContent = `${speakers.length} voci distinte; ${uncertain} interventi da verificare. Usa ✎ per assegnare i nomi e Salva Progetto per conservarli.`;
+            } catch (e) {
+                $('diarizationStatus').textContent = e.name === 'AbortError' ? 'Tempo di attesa terminato. Originale conservato; nessun nuovo invio automatico.' : e.message;
+            } finally { diarizationBusy = false; $('diarizeBtn').disabled = false; if (window.syncNativeRecorder) window.syncNativeRecorder(); }
+        };
+
         // ============ RECORDING ============
         async function startRecording() {
+            if (diarizationBusy) return;
             if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
             try {
                 if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microfono non disponibile: usa HTTPS o l’APK Android per registrare.');
@@ -1639,6 +1798,7 @@
             mediaRecorder = new MediaRecorder(currentStream, { mimeType: mime, audioBitsPerSecond: 32000 });
             let chunkData = [];
             const chunkOffset = elapsedMs();
+            const chunkSpeaker = { speaker: currentSpeaker, speakerName: speakers[currentSpeaker - 1] };
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunkData.push(e.data); };
             mediaRecorder.onerror = e => {
                 showToast('Registrazione interrotta: ' + (e.error?.message || 'errore microfono'));
@@ -1652,8 +1812,8 @@
                 if (!chunkData.length) { lastChunkSaved = Promise.resolve(); return; }
                 const chunkBlob = new Blob(chunkData, { type: mime });
                 chunkData = [];
-                lastChunkSaved = saveChunkToDB(chunkBlob, currentSessionId).catch(() => {});
-                enqueueChunk(chunkBlob, chunkOffset);
+                lastChunkSaved = saveChunkToDB(chunkBlob, currentSessionId, { offsetMs: chunkOffset, participant: chunkSpeaker }).catch(() => {});
+                enqueueChunk(chunkBlob, chunkOffset, chunkSpeaker);
             };
             mediaRecorder.start(1000);
             chunkCount++;
@@ -1671,8 +1831,8 @@
             el.classList.toggle('busy', liveProcessing);
         }
 
-        async function rotateChunk() {
-            if (chunkRotationPromise || !isRecording || !mediaRecorder || mediaRecorder.state === 'inactive' || isPaused) return;
+        async function rotateChunk(force = false) {
+            if (chunkRotationPromise || !isRecording || !mediaRecorder || mediaRecorder.state === 'inactive' || (isPaused && !force)) return;
             const recorder = mediaRecorder;
             chunkRotationPromise = new Promise(resolve => {
                 recorder.addEventListener('stop', resolve, { once: true });
@@ -1762,8 +1922,8 @@
         // Ogni chunk viene trascritto appena chiuso (ogni 2 minuti): la
         // trascrizione e' quindi visibile in tempo reale e una chiusura
         // imprevista non fa perdere piu' di un chunk.
-        function enqueueChunk(blob, offsetMs) {
-            liveQueue.push({ blob, offsetMs });
+        function enqueueChunk(blob, offsetMs, speaker = { speaker: currentSpeaker, speakerName: speakers[currentSpeaker - 1] }) {
+            liveQueue.push({ blob, offsetMs, speaker });
             updateChunkIndicator();
             processLiveQueue();
         }
@@ -1777,7 +1937,7 @@
                 updateLiveProgress();
                 try {
                     const text = await transcribeBlob(item.blob);
-                    if (text) addEntry(text, item.offsetMs);
+                    if (text) addEntry(text, item.offsetMs, item.speaker);
                 } catch (e) {
                     failedChunks.push(item);
                     if (isRecording) showToast(`⚠️ Chunk non trascritto (${e.message})`);
@@ -1798,7 +1958,7 @@
                     showProgress(true, `Riprovo i chunk mancanti (tentativo ${attempt}/2): ${i + 1}/${retry.length}`, 60 + (i / retry.length) * 40);
                     try {
                         const text = await transcribeBlob(retry[i].blob, 1);
-                        if (text) addEntry(text, retry[i].offsetMs);
+                        if (text) addEntry(text, retry[i].offsetMs, retry[i].speaker);
                     } catch (e) { failedChunks.push(retry[i]); }
                     updateChunkIndicator();
                 }
@@ -1853,7 +2013,7 @@
         // Load audio file
         window.loadAudioFile = () => $('audioFileInput').click();
         $('audioFileInput').onchange = async (e) => {
-            if (window.AndroidRecorder && (isRecording || isProcessing)) return showToast('Ferma prima la registrazione');
+            if (isRecording || isProcessing || diarizationBusy) return showToast('Ferma prima la registrazione');
             const file = e.target.files[0]; if (!file) return;
             if (!whisperKey) { showToast('⚠️ Inserisci chiave Whisper'); e.target.value = ''; return; }
             showToast(`📁 Caricato: ${file.name}`);
@@ -1865,7 +2025,7 @@
                 else showToast('⚠️ Nessun testo riconosciuto');
             } catch (err) { showToast('⚠️ ' + err.message); }
             audioBlob = file;
-            window.nativeAudioSession = null;
+            window.nativeAudioSession = null; window.nativeDiarizedSession = null;
             try { await clearChunksFromDB(AUDIO_SESSION); } catch (err) {}
             showProgress(false); isProcessing = false; updateUI();
             scheduleAutosave(true);
@@ -2161,11 +2321,11 @@
         }
 
         // ============ TRANSCRIPT: RENDER, RICERCA, MODIFICA ============
-        function addEntry(text, offsetMs) {
+        function addEntry(text, offsetMs, participant = { speaker: currentSpeaker, speakerName: speakers[currentSpeaker - 1] }) {
             const ms = typeof offsetMs === 'number' ? offsetMs : parseDuration($('timer').textContent);
             const entry = {
-                speaker: currentSpeaker,
-                speakerName: speakers[currentSpeaker - 1],
+                speaker: participant.speaker,
+                speakerName: participant.speakerName,
                 text: String(text || '').trim(),
                 time: formatDuration(ms),
                 offsetMs: ms,
@@ -2193,7 +2353,7 @@
             div.className = 'transcript-entry';
             div.dataset.index = String(index);
             div.innerHTML = `<div class="transcript-speaker">`
-                + `<span class="speaker-label clickable label-speaker-${entry.speaker}" title="Tocca per cambiare speaker" onclick="cycleSpeaker(${index})">${escapeHtml(entry.speakerName)}</span>`
+                + `<span class="speaker-label clickable label-speaker-${entry.speaker ? (entry.speaker-1)%5+1 : 0}" title="Assegna partecipante" onclick="chooseEntrySpeaker(${index})">${escapeHtml(entry.speakerName)}${entry.speakerReview ? ' · da verificare' : ''}</span>`
                 + `<span class="transcript-time">${escapeHtml(entry.time)}</span>`
                 + `<span class="entry-actions">`
                 + `<button class="entry-btn" title="Modifica" onclick="editEntry(${index})">✏️</button>`
@@ -2395,7 +2555,7 @@
             return list.map((entry, i) => {
                 const start = entryOffset(entry);
                 const nextStart = list[i + 1] ? entryOffset(list[i + 1]) : start + 4000;
-                const end = nextStart > start ? nextStart : start + 4000;
+                const end = Number.isFinite(entry.endMs) && entry.endMs > start ? entry.endMs : (nextStart > start ? nextStart : start + 4000);
                 return {
                     start, end,
                     speaker: entry.speakerName,
@@ -2482,7 +2642,7 @@
                 // sessione live continua a essere modificata
                 entries: transcriptEntries.map(entry => ({ ...entry })),
                 speakers: [...speakers], notes: notesText,
-                hasAudio: !!audio || !!nativeAudioSession, nativeAudioSession, hasDrawing: drawingHistory.length > 0, hasNotes: !!notesText,
+                hasAudio: !!audio || !!nativeAudioSession, nativeDiarizedSession: window.nativeDiarizedSession || null, nativeAudioSession, hasDrawing: drawingHistory.length > 0, hasNotes: !!notesText,
                 hasChart: !!chartImg, hasMap: !!mapImg, chart: chartData, concept: conceptMapData, chartImage: chartImg, mapImage: mapImg
             };
             savedRecordings.push(record);
@@ -2532,8 +2692,10 @@
         }
 
         window.loadRec = async (id) => {
+            if (isRecording || isProcessing || diarizationBusy) return showToast('Attendi il completamento');
             const r = savedRecordings.find(x => x.id === id); if (!r) return;
             window.nativeAudioSession = window.AndroidRecorder ? (r.nativeAudioSession || null) : null;
+            window.nativeDiarizedSession = r.nativeDiarizedSession || null;
             transcriptEntries = (Array.isArray(r.entries) ? r.entries : []).map(entry => ({
                 ...entry,
                 offsetMs: typeof entry.offsetMs === 'number' ? entry.offsetMs : parseDuration(entry.time)
@@ -2591,7 +2753,7 @@
 
         // Events
         function setupEvents() {
-            $('recordBtn').onclick = () => { if (isProcessing) return; isRecording ? stopRecording() : startRecording(); };
+            $('recordBtn').onclick = () => { if (isProcessing || diarizationBusy) return; isRecording ? stopRecording() : startRecording(); };
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.onclick = () => {
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -2613,11 +2775,11 @@
         function showToast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 
         window.newTranscript = async () => {
-            if (isRecording) return showToast('⚠️ Ferma prima la registrazione');
+            if (isRecording || isProcessing || diarizationBusy) return showToast('⚠️ Attendi il completamento');
             if (!transcriptEntries.length && !notesText && drawingHistory.length === 0) return showToast('Già vuoto');
             if (!confirm('Cancellare tutto il contenuto corrente?')) return;
             transcriptEntries = []; audioBlob = null; notesText = '';
-            window.nativeAudioSession = null;
+            window.nativeAudioSession = null; window.nativeDiarizedSession = null;
             $('timer').textContent = '00:00';
             $('notesTextarea').value = '';
             $('notesCharCount').textContent = '0';

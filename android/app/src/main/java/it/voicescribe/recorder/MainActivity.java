@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService aiWorker = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
-    private volatile boolean starting, retrying;
+    private volatile boolean starting, retrying, diarizing;
     private String key, model, language;
     private boolean pendingStart;
     private ValueCallback<Uri[]> filePicker;
@@ -91,7 +91,7 @@ public final class MainActivity extends Activity {
         if (web != null) web.evaluateJavascript("window.nativeRecorderError && window.nativeRecorderError(" + JSONObject.quote(message) + ")", null);
     }
     private void requestStart(String apiKey, String selectedModel, String lang) {
-        if (RecordingService.active || starting || retrying) return;
+        if (RecordingService.active || starting || retrying || diarizing) return;
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare il microfono"); return; }
         if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
         key = apiKey; model = selectedModel; language = lang; starting = true;
@@ -135,7 +135,15 @@ public final class MainActivity extends Activity {
             size += Math.max(0, wav.length() - 44);
             if (Transcriber.result(wav).exists()) {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
-                entries.put(new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text));
+                JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);
+                File label = new File(wav.getPath() + ".speaker.json");
+                if (label.exists()) {
+                    try {
+                        JSONObject speaker = new JSONObject(new String(Files.readAllBytes(label.toPath()), StandardCharsets.UTF_8));
+                        entry.put("speaker", speaker.optInt("speaker", 0)).put("speakerName", speaker.optString("speakerName", "Non assegnato"));
+                    } catch (Exception ignored) { /* Older/corrupt labels stay unassigned. */ }
+                }
+                entries.put(entry);
             } else pending++;
         }
         File[] partials = dir.listFiles((d,n) -> n.endsWith(".part"));
@@ -175,6 +183,29 @@ public final class MainActivity extends Activity {
         startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(next.type).putExtra(Intent.EXTRA_TITLE, next.name), 30);
     }
     public final class RecorderBridge {
+        @JavascriptInterface public void selectSpeaker(int id, String name) {
+            if (id < 1 || id > 32 || name == null || name.trim().isEmpty()) return;
+            RecordingService.selectedSpeaker = new RecordingService.SpeakerSelection(id, name.trim().substring(0, Math.min(80, name.trim().length())));
+        }
+        @JavascriptInterface public void diarize(String requestId, String sessionId, String apiKey, String lang) {
+            if (!requestId.matches("[0-9]{1,12}")) return;
+            ui.post(() -> {
+                if (RecordingService.active || starting || retrying || diarizing) { aiReply(requestId, 0, "", "Attendi il completamento della registrazione"); return; }
+                diarizing = true;
+                worker.execute(() -> {
+                    File audio = null;
+                    try {
+                        File dir = session(sessionId); repair(dir);
+                        long size = 44;
+                        for (File part : Transcriber.segments(dir)) size += Math.max(0, part.length() - 44);
+                        if (size <= 44 || size > 2_000_000_000L) throw new IOException("Audio vuoto o superiore a 2 GB");
+                        audio = combinedAudio(sessionId);
+                        aiReply(requestId, 200, MeetingDiarizer.analyse(audio, apiKey, lang), "");
+                    } catch (Exception e) { aiReply(requestId, 0, "", "Analisi voci non riuscita: " + e.getMessage()); }
+                    finally { if (audio != null) audio.delete(); diarizing = false; }
+                });
+            });
+        }
         @JavascriptInterface public void aiRequest(String id, String provider, String path, String apiKey, String body) {
             if (!id.matches("[0-9]{1,12}")) return;
             Runnable request = () -> {
@@ -193,7 +224,7 @@ public final class MainActivity extends Activity {
             try {
                 String id = latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
-                    .put("starting", starting).put("retrying", retrying).put("level", RecordingService.level).put("status", RecordingService.status).toString();
+                    .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("status", RecordingService.status).toString();
             } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
         }
         @JavascriptInterface public String sessions() {
@@ -203,7 +234,7 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void retry(String id, String apiKey, String selectedModel, String lang) {
             ui.post(() -> {
-                if (RecordingService.active || retrying || !hasWindowFocus()) return;
+                if (RecordingService.active || retrying || diarizing || !hasWindowFocus()) return;
                 retrying = true;
                 worker.execute(() -> {
                     try {

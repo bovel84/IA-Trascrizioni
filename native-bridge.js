@@ -11,6 +11,15 @@ if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'funct
             catch (e) { return { error: text }; } // Preserve API denials for safe UI formatting.
         } });
     };
+    window.nativeDiarizeMeeting = (sessionId, key, language) => new Promise((resolve, reject) => {
+        const id = String(++requestId);
+        const timer = setTimeout(() => { pending.delete(id); reject(new Error('Timeout analisi voci: nessun reinvio automatico.')); }, 690000);
+        pending.set(id, { timer, reject, resolve: async response => {
+            try { if (!response.ok) throw new Error('Analisi voci non riuscita'); resolve(await response.json()); } catch (e) { reject(e); }
+        } });
+        try { window.AndroidRecorder.diarize(id, sessionId, key, language); }
+        catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
+    });
     window.nativeAiRequest = (provider, path, key, body) => new Promise((resolve, reject) => {
         const id = String(++requestId);
         const timer = setTimeout(() => {
@@ -33,7 +42,8 @@ window.initNativeRecorder = function () {
     window.nativeAudioSession = window.nativeAudioSession || null;
 
     function entryFromNative(entry) {
-        return { ...entry, speaker: 1, speakerName: speakers[0], time: formatDuration(entry.offsetMs), timestamp: Date.now() };
+        const id = Number.isInteger(entry.speaker) && entry.speaker >= 1 && entry.speaker <= 32 ? entry.speaker : 0;
+        return { ...entry, speaker: id, speakerName: id ? (entry.speakerName || `Persona ${id}`) : 'Non assegnato', speakerSource: id ? 'manual' : 'unknown', time: formatDuration(entry.offsetMs), timestamp: Date.now() };
     }
     function saveArchives(states) {
         let changed = false;
@@ -69,12 +79,14 @@ window.initNativeRecorder = function () {
         }
     }
     function importEntries(state) {
-        if (window.nativeAudioSession !== state.sessionId) return;
+        if (window.nativeAudioSession !== state.sessionId || window.nativeDiarizedSession === state.sessionId) return;
         let changed = false;
         for (const entry of state.entries || []) {
             if (seen.has(entry.nativeSegmentId)) continue;
             const before = transcriptEntries.length;
-            addEntry(entry.text, entry.offsetMs);
+            const participant = entryFromNative(entry);
+            if (participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
+            addEntry(entry.text, entry.offsetMs, participant);
             if (transcriptEntries.length > before) transcriptEntries[transcriptEntries.length - 1].nativeSegmentId = entry.nativeSegmentId;
             seen.add(entry.nativeSegmentId); changed = true;
         }
@@ -95,7 +107,7 @@ window.initNativeRecorder = function () {
         } else if (/^Avvio fallito/.test(state.status || '')) startRequested = false;
         isRecording = !!state.recording;
         isPaused = !!state.paused;
-        isProcessing = startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
+        isProcessing = diarizationBusy || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
         if (window.nativeAudioSession === state.sessionId) {
             importEntries(state);
             $('timer').textContent = formatDuration(state.elapsedMs || 0);
@@ -125,9 +137,9 @@ window.initNativeRecorder = function () {
     };
     startRecording = async function () {
         if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
-        if (isRecording || isProcessing) return;
+        if (isRecording || isProcessing || diarizationBusy) return;
         audioBlob = null; startRequested = true; isProcessing = true; updateUI();
-        try { bridge.start(whisperKey, sttModel, $('languageSelect').value); }
+        try { if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]); bridge.start(whisperKey, sttModel, $('languageSelect').value); }
         catch (error) { window.nativeRecorderError('Impossibile avviare il servizio Android: ' + (error.message || 'errore sconosciuto')); }
     };
     stopRecording = async function () { bridge.stop(); };

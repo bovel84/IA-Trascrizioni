@@ -22,6 +22,11 @@ public final class RecordingService extends Service {
     private final ExecutorService uploads = Executors.newSingleThreadExecutor();
     private String key, model, language;
     private File session;
+    static final class SpeakerSelection {
+        final int id; final String name;
+        SpeakerSelection(int id, String name) { this.id = id; this.name = name; }
+    }
+    static volatile SpeakerSelection selectedSpeaker = new SpeakerSelection(0, "Non assegnato");
 
     public void onCreate() {
         super.onCreate();
@@ -73,6 +78,7 @@ public final class RecordingService extends Service {
     private void captureAudio() {
         WavFile wav = null; File partial = null;
         long totalBytes = 0, segmentBytes = 0;
+        SpeakerSelection capturedSpeaker = selectedSpeaker;
         String failure = null;
         try {
             int min = AudioRecord.getMinBufferSize(WavFile.RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -104,9 +110,16 @@ public final class RecordingService extends Service {
                     if (wav != null) { wav.close(); wav = null; submit(finalizeSegment(partial)); partial = null; segmentBytes = 0; }
                     continue;
                 }
+                SpeakerSelection selected = selectedSpeaker;
+                if (wav != null && selected.id != capturedSpeaker.id) {
+                    wav.close(); wav = null; submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
+                }
                 if (wav == null) {
                     String offset = String.format(java.util.Locale.ROOT, "%012d", totalBytes * 1000 / WavFile.BYTES_PER_SECOND);
                     partial = new File(session, offset + ".part"); wav = new WavFile(partial);
+                    capturedSpeaker = selected;
+                    org.json.JSONObject label = new org.json.JSONObject().put("speaker", selected.id).put("speakerName", selected.name);
+                    java.nio.file.Files.write(new File(session, offset + ".wav.speaker.json").toPath(), label.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
                 wav.write(buf, n); totalBytes += n; segmentBytes += n;
                 if (segmentBytes >= WavFile.BYTES_PER_SECOND * SEGMENT_SECONDS) {

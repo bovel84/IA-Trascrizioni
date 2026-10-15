@@ -4,7 +4,7 @@
  * ovviamente online). Funziona solo se la pagina e' servita in http(s):
  * aprendo il file con file:// il browser non registra i service worker.
  */
-const CACHE = 'voicescribe-v9';
+const CACHE = 'voicescribe-v10';
 
 // App shell + librerie da CDN (jsPDF e Chart.js vengono messe in cache al primo avvio)
 const APP_SHELL = [
