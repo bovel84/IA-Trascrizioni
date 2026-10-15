@@ -136,7 +136,7 @@ window.initNativeRecorder = function () {
         catch (e) { showToast('Impossibile leggere lo stato Android'); }
     };
     startRecording = async function () {
-        if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
+        if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
         audioBlob = null; startRequested = true; isProcessing = true; updateUI();
         try { if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]); bridge.start(whisperKey, sttModel, $('languageSelect').value); }

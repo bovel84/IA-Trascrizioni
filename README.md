@@ -136,3 +136,8 @@ Vedere [android/README.md](android/README.md) per build, installazione, file cam
 Verifica locale: `node tools/check-app.js`, `node tools/smoke-test.js`, `node tools/native-bridge-test.js`, `node tools/provider-test.js`, `node tools/speakers-test.js`. Le risposte API sono simulate: qualità su voci reali, rete e accesso al servizio devono essere verificati sul telefono con un audio di prova. Nessuna chiamata API a pagamento viene eseguita dai test.
 
 Riferimenti API: [diarizzazione Deepgram](https://developers.deepgram.com/docs/diarization), [utterances](https://developers.deepgram.com/docs/utterances), [limiti file](https://developers.deepgram.com/docs/pre-recorded-audio).
+
+
+## VoiceScribe 2.0 — nuovo spazio di lavoro
+
+Interfaccia adattiva: navigazione inferiore su telefono, menu laterale e registratore affiancato alla trascrizione su desktop. Connessioni e modelli sono raccolti in un pannello espandibile, raggiungibile anche da Impostazioni. Pulsanti più grandi, contrasto migliorato, ricerca nel testo più ampia e nomi/azioni dei partecipanti raggruppati. Appunti, disegno, analisi AI, grafici, mappa, progetti e tutti gli otto export/salvataggi mantengono gli stessi handler. Zoom della pagina consentito, focus da tastiera visibile, etichette dei comandi di registrazione aggiornate e animazioni ridotte se richiesto dal dispositivo. APK 2.0 / versionCode 11, cache PWA v11.

@@ -2,9 +2,9 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>VoiceScribe Pro</title>
-    <meta name="theme-color" content="#0a0a0f">
+    <meta name="theme-color" content="#101519">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -369,6 +369,147 @@
 
         /* Drawing preview in saved items */
         .drawing-preview { width: 50px; height: 50px; border-radius: 8px; background: white; object-fit: cover; }
+            /* VoiceScribe 2.0 — responsive workspace, shared by web and Android. */
+        :root { color-scheme: dark; --bg-primary:#101519; --bg-secondary:#171e23; --bg-card:#1c242a; --accent:#a8edbe; --accent-glow:rgba(168,237,190,.12); --accent-secondary:#b6acf0; --text-primary:#f2f5f3; --text-secondary:#bdc7c9; --text-muted:#8d9b9f; --border:#303c43; --danger:#ff8d8d; --warning:#edc879; --success:#a8edbe; }
+        body { font-family:'DM Sans',system-ui,sans-serif; line-height:1.5; background:var(--bg-primary); }
+        button,input,select,textarea { font:inherit; }
+        button,a,input,select,textarea,summary { -webkit-tap-highlight-color:rgba(168,237,190,.12); }
+        button,summary { cursor:pointer; }
+        button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+        button:disabled { opacity:.5; cursor:wait; }
+        button { transition:background .15s,border-color .15s; }
+        .ui-icon { width:21px; height:21px; flex-shrink:0; }
+        .header { padding:18px 36px; background:rgba(16,21,25,.96); border-bottom:1px solid var(--border); backdrop-filter:blur(12px); }
+        .header-content { max-width:1360px; margin:auto; gap:16px; }
+        .logo-icon { width:44px; height:44px; flex-basis:44px; border:1px solid var(--border); border-radius:14px; }
+        .brand-copy { display:flex; flex-direction:column; }
+        .logo-text { display:flex; align-items:center; gap:9px; font-size:19px; letter-spacing:-.6px; color:var(--text-primary); background:none; -webkit-text-fill-color:currentColor; }
+        .pro-tag { font-size:9px; letter-spacing:1.2px; color:var(--accent); border:1px solid #466451; border-radius:5px; padding:1px 5px; }
+        .brand-caption { font-size:11px; color:var(--text-muted); }
+        .header-badges { gap:16px; }
+        .status-badge { font-size:11px; border:1px solid var(--border); padding:7px 11px; letter-spacing:.3px; }
+        .status-badge.idle { color:var(--accent); background:#1c2a23; border-color:#334c3d; }
+        .settings-trigger { display:flex; align-items:center; gap:8px; background:none; border:0; color:var(--text-secondary); min-height:44px; font-size:12px; }
+        .main-content { width:100%; max-width:1440px; margin:0 auto; padding:32px 36px 50px; display:grid; grid-template-columns:168px minmax(0,1fr); grid-template-rows:auto auto 1fr; gap:22px 34px; align-items:start; }
+        .workspace-heading { grid-column:2; grid-row:1; display:flex; justify-content:space-between; align-items:center; gap:20px; padding:4px 0 8px; }
+        .eyebrow { font-size:10px; letter-spacing:2px; color:var(--accent); margin-bottom:9px; font-weight:700; }
+        h1 { font-size:clamp(26px,3vw,35px); font-weight:600; letter-spacing:-1.2px; line-height:1.2; }
+        #workspaceDescription { color:var(--text-muted); font-size:13px; margin-top:10px; }
+        .secondary-action { display:flex; align-items:center; justify-content:center; gap:9px; flex-shrink:0; padding:10px 16px; min-height:44px; border-radius:10px; border:1px solid var(--border); color:var(--text-primary); background:var(--bg-secondary); font-size:12px; font-weight:600; }
+        .secondary-action:hover,.model-refresh:hover { background:#29353b; }
+        .tabs { grid-column:1; grid-row:1 / span 3; position:sticky; top:110px; flex-direction:column; background:none; padding:12px 0; gap:8px; overflow:visible; border-radius:0; }
+        .tab { display:flex; align-items:center; justify-content:flex-start; gap:12px; padding:13px 16px; min-height:48px; flex:none; font-size:13px; font-weight:500; border-radius:10px; text-align:left; }
+        .tab.active { background:#24392d; color:var(--accent); box-shadow:none; }
+        .tab:hover:not(.active) { background:var(--bg-secondary); }
+        .api-section { grid-column:2; grid-row:2; border:1px solid var(--border); border-radius:12px; background:transparent; padding:0; scroll-margin-top:100px; min-width:0; }
+        .api-section>summary { display:flex; align-items:center; gap:12px; padding:13px 18px; list-style:none; }
+        .api-section>summary::-webkit-details-marker { display:none; }
+        .connection-icon { color:var(--text-muted); display:flex; }
+        .connection-copy { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 14px; }
+        .connection-copy strong { font-size:12px; font-weight:500; }
+        .connection-copy>span { font-size:11px; color:var(--text-muted); }
+        .settings-chevron { margin-left:auto; color:var(--text-muted); }
+        .api-section[open] .settings-chevron { transform:rotate(180deg); }
+        .connection-body { border-top:1px solid var(--border); padding:20px; background:var(--bg-secondary); border-radius:0 0 12px 12px; }
+        .api-box { border:1px solid var(--border); background:var(--bg-primary); padding:14px; }
+        .api-box-title { font-size:10px; letter-spacing:.7px; }
+        .api-box-link,.api-box .change-btn { font-size:12px; min-height:32px; display:inline-flex; align-items:center; }
+        .api-box input,#customLlmModel,.control-select,.modal-input { min-height:44px; font-size:14px; border:1px solid var(--border); padding:10px 12px; border-radius:9px; }
+        .api-save-btn,.modal-btn.confirm { color:#12271a; background:var(--accent); min-height:44px; font-weight:700; }
+        .model-refresh { min-height:44px; font-size:12px; line-height:1.5; padding:10px 12px; border-radius:9px; }
+        .tab-content { grid-column:2; grid-row:3; min-width:0; gap:20px; }
+        #recordTab.active { display:grid; grid-template-columns:minmax(250px,320px) minmax(0,1fr); gap:22px; align-items:start; }
+        .session-controls { display:flex; flex-direction:column; gap:16px; min-width:0; }
+        .recording-section { position:relative; padding:22px 20px 24px; border:1px solid #3a5144; border-radius:18px; background:radial-gradient(ellipse at 50% 30%,#293e31 0,transparent 68%),#1a2420; gap:14px; }
+        .recorder-caption { color:#b3c4b9; display:flex; align-items:center; gap:7px; font-size:9px; font-weight:600; letter-spacing:1.8px; margin-bottom:14px; }
+        .ready-dot { width:5px; height:5px; border-radius:50%; background:var(--accent); }
+        .record-button { width:86px; height:86px; background:var(--accent); box-shadow:0 0 0 9px #a8edbe0b,0 0 0 10px #a8edbe1a; }
+        .record-button svg { fill:#1c3b28; width:32px; height:32px; }
+        .record-button.recording,.record-button.paused,.record-button.processing { box-shadow:0 0 0 9px #ffffff09; }
+        .record-button.recording svg,.record-button.paused svg,.record-button.processing svg { fill:#271d1d; }
+        .record-rings { width:112px; height:112px; }
+        .pause-button { width:44px; height:44px; right:-58px; box-shadow:none; }
+        .pause-button svg { fill:#3c301b; }
+        .timer { font-family:'Space Mono',monospace; font-size:35px; letter-spacing:-1.5px; font-variant-numeric:tabular-nums; margin-top:5px; }
+        .record-hint { color:#b1c0b6; font-size:12px; max-width:100%; overflow-wrap:anywhere; }
+        .visualizer { height:24px; max-width:100%; overflow:hidden; }
+        .visualizer-bar { background:var(--accent); width:3px; }
+        .chunk-indicator { font-size:10px; max-width:100%; overflow-wrap:anywhere; }
+        .settings-card { border:1px solid var(--border); border-radius:12px; background:transparent; padding:15px; }
+        .setting-row { gap:14px; }
+        .setting-info h4 { font-size:12px; font-weight:500; }
+        .setting-info p { font-size:11px; line-height:1.5; margin-top:3px; }
+        .toggle-slider { border:1px solid #56656c; }
+        .toggle-switch input:focus-visible + .toggle-slider { outline:2px solid var(--accent); outline-offset:4px; }
+        .speaker-quick-select { padding:18px; border:1px solid var(--border); background:var(--bg-secondary); border-radius:14px; }
+        .section-title { font-size:11px; font-weight:600; text-transform:none; letter-spacing:.3px; color:var(--text-primary); margin-bottom:12px; }
+        .section-kicker { display:block; font-weight:400; font-size:11px; color:var(--text-muted); margin-top:3px; }
+        .speaker-chips { gap:8px; }
+        .speaker-control { display:inline-flex; max-width:100%; border:1px solid var(--border); border-radius:9px; overflow:hidden; }
+        .speaker-chip { min-height:40px; border-radius:8px; border:0; font-size:12px; padding:8px 10px; overflow-wrap:anywhere; }
+        .speaker-control .speaker-chip:first-child { border-radius:8px 0 0 8px; min-width:0; }
+        .speaker-control .speaker-chip:last-child { border-radius:0; border-left:1px solid var(--border); min-width:34px; }
+        .speaker-chip.add { border:1px dashed #57686e; }
+        .speaker-2,.label-speaker-2 { color:#c4b2ff!important; border-color:#c4b2ff!important; }
+        .speaker-5,.label-speaker-5 { color:#85c4ff!important; border-color:#85c4ff!important; }
+        .speaker-quick-select details { border-top:1px solid var(--border); padding-top:12px; }
+        .speaker-quick-select summary { font-size:12px; color:var(--accent); padding:7px 0; }
+        .speaker-quick-select details label { font-size:11px; display:block; margin:12px 0 6px; }
+        .retranscribe-info { text-align:left; font-size:11px; line-height:1.6; margin-top:10px; }
+        .language-row { gap:14px; }.language-row label { font-size:11px; }
+        .transcript-section { border-radius:16px; padding:22px; background:var(--bg-secondary); box-shadow:none; min-height:610px; min-width:0; }
+        .transcript-header { align-items:flex-start; flex-wrap:wrap; gap:16px; padding-bottom:18px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+        .transcript-heading h2 { font-size:17px; font-weight:500; letter-spacing:-.3px; }
+        .transcript-heading>span { display:block; color:var(--text-muted); font-size:11px; margin-top:4px; }
+        .transcript-tools { flex-wrap:wrap; gap:8px; width:100%; }
+        .search-input { flex:1; min-width:90px; width:120px; min-height:40px; font-size:12px; padding:10px 12px; background:var(--bg-primary); }
+        .transcript-count { color:var(--text-muted); font-size:10px; text-transform:none; letter-spacing:0; padding:0 4px; }
+        .new-btn { min-height:40px; padding:8px 12px; background:transparent; border:1px solid var(--border); font-size:11px; color:var(--text-secondary); }
+        .transcript-area { min-height:250px; max-height:65vh; gap:0; }
+        .transcript-entry,.transcript-entry:nth-child(odd) { background:none; border:0; border-bottom:1px solid var(--border); border-radius:0; box-shadow:none; padding:18px 0; }
+        .transcript-entry:first-child { padding-top:0; }
+        .transcript-speaker { flex-wrap:wrap; gap:8px; }
+        .transcript-text { font-size:15px; line-height:1.85; letter-spacing:0; overflow-wrap:anywhere; }
+        .speaker-label { font-size:11px; max-width:100%; overflow-wrap:anywhere; padding:5px 9px; }
+        .transcript-time { font-size:10px; background:none; }
+        .entry-actions { gap:4px; }.entry-btn { min-width:34px; min-height:34px; font-size:12px; background:transparent; }
+        .entry-btn:hover { background:#29353b; }.empty-state { min-height:280px; font-size:13px; line-height:1.8; }
+        .empty-state svg { color:var(--accent); width:38px; height:38px; opacity:.6; }
+        .notes-section,.drawing-section,.ai-result,.insight-card,.stat-card,.recording-item { border:1px solid var(--border); border-radius:14px; background:var(--bg-secondary); box-shadow:none; }
+        .notes-textarea { font-size:15px; line-height:1.8; min-height:200px; padding:16px; background:var(--bg-primary); }
+        .drawing-toolbar { flex-wrap:wrap; gap:8px; }.tool-btn { min-height:40px; min-width:40px; }.color-btn { width:28px; height:28px; }
+        .ai-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+        .ai-btn { border:1px solid var(--border); background:var(--bg-secondary); border-radius:12px; min-height:104px; box-shadow:none; padding:16px 10px; font-size:13px; }
+        .ai-btn-icon { background:#26392d; color:var(--accent); border:0; font-size:13px; width:32px; height:32px; border-radius:9px; }
+        .ai-btn-label { font-size:10px; }.stat-value { font-size:25px; color:var(--accent); }.stat-label { font-size:11px; }
+        .insight-card h4 { text-transform:none; font-size:14px; letter-spacing:0; }.insight-meta { font-size:11px; }
+        .export-section { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+        .export-card { color:var(--text-primary); text-align:left; border:1px solid var(--border); background:var(--bg-secondary); border-radius:13px; padding:20px; min-width:0; }
+        .export-card:hover { border-color:#759981; background:#202c25; }.export-info h3 { font-size:14px; font-weight:500; }.export-info p { font-size:11px; margin-top:3px; }
+        .recording-item { padding:18px; }.recording-item-title { font-size:14px; }.recording-item-meta { font-size:11px; }.action-btn { width:40px; height:40px; }.item-badge { font-size:10px; }
+        .retranscribe-section { border:1px solid var(--border); background:var(--bg-secondary); border-radius:14px; }.retranscribe-btn { background:#293d30; color:var(--accent); border:1px solid #466451; font-size:13px; }
+        .modal { max-width:400px; padding:24px; border:1px solid #45535a; box-shadow:0 24px 90px #0008; max-height:85dvh; overflow-y:auto; }.modal-btn { min-height:44px; }
+        .bg-warning { background:#26392d; color:var(--accent); font-size:10px; animation:none; }.toast { font-size:13px; line-height:1.5; }
+        @media (max-width:1100px) { .main-content { grid-template-columns:140px minmax(0,1fr); gap:20px; padding:26px 24px; } #recordTab.active { grid-template-columns:minmax(230px,280px) minmax(0,1fr); gap:16px; } .tab { padding:12px; gap:9px; }.secondary-action { padding:10px; }.workspace-heading .secondary-action span { display:none; } }
+        @media (max-width:850px) {
+            .header { padding:14px 20px; }.main-content { display:flex; flex-direction:column; padding:24px 20px calc(96px + env(safe-area-inset-bottom)); gap:18px; }.main-content>* { width:100%; }
+            .workspace-heading { order:0; }.api-section { order:1; }.tab-content { order:2; }
+            .tabs { position:fixed; z-index:150; bottom:0; left:0; right:0; top:auto; display:flex; flex-direction:row; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); gap:4px; background:rgba(23,30,35,.98); border-top:1px solid #3a484f; backdrop-filter:blur(16px); }
+            .tab { flex:1; min-width:0; flex-direction:column; gap:5px; font-size:10px; padding:8px 3px; min-height:54px; justify-content:center; }.tab.active { background:#2b3e31; }.tab .ui-icon { width:20px; height:20px; }
+            #recordTab.active { display:grid; grid-template-columns:minmax(230px,.8fr) minmax(0,1fr); }.header-badges { gap:8px; }.settings-trigger span { display:none; }
+            .toast { bottom:calc(88px + env(safe-area-inset-bottom)); }.transcript-section { padding:18px; min-height:550px; }.api-section { scroll-margin-top:96px; }
+        }
+        @media (max-width:620px) {
+            .header { padding:12px 16px; }.logo { gap:10px; }.logo-icon { width:38px; height:38px; flex-basis:38px; }.logo-text { font-size:18px; }.brand-caption { font-size:10px; }.pro-tag { display:none; }.status-badge { padding:6px 9px; font-size:10px; }.settings-trigger { padding:5px; }
+            .main-content { padding:22px 16px calc(100px + env(safe-area-inset-bottom)); gap:16px; }.workspace-heading { gap:10px; padding:0 0 3px; } h1 { font-size:28px; }.eyebrow { font-size:9px; letter-spacing:1.7px; margin-bottom:8px; } #workspaceDescription { font-size:12px; max-width:250px; margin-top:8px; }
+            .api-section>summary { padding:12px 14px; }.connection-copy { flex-direction:column; gap:1px; }.connection-copy>span { font-size:10px; }.connection-body { padding:14px; }.api-grid,.model-row { grid-template-columns:minmax(0,1fr); }.api-save-btn { grid-column:auto; }
+            #recordTab.active { display:flex; }.session-controls { gap:12px; }.recording-section { padding:18px 16px; gap:8px; }.recorder-caption { margin-bottom:12px; }.record-button { width:76px; height:76px; }.timer { font-size:32px; margin-top:5px; }.record-hint { font-size:11px; }
+            .speaker-quick-select { padding:15px; }.section-title { margin-bottom:10px; }.section-kicker { display:inline; margin-left:8px; }.settings-card { padding:12px 15px; }.transcript-section { min-height:360px; }.transcript-area { max-height:65vh; }.empty-state { min-height:220px; }.transcript-text { font-size:15px; }
+            .ai-actions { gap:8px; }.ai-btn { min-height:100px; padding:12px 6px; font-size:11px; }.export-section { gap:10px; }.export-card { padding:14px; flex-direction:column; align-items:flex-start; gap:10px; }.export-info h3 { font-size:13px; }.export-info p { font-size:10px; }.export-icon { width:36px; height:36px; }.recording-item { gap:10px; padding:14px; flex-wrap:wrap; }.recording-item-actions { margin-left:auto; }.recording-item-meta { font-size:10px; }
+            .notes-textarea,input,select,textarea,.api-box input,#customLlmModel,.control-select,.modal-input,.search-input { font-size:16px; }.notes-textarea { min-height:220px; }.search-input { font-size:14px; }.insight-grid { grid-template-columns:minmax(0,1fr); }
+        }
+        @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+
     </style>
     <script src="native-bridge.js"></script>
 </head>
@@ -379,9 +520,9 @@
             <div class="header-content">
                 <div class="logo">
                     <div class="logo-icon"><img src="icon.svg" alt="" aria-hidden="true"></div>
-                    <span class="logo-text">VoiceScribe</span>
+                    <span class="brand-copy"><span class="logo-text">VoiceScribe<span class="pro-tag">PRO</span></span><span class="brand-caption">Il tuo spazio di ascolto</span></span>
                 </div>
-                <div class="header-badges">
+                <div class="header-badges"><button class="settings-trigger" onclick="openConnectionSettings()" aria-label="Apri connessioni e modelli"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Impostazioni</span></button>
                     <div class="status-badge background" id="bgBadge" style="display: none;"><span>🔒</span></div>
                     <div class="status-badge idle" id="statusBadge">
                         <span class="status-dot"></span>
@@ -392,21 +533,23 @@
         </header>
 
         <main class="main-content">
+            <div class="workspace-heading"><div><p class="eyebrow" id="workspaceEyebrow">IL TUO WORKSPACE</p><h1 id="workspaceTitle">La tua riunione.</h1><p id="workspaceDescription">Registra la conversazione. Ritrova ogni intervento.</p></div><button class="secondary-action" onclick="saveSession()"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg><span>Salva progetto</span></button></div>
             <!-- API Keys -->
-            <div class="api-section">
+            <details class="api-section" id="connectionSettings">
+                <summary><span class="connection-icon"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></span><span class="connection-copy"><strong>Connessioni e modelli</strong><span>Chiavi API, trascrizione e assistente AI</span></span><span class="settings-chevron" aria-hidden="true">⌄</span></summary><div class="connection-body">
                 <div class="api-grid" id="apiGrid">
                     <div class="api-box">
                         <div class="api-box-header">
-                            <span class="api-box-title">🎤 GROQ WHISPER</span>
-                            <a href="https://console.groq.com/keys" target="_blank" class="api-box-link">Ottieni</a>
+                            <span class="api-box-title">TRASCRIZIONE AUDIO</span>
+                            <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" class="api-box-link">Ottieni</a>
                         </div>
                         <div id="whisperKeyBox"><input type="password" id="whisperKeyInput" placeholder="gsk_..."></div>
                         <div id="whisperKeySaved" style="display: none;"><span class="saved">✓ Memorizzata</span><button class="change-btn" onclick="changeKey('whisper')">Modifica</button></div>
                     </div>
                     <div class="api-box">
                         <div class="api-box-header">
-                            <span class="api-box-title">🤖 PROVIDER AI</span>
-                            <a id="aiKeyLink" href="https://console.groq.com/keys" target="_blank" class="api-box-link">Ottieni</a>
+                            <span class="api-box-title">ASSISTENTE AI</span>
+                            <a id="aiKeyLink" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" class="api-box-link">Ottieni</a>
                         </div>
                         <select class="control-select" id="aiProviderSelect" aria-label="Provider AI" style="width:100%;min-width:0;margin-bottom:8px">
                             <option value="groq">Groq</option>
@@ -421,14 +564,14 @@
                 </div>
                 <div class="model-row">
                     <div class="model-box">
-                        <span class="api-box-title">🎤 MODELLO WHISPER</span>
+                        <span class="api-box-title">MODELLO VOCE</span>
                         <select class="control-select" id="sttModelSelect">
                             <option value="whisper-large-v3-turbo">Turbo · veloce, -60% costo</option>
                             <option value="whisper-large-v3">Large v3 · massima precisione</option>
                         </select>
                     </div>
                     <div class="model-box">
-                        <span class="api-box-title">🤖 MODELLO LLM</span>
+                        <span class="api-box-title">MODELLO AI</span>
                         <select class="control-select" id="llmModelSelect">
                             <option value="openai/gpt-oss-120b">GPT-OSS 120B · qualità</option>
                             <option value="openai/gpt-oss-20b">GPT-OSS 20B · velocissimo</option>
@@ -440,41 +583,29 @@
                 <button class="model-refresh" id="refreshModelsBtn">🔄 Verifica i modelli disponibili con la tua chiave</button>
                 <button class="model-refresh" id="testLlmBtn" type="button">🧪 Prova modello LLM selezionato</button>
                 <p id="aiProviderStatus" role="status" style="font-size:0.75rem;color:var(--text-muted);margin:8px 0 0;overflow-wrap:anywhere">Inserisci la chiave del provider per aggiornare il catalogo.</p>
-            </div>
+            </div></details>
 
             <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab active" data-tab="record">🎙️ Rec</button>
-                <button class="tab" data-tab="notes">📝 Note</button>
-                <button class="tab" data-tab="ai">✨ AI</button>
-                <button class="tab" data-tab="export">📤</button>
-                <button class="tab" data-tab="saved">💾</button>
-            </div>
+            <nav class="tabs" aria-label="Sezioni dell’app">
+                <button class="tab active" data-tab="record" aria-controls="recordTab" aria-pressed="true"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg><span>Registra</span></button>
+                <button class="tab" data-tab="notes" aria-controls="notesTab" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9M8 16l1-4L19 2l3 3-10 10-4 1Z"/></svg><span>Appunti</span></button>
+                <button class="tab" data-tab="ai" aria-controls="aiTab" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 6.2L21 12l-6.2 2.8L12 21l-2.8-6.2L3 12l6.2-2.8L12 3ZM20 2v4m-2-2h4"/></svg><span>Analisi AI</span></button>
+                <button class="tab" data-tab="export" aria-controls="exportTab" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg><span>Esporta</span></button>
+                <button class="tab" data-tab="saved" aria-controls="savedTab" aria-pressed="false"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg><span>Progetti</span></button>
+            </nav>
 
             <!-- Record Tab -->
             <div class="tab-content active" id="recordTab">
-                <div class="settings-card">
-                    <div class="setting-row">
-                        <div class="setting-info">
-                            <h4>💡 Mantieni schermo attivo</h4>
-                            <p>Per schermo bloccato usa l’app Android nativa</p>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="backgroundToggle">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="recording-section">
+                <div class="session-controls">
+                <div class="recording-section"><div class="recorder-caption"><span class="ready-dot"></span> REGISTRATORE</div>
                     <div class="record-button-container" id="recordBtnContainer">
-                        <button class="record-button" id="recordBtn">
+                        <button class="record-button" id="recordBtn" aria-label="Avvia registrazione">
                             <svg viewBox="0 0 24 24" id="recordIcon">
                                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                             </svg>
                         </button>
-                        <button class="pause-button" id="pauseBtn" onclick="togglePause()">
+                        <button class="pause-button" id="pauseBtn" aria-label="Metti in pausa" onclick="togglePause()">
                             <svg viewBox="0 0 24 24" id="pauseIcon">
                                 <rect x="6" y="4" width="4" height="16"/>
                                 <rect x="14" y="4" width="4" height="16"/>
@@ -482,7 +613,7 @@
                         </button>
                         <div class="record-rings"></div>
                     </div>
-                    <div class="timer" id="timer">00:00</div>
+                    <div class="timer" id="timer" aria-label="Durata registrazione">00:00</div>
                     <div class="chunk-indicator" id="chunkIndicator">Chunk: 0</div>
                     <div class="visualizer" id="visualizer" style="display: none;"></div>
                     <p class="record-hint" id="recordHint">Tocca per registrare</p>
@@ -495,11 +626,11 @@
                 </div>
 
                 <div class="speaker-quick-select">
-                    <div class="section-title">👤 Partecipanti</div>
+                    <div class="section-title">Partecipanti <span class="section-kicker">Chi sta parlando?</span></div>
                     <div class="speaker-chips" id="speakerChips"></div>
                     <p class="retranscribe-info">Seleziona chi parla durante la registrazione. ✎ rinomina tutte le sue frasi.</p>
                     <details style="margin-top:0.8rem">
-                        <summary>Riconoscimento automatico delle voci</summary>
+                        <summary>Distingui le voci con AI</summary>
                         <p class="retranscribe-info">A registrazione conclusa, invia l’audio a Deepgram per distinguere le voci. Richiede una chiave Deepgram e credito API; Groq e la chiave del modello chat non sono utilizzati. I nomi reali si assegnano manualmente.</p>
                         <label for="diarizationKey">Chiave API Deepgram (solo per questa apertura)</label>
                         <input id="diarizationKey" type="password" class="modal-input" autocomplete="off" placeholder="Chiave Deepgram">
@@ -508,7 +639,7 @@
                         <p id="diarizationStatus" role="status" class="retranscribe-info"></p>
                     </details>
                     <div class="language-row">
-                        <label>Lingua:</label>
+                        <label for="languageSelect">Lingua</label>
                         <select class="control-select" id="languageSelect">
                             <option value="it">🇮🇹 Italiano</option>
                             <option value="en">🇺🇸 English</option>
@@ -519,13 +650,27 @@
                     </div>
                 </div>
 
+                <div class="settings-card">
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <h4>Mantieni schermo attivo</h4>
+                            <p>Per schermo bloccato usa l’app Android nativa</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="backgroundToggle" aria-label="Mantieni schermo attivo">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                </div>
                 <div class="transcript-section">
                     <div class="transcript-header">
-                        <div class="section-title">Trascrizione</div>
+                        <div class="transcript-heading"><h2>Trascrizione</h2><span>La conversazione, parola per parola</span></div>
                         <div class="transcript-tools">
-                            <input type="search" class="search-input" id="transcriptSearch" placeholder="Cerca..." title="Cerca nella trascrizione">
+                            <input type="search" class="search-input" id="transcriptSearch" placeholder="Cerca nel testo…" aria-label="Cerca nella trascrizione" title="Cerca nella trascrizione">
                             <span class="transcript-count" id="transcriptCount">0 frasi</span>
-                            <button class="new-btn" onclick="newTranscript()" title="Nuova">🗑️ Nuova</button>
+                            <button class="new-btn" onclick="newTranscript()" title="Nuova">Nuova</button>
                         </div>
                     </div>
                     <div class="transcript-area" id="transcriptArea">
@@ -589,7 +734,7 @@
             <div class="tab-content" id="aiTab">
                 <div class="stats-grid">
                     <div class="stat-card"><div class="stat-value" id="wordCount2">0</div><div class="stat-label">Parole</div></div>
-                    <div class="stat-card"><div class="stat-value" id="speakerCount2">0</div><div class="stat-label">Speaker</div></div>
+                    <div class="stat-card"><div class="stat-value" id="speakerCount2">0</div><div class="stat-label">Partecipanti</div></div>
                 </div>
                 <div class="ai-actions">
                     <button class="ai-btn" onclick="runAI('correct')"><span class="ai-btn-icon">G</span><span>Correggi</span><span class="ai-btn-label">Grammatica</span></button>
@@ -616,14 +761,14 @@
             <!-- Export Tab -->
             <div class="tab-content" id="exportTab">
                 <div class="export-section">
-                    <div class="export-card" onclick="exportPDF()"><div class="export-icon pdf">📄</div><div class="export-info"><h3>Esporta PDF</h3><p>Tutto incluso</p></div></div>
-                    <div class="export-card" onclick="exportTXT()"><div class="export-icon txt">📝</div><div class="export-info"><h3>Esporta TXT</h3><p>Testo + Note</p></div></div>
-                    <div class="export-card" onclick="exportSRT()"><div class="export-icon txt">🎬</div><div class="export-info"><h3>Esporta SRT</h3><p>Sottotitoli con tempi</p></div></div>
-                    <div class="export-card" onclick="exportVTT()"><div class="export-icon txt">📺</div><div class="export-info"><h3>Esporta VTT</h3><p>Sottotitoli web</p></div></div>
-                    <div class="export-card" onclick="exportMarkdown()"><div class="export-icon txt">📑</div><div class="export-info"><h3>Esporta Markdown</h3><p>MD + Note</p></div></div>
-                    <div class="export-card" onclick="exportAudio()"><div class="export-icon audio">🎵</div><div class="export-info"><h3>Scarica Audio</h3><p>File registrato</p></div></div>
-                    <div class="export-card" onclick="exportDrawing()"><div class="export-icon" style="background: rgba(245, 158, 11, 0.2);">🖼️</div><div class="export-info"><h3>Scarica Disegno</h3><p>Immagine PNG</p></div></div>
-                    <div class="export-card" onclick="saveSession()"><div class="export-icon" style="background: rgba(16, 185, 129, 0.2);">💾</div><div class="export-info"><h3>Salva Progetto</h3><p>Audio + Note + Disegno</p></div></div>
+                    <button type="button" class="export-card" onclick="exportPDF()"><div class="export-icon pdf">📄</div><div class="export-info"><h3>Esporta PDF</h3><p>Tutto incluso</p></div></button>
+                    <button type="button" class="export-card" onclick="exportTXT()"><div class="export-icon txt">📝</div><div class="export-info"><h3>Esporta TXT</h3><p>Testo + Note</p></div></button>
+                    <button type="button" class="export-card" onclick="exportSRT()"><div class="export-icon txt">🎬</div><div class="export-info"><h3>Esporta SRT</h3><p>Sottotitoli con tempi</p></div></button>
+                    <button type="button" class="export-card" onclick="exportVTT()"><div class="export-icon txt">📺</div><div class="export-info"><h3>Esporta VTT</h3><p>Sottotitoli web</p></div></button>
+                    <button type="button" class="export-card" onclick="exportMarkdown()"><div class="export-icon txt">📑</div><div class="export-info"><h3>Esporta Markdown</h3><p>MD + Note</p></div></button>
+                    <button type="button" class="export-card" onclick="exportAudio()"><div class="export-icon audio">🎵</div><div class="export-info"><h3>Scarica Audio</h3><p>File registrato</p></div></button>
+                    <button type="button" class="export-card" onclick="exportDrawing()"><div class="export-icon" style="background: rgba(245, 158, 11, 0.2);">🖼️</div><div class="export-info"><h3>Scarica Disegno</h3><p>Immagine PNG</p></div></button>
+                    <button type="button" class="export-card" onclick="saveSession()"><div class="export-icon" style="background: rgba(16, 185, 129, 0.2);">💾</div><div class="export-info"><h3>Salva Progetto</h3><p>Audio + Note + Disegno</p></div></button>
                 </div>
             </div>
 
@@ -653,7 +798,7 @@
 
     <div class="modal-overlay" id="speakerModal">
         <div class="modal">
-            <h2 class="modal-title">Nuovo Speaker</h2>
+            <h2 class="modal-title">Nuovo partecipante</h2>
             <input type="text" class="modal-input" id="newSpeakerInput" placeholder="Nome">
             <div class="modal-buttons">
                 <button class="modal-btn cancel" onclick="$('speakerModal').classList.remove('active')">Annulla</button>
@@ -1637,11 +1782,11 @@
                 const chip = document.createElement('button');
                 chip.className = `speaker-chip speaker-${i%5+1} ${i+1 === currentSpeaker ? 'active' : ''} ${isRecording && i+1 === currentSpeaker ? 'recording-active' : ''}`;
                 chip.textContent = name; chip.onclick = () => selectSpeaker(i+1);
-                c.appendChild(chip);
+                const group = document.createElement('span'); group.className = 'speaker-control'; group.appendChild(chip); c.appendChild(group);
                 const rename = document.createElement('button'); rename.className = 'speaker-chip'; rename.textContent = '✎';
-                rename.setAttribute('aria-label', `Rinomina ${name}`); rename.onclick = () => renameSpeaker(i+1); c.appendChild(rename);
+                rename.setAttribute('aria-label', `Rinomina ${name}`); rename.onclick = () => renameSpeaker(i+1); group.appendChild(rename);
             });
-            const add = document.createElement('button'); add.className = 'speaker-chip add'; add.textContent = '+';
+            const add = document.createElement('button'); add.className = 'speaker-chip add'; add.textContent = '+ Aggiungi';
             add.onclick = () => $('speakerModal').classList.add('active'); c.appendChild(add);
         }
 
@@ -1761,7 +1906,7 @@
         // ============ RECORDING ============
         async function startRecording() {
             if (diarizationBusy) return;
-            if (!whisperKey) return showToast('⚠️ Inserisci chiave Whisper');
+            if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
             try {
                 if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microfono non disponibile: usa HTTPS o l’APK Android per registrare.');
                 currentStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
@@ -2257,6 +2402,9 @@
         function updateUI() {
             const btn = $('recordBtn'), cont = $('recordBtnContainer'), icon = $('recordIcon');
             const pauseBtn = $('pauseBtn'), pauseIcon = $('pauseIcon'), timer = $('timer');
+            btn.setAttribute('aria-label', isProcessing ? 'Elaborazione in corso' : isRecording ? 'Ferma registrazione' : 'Avvia registrazione');
+            btn.setAttribute('aria-disabled', String(isProcessing));
+            pauseBtn.setAttribute('aria-label', isPaused ? 'Riprendi registrazione' : 'Metti in pausa');
 
             btn.classList.remove('recording', 'processing', 'paused');
             cont.classList.remove('recording');
@@ -2734,10 +2882,7 @@
             $('transcriptSearch').value = '';
             updateSpeakerChips(); renderAllEntries();
             clearAutosave();  // la sessione corrente ora e' un progetto salvato
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector('[data-tab="record"]').classList.add('active');
-            $('recordTab').classList.add('active');
+            showPanel('record');
             showToast(`✓ Caricato: ${r.name}`);
         };
 
@@ -2751,15 +2896,35 @@
             showToast('Eliminato');
         };
 
+        window.openConnectionSettings = () => {
+            $('connectionSettings').open = true;
+            $('connectionSettings').scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        };
+        function showPanel(name) {
+            const pages = {
+                record: ['La tua riunione.', 'Registra la conversazione. Ritrova ogni intervento.'],
+                notes: ['Dai spazio alle idee.', 'Appunti e disegni, accanto alla conversazione.'],
+                ai: ['Dal testo alla sintesi.', 'Esplora i contenuti con il tuo modello AI.'],
+                export: ['Pronto da condividere.', 'Scegli il formato più adatto al tuo lavoro.'],
+                saved: ['Le tue conversazioni.', 'Riprendi un progetto o importa un nuovo audio.']
+            };
+            if (!pages[name]) return;
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === name);
+                t.setAttribute('aria-pressed', String(t.dataset.tab === name));
+            });
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            $(`${name}Tab`).classList.add('active');
+            $('workspaceTitle').textContent = pages[name][0]; $('workspaceDescription').textContent = pages[name][1];
+            if (name === 'notes') setTimeout(resizeCanvas, 100);
+        }
+
         // Events
         function setupEvents() {
             $('recordBtn').onclick = () => { if (isProcessing || diarizationBusy) return; isRecording ? stopRecording() : startRecording(); };
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.onclick = () => {
-                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    tab.classList.add('active'); $(`${tab.dataset.tab}Tab`).classList.add('active');
-                    if (tab.dataset.tab === 'notes') setTimeout(resizeCanvas, 100);
+                    showPanel(tab.dataset.tab);
                 };
             });
             // Ricerca nella trascrizione (debounce: ridisegna una volta sola)
