@@ -1,0 +1,79 @@
+name: Actions artifact housekeeping
+
+# Runs once when introduced on main, weekly thereafter, or on demand.
+# Preserve the latest three APKs and the latest APK generated on main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/actions-storage-cleanup.yml"
+  schedule:
+    - cron: "19 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-storage-housekeeping
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Prune superseded artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const apkNames = new Set(["VoiceScribe-Audio-APK"]);
+            const tempNames = new Set(["Android-test-report","VoiceScribe-interface-previews"]);
+            const all = (await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              { owner, repo, per_page: 100 }
+            )).filter(a => !a.expired);
+            const newestFirst = (a, b) =>
+              new Date(b.created_at) - new Date(a.created_at);
+            const apks = all.filter(a => apkNames.has(a.name)).sort(newestFirst);
+            const protectedIds = new Set(apks.slice(0, 3).map(a => a.id));
+            const latestMain = apks.find(a => a.workflow_run?.head_branch === 'main');
+            if (latestMain) protectedIds.add(latestMain.id);
+
+            const now = Date.now();
+            const ageMs = a => now - new Date(a.created_at).getTime();
+            const candidates = all.filter(a => {
+              if (apkNames.has(a.name)) {
+                // Never delete the recent three APKs or latest main APK.
+                // Also allow newly generated builds time to be downloaded.
+                return !protectedIds.has(a.id) && ageMs(a) > 4 * 3600000;
+              }
+              if (tempNames.has(a.name)) {
+                return ageMs(a) > 48 * 3600000;
+              }
+              // Never delete unknown artifact types.
+              return false;
+            }).sort((a, b) => b.size_in_bytes - a.size_in_bytes)
+              .slice(0, 80);
+
+            core.info(`Found ${all.length} live artifacts; ${candidates.length} selected for deletion.`);
+            let deleted = 0;
+            let freedBytes = 0;
+            let failures = 0;
+            for (const a of candidates) {
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner, repo, artifact_id: a.id
+                });
+                deleted++;
+                freedBytes += a.size_in_bytes;
+              } catch (error) {
+                failures++;
+                core.warning(`Cannot delete artifact ${a.id} (${a.name}): ${error.message}`);
+              }
+            }
+            core.info(`Deleted ${deleted} artifacts, ~${(freedBytes / 1048576).toFixed(1)} MiB; failures: ${failures}.`);
+            if (failures) core.setFailed(`${failures} artifact deletions failed`);
