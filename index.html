@@ -2264,7 +2264,7 @@
                 resetAnalysisScope();
                 await clearCurrentAudio();
                 await moveChunksSession(importedSession,AUDIO_SESSION);
-                transcriptEntries=[]; notesText=''; drawingHistory=[];
+                transcriptEntries=[]; notesText=''; drawingHistory=[]; drawingRedo=[];
                 $('notesTextarea').value=''; $('notesCharCount').textContent='0'; $('transcriptSearch').value=''; $('timer').textContent='00:00';
                 window.nativeAudioSession=null; window.nativeDiarizedSession=null; audioBlob=file;
                 redrawFromHistory(); restoreAnalysisState({});
@@ -2668,9 +2668,17 @@
             const result=aiResults.find(r=>r.action===activeAIResult); if (!result) return;
             downloadText(`voicescribe_${result.action}_${result.createdAt}.md`,`# ${result.title}\n\n${result.content}\n`,'text/markdown;charset=utf-8');
         };
-        window.exportChart = () => {
-            const data=getChartImage(); if (!data) return showToast('Crea prima un grafico');
-            const a=document.createElement('a'); a.href=data; a.download=`grafico_${Date.now()}.png`; a.click();
+        async function downloadImage(filename, data) {
+            if (!data || data === 'data:,') throw new Error('Immagine non disponibile: apri lo strumento e riprova.');
+            const response=await fetch(data), blob=await response.blob();
+            if (!blob.size) throw new Error('Immagine vuota: riprova.');
+            const url=URL.createObjectURL(blob), anchor=document.createElement('a');
+            anchor.href=url; anchor.download=filename; document.body.appendChild(anchor); anchor.click(); anchor.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),5000);
+        }
+        window.exportChart = async () => {
+            if (!chartInstance) return showToast('Crea prima un grafico');
+            try { await downloadImage(`grafico_${Date.now()}.png`,getChartImage()); } catch(e) { showToast(e.message); }
         };
         window.exportChartData = () => {
             if (!chartData) return showToast('Crea prima un grafico');
@@ -2679,8 +2687,12 @@
             const rows=[['Categoria',...chartData.series.flatMap(s=>evidence ? [s.name,'Fonte ('+s.name+')'] : [s.name])],...chartData.labels.map((label,i)=>[label,...chartData.series.flatMap(s=>evidence ? [s.data[i],s.evidence?.[i]||''] : [s.data[i]])])];
             downloadText(`grafico_${Date.now()}.csv`,'\uFEFF'+rows.map(row=>row.map(cell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
         };
-        window.exportConceptSvg = () => { const data=getConceptMapImage(); if (!data) return showToast('Crea prima una mappa'); const a=document.createElement('a');a.href=data;a.download=`mappa_${Date.now()}.svg`;a.click(); };
-        window.exportConceptPng = async () => { const data=await getConceptMapPng(); if (!data) return showToast('Immagine mappa non disponibile'); const a=document.createElement('a');a.href=data;a.download=`mappa_${Date.now()}.png`;a.click(); };
+        window.exportConceptSvg = async () => {
+            try { await downloadImage(`mappa_${Date.now()}.svg`,getConceptMapImage()); } catch(e) { showToast(e.message); }
+        };
+        window.exportConceptPng = async () => {
+            try { await downloadImage(`mappa_${Date.now()}.png`,await getConceptMapPng()); } catch(e) { showToast(e.message); }
+        };
 
         // Recorder UI
         function updateUI() {
@@ -3063,13 +3075,10 @@
             showToast('✓ Audio');
         };
 
-        window.exportDrawing = () => {
-            if (drawingHistory.length === 0) return showToast('Nessun disegno');
-            const a = document.createElement('a');
-            a.href = getCanvasDataUrl();
-            a.download = `disegno_${Date.now()}.png`;
-            a.click();
-            showToast('✓ Immagine');
+        window.exportDrawing = async () => {
+            if (!drawingHistory.length) return showToast('Nessun disegno');
+            try { await downloadImage(`disegno_${Date.now()}.png`,getCanvasDataUrl()); showToast('Immagine esportata'); }
+            catch(e) { showToast(e.message || 'Esportazione disegno non riuscita'); }
         };
 
         window.saveSession = () => {
@@ -3215,11 +3224,12 @@
             $(`${name}Tab`).classList.add('active');
             $('workspaceTitle').textContent = pages[name][0]; $('workspaceDescription').textContent = pages[name][1];
             if (name === 'notes') setTimeout(resizeCanvas, 100);
-            if (name === 'ai') { updateAIControls(); if (chartInstance?.resize) chartInstance.resize(); }
+            if (name === 'ai') { updateAIControls(); if (chartInstance?.resize) chartInstance.resize(); if(conceptMapData) renderConceptMap(conceptMapData); }
         }
 
         // Events
         function setupEvents() {
+            window.addEventListener('resize', () => { if ($('aiTab').classList.contains('active') && conceptMapData) renderConceptMap(conceptMapData); });
             $('recordBtn').onclick = () => { if (isProcessing || diarizationBusy) return; isRecording ? stopRecording() : startRecording(); };
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.onclick = () => {

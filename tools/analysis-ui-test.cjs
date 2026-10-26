@@ -43,14 +43,16 @@ fs.mkdirSync(output,{recursive:true});
  await page.locator('#chartModeSelect').selectOption('numbers');await page.locator('[data-ai-action="chart"]').click();await page.waitForFunction(()=>!aiJob);
  assert.deepEqual(await page.evaluate(()=>chartData.series[0].data),[1250,800]);
  for(const width of [320,390,768,1440]){
-  await page.setViewportSize({width,height:1000});
+  await page.setViewportSize({width,height:1000});await page.waitForTimeout(120);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'overflow '+width);
   assert.equal(await page.locator('[data-ai-action]').count(),6);
   await page.evaluate(()=>{scrollTo(0,0);document.getElementById('toast').classList.remove('show');});
   await page.screenshot({path:path.join(output,`tools-${width}.png`),fullPage:true});
  }
  async function download(action){
-  const [file]=await Promise.all([page.waitForEvent('download'),page.evaluate(action=>window[action](),action)]);
+  let file;
+  try { [file]=await Promise.all([page.waitForEvent('download'),page.evaluate(action=>window[action](),action)]); }
+  catch(error) { throw new Error(action+': '+error.message+' · '+await page.locator('#toast').innerText()); }
   assert.equal(await file.failure(),null);const target=path.join(output,file.suggestedFilename());await file.saveAs(target);downloads.push(target);return target;
  }
  for(const action of ['exportTXT','exportMarkdown','exportSRT','exportVTT','exportAIResult','exportChart','exportChartData','exportConceptSvg','exportConceptPng','exportPDF'])await download(action);
