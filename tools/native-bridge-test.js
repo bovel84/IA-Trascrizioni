@@ -116,6 +116,7 @@ async function main() {
     run("$('captureSourceSelect').value = 'microphone'; syncNativeRecorder();");
     check('returning to an active capture restores and locks the actual source', ctx.__elements.get('captureSourceSelect').value === 'playback' && ctx.__elements.get('captureSourceSelect').disabled);
     check('device capture tells the user to switch to the video app', ctx.__elements.get('bgWarning').textContent.includes('APP DEL VIDEO'));
+    check('device capture explains screen lock limits', run("document.querySelector('.setting-info').innerHTML").includes('blocco schermo può interrompere'));
     const stops = calls.filter(c => c[0] === 'stop').length;
     run("document.visibilityState = 'hidden';"); await run('handleVisibilityChange()');
     check('switching to the video app keeps device capture running', calls.filter(c => c[0] === 'stop').length === stops && run('isRecording'));

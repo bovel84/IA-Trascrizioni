@@ -42,7 +42,12 @@ window.initNativeRecorder = function () {
     function updateSourceHint() {
         $('captureSourceHint').textContent = sourceSelect.value === 'playback'
             ? 'Premi Registra, autorizza la condivisione Android, poi apri il video nell’altra app. Viene acquisito solo l’audio; alcune app ne impediscono la cattura.'
-            : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'Audio dei video disponibile nell’app Android aggiornata, da Android 10.';
+            : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'L’audio dei video richiede l’app Android aggiornata e Android 10 o successivo.';
+        const setting = document.querySelector('.setting-info');
+        if (setting) setting.innerHTML = sourceSelect.value === 'playback'
+            ? '<h4>▶️ Audio in background</h4><p>Puoi cambiare app. Il blocco schermo può interrompere la cattura.</p>'
+            : '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
+        $('backgroundToggle').setAttribute('aria-label', 'Registrazione Android in background');
     }
     sourceSelect.onchange = () => {
         if (sourceSelect.disabled) return;
@@ -195,8 +200,6 @@ window.initNativeRecorder = function () {
         }
     };
     $('backgroundToggle').checked = true; $('backgroundToggle').disabled = true;
-    const setting = document.querySelector('.setting-info');
-    if (setting) setting.innerHTML = '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
     $('bgWarning').textContent = 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
     const section = document.querySelector('.retranscribe-section');
     if (section) {
