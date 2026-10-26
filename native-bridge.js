@@ -65,6 +65,12 @@ window.initNativeRecorder = function () {
         updateSourceHint();
     };
     updateSourceHint();
+    const voiceSelect=$('nativeVoiceModeSelect');
+    const voiceAvailable=typeof bridge.localVoicesAvailable==='function' && bridge.localVoicesAvailable();
+    $('nativeVoiceControls').hidden=!voiceAvailable;
+    voiceSelect.value='local';
+    window.nativeVoicesEnabled=()=>voiceAvailable && voiceSelect.value==='local';
+    voiceSelect.onchange=()=>{if(!voiceSelect.disabled && bridge.setLocalVoices)bridge.setLocalVoices(voiceSelect.value==='local');};
     let startRequested = false, wasActive = false, wasRetrying = false, lastArchive = '';
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
@@ -72,9 +78,24 @@ window.initNativeRecorder = function () {
     transcriptEntries.forEach(entry => { if (entry.nativeSegmentId) seen.add(entry.nativeSegmentId); });
     window.nativeAudioSession = window.nativeAudioSession || null;
 
-    function entryFromNative(entry) {
-        const id = Number.isInteger(entry.speaker) && entry.speaker >= 1 && entry.speaker <= 32 ? entry.speaker : 0;
-        return { ...entry, speaker: id, speakerName: id ? (entry.speakerName || `Persona ${id}`) : 'Non assegnato', speakerSource: id ? 'manual' : 'unknown', time: formatDuration(entry.offsetMs), timestamp: Date.now() };
+    function entryFromNative(entry, register=false) {
+        let id=Number.isInteger(entry.speaker)&&entry.speaker>=1&&entry.speaker<=32?entry.speaker:0;
+        const source=['local','audio','manual'].includes(entry.speakerSource)?entry.speakerSource:(id?'manual':'unknown');
+        let name=id?(entry.speakerName||`Persona ${id}`):'Non assegnato';
+        if(register && source==='local' && id && entry.nativeVoiceId){
+            const known=transcriptEntries.find(e=>e.nativeVoiceId===entry.nativeVoiceId);
+            if(known)id=known.speaker;
+            else {
+                const used=new Set(transcriptEntries.map(e=>e.speaker));
+                const free=speakers.findIndex((value,index)=>!used.has(index+1)&&/^Persona \d+$/.test(value));
+                if(free>=0){id=free+1;speakers[free]=name;}
+                else if(speakers.length<32){speakers.push(name);id=speakers.length;}
+                else{id=0;name='Non assegnato';}
+            }
+            if(id)name=speakers[id-1]||name;
+            saveSpeakers();
+        }
+        return {...entry,speaker:id,speakerName:name,speakerSource:source,speakerReview:!!entry.speakerReview||!id,time:formatDuration(entry.offsetMs),timestamp:Date.now()};
     }
     function saveArchives(states) {
         let changed = false;
@@ -85,7 +106,7 @@ window.initNativeRecorder = function () {
             if (!record) {
                 const id = Number(state.sessionId.replace('session-', ''));
                 record = { id, name: `Registrazione ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
-                    nativeAuto: true, nativeAudioSession: state.sessionId, speakers: [...speakers], notes: '',
+                    nativeAuto: true, nativeAudioSession: state.sessionId, speakers: state.sessionLocalVoices?[]:[...speakers], notes: '',
                     hasAudio: true, hasNotes: false, hasDrawing: false, hasChart: false, hasMap: false };
                 savedRecordings.push(record);
             }
@@ -95,7 +116,13 @@ window.initNativeRecorder = function () {
             const imported = new Set(Array.isArray(record.nativeImportedSegmentIds)
                 ? record.nativeImportedSegmentIds : record.entries.map(e => e.nativeSegmentId).filter(Boolean));
             for (const entry of state.entries || []) {
-                if (!entry.nativeSegmentId || imported.has(entry.nativeSegmentId)) continue;
+                if (!entry.nativeSegmentId) continue;
+                if(state.sessionLocalVoices && entry.speaker>0)record.speakers[entry.speaker-1]=entry.speakerName;
+                if (imported.has(entry.nativeSegmentId)) {
+                    const existing=record.entries.find(e=>e.nativeSegmentId===entry.nativeSegmentId);
+                    if(existing?.nativeVoiceId && existing.speakerSource==='local')existing.speakerName=entry.speakerName;
+                    continue;
+                }
                 record.entries.push(entryFromNative(entry));
                 imported.add(entry.nativeSegmentId);
             }
@@ -115,8 +142,8 @@ window.initNativeRecorder = function () {
         for (const entry of state.entries || []) {
             if (seen.has(entry.nativeSegmentId)) continue;
             const before = transcriptEntries.length;
-            const participant = entryFromNative(entry);
-            if (participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
+            const participant = entryFromNative(entry,true);
+            if (participant.speakerSource!=='local' && participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
             addEntry(entry.text, entry.offsetMs, participant);
             if (transcriptEntries.length > before) transcriptEntries[transcriptEntries.length - 1].nativeSegmentId = entry.nativeSegmentId;
             seen.add(entry.nativeSegmentId); changed = true;
@@ -142,6 +169,11 @@ window.initNativeRecorder = function () {
         sourceSelect.disabled = !!state.active || isProcessing;
         if (state.active && (state.source === 'playback' || state.source === 'microphone')) sourceSelect.value = state.source;
         updateSourceHint();
+        voiceSelect.disabled=!!state.active||isProcessing;
+        if(voiceAvailable && typeof state.localVoices==='boolean')voiceSelect.value=state.localVoices?'local':'manual';
+        $('nativeVoiceStatus').textContent=window.nativeVoicesEnabled()
+            ? ((state.active||window.nativeAudioSession===state.sessionId)?(state.voiceStatus||'Riconoscimento voci sul dispositivo'):'Riconoscimento locale pronto')
+            : 'Seleziona chi parla con i pulsanti dei partecipanti.';
         if (window.nativeAudioSession === state.sessionId) {
             importEntries(state);
             $('timer').textContent = formatDuration(state.elapsedMs || 0);

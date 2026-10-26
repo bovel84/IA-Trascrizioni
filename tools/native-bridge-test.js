@@ -23,6 +23,9 @@ ctx.AndroidRecorder = {
     sessions: () => JSON.stringify(state.sessionId ? [state] : []),
     start: (...args) => calls.push(['start', ...args]),
     canCapturePlayback: () => true,
+    localVoicesAvailable: () => true,
+    setLocalVoices: value => calls.push(['voiceMode',value]),
+    renameVoice: (...args) => calls.push(['renameVoice',...args]),
     startPlayback: (...args) => calls.push(['startPlayback', ...args]),
     stop: () => calls.push(['stop']),
     pause: value => calls.push(['pause', value]),
@@ -138,6 +141,25 @@ async function main() {
     delete ctx.AndroidRecorder.startPlayback;
     await run('startRecording()');
     check('unavailable projection never silently falls back to the microphone', !run('isProcessing') && calls.filter(c => c[0] === 'start').length === microphoneStarts);
+    check('native voice controls are exposed by a capable APK', !ctx.__elements.get('nativeVoiceControls').hidden);
+    run("transcriptEntries=[{speaker:1,speakerName:'Andrea',text:'Intervento precedente',time:'00:00',offsetMs:0}];speakers=['Andrea','Persona 2'];window.nativeDiarizedSession=null;");
+    state={active:true,recording:true,paused:false,source:'microphone',localVoices:true,sessionLocalVoices:true,voiceStatus:'2 voci distinte sul dispositivo',status:'Registrazione',sessionId:'session-1790766999000',elapsedMs:30000,chunkCount:1,entries:[
+        {nativeSegmentId:'session-1790766999000/000000000000.wav#0',nativeVoiceId:'session-1790766999000/voice-1',speaker:1,speakerName:'Voce 1',speakerSource:'local',speakerReview:false,text:'Prima voce',offsetMs:100,endMs:900},
+        {nativeSegmentId:'session-1790766999000/000000000000.wav#1',nativeVoiceId:'session-1790766999000/voice-2',speaker:2,speakerName:'Voce 2',speakerSource:'local',speakerReview:false,text:'Seconda voce',offsetMs:1100,endMs:1900},
+        {nativeSegmentId:'session-1790766999000/000000000000.wav#2',speaker:0,speakerName:'Non assegnato',speakerSource:'local',speakerReview:true,text:'Voci sovrapposte',offsetMs:2100,endMs:2400}
+    ]};run('syncNativeRecorder()');
+    check('automatic native voices never inherit an unrelated participant name',run('transcriptEntries[1].speakerName')==='Voce 1'&&run('transcriptEntries[1].speaker')===2);
+    check('distinct detected voices remain distinct in the project',run('transcriptEntries[2].speaker')===3&&run('transcriptEntries[2].speakerName')==='Voce 2');
+    check('native voice provenance and timing survive import',run('transcriptEntries[1].speakerSource')==='local'&&run('transcriptEntries[1].nativeVoiceId')==='session-1790766999000/voice-1'&&run('transcriptEntries[1].endMs')===900);
+    check('ambiguous audio stays visibly unassigned',run('transcriptEntries[3].speaker')===0&&run('transcriptEntries[3].speakerReview'));
+    check('voice mode cannot change while capture is active',ctx.__elements.get('nativeVoiceModeSelect').disabled);
+    ctx.prompt=()=> 'Marco';run('renameSpeaker(2)');
+    check('renaming a local voice persists its session identity in native storage',calls.some(c=>c[0]==='renameVoice'&&c[1]==='session-1790766999000/voice-1'&&c[2]==='Marco'));
+    state.entries.push({...state.entries[0],nativeSegmentId:'session-1790766999000/000000030000.wav#0',offsetMs:30000,endMs:31000,text:'La stessa voce ritorna'});state.chunkCount=2;run('syncNativeRecorder()');
+    check('same voice in later chunks keeps the user assigned name',run('transcriptEntries.at(-1).speakerName')==='Marco'&&run('transcriptEntries.at(-1).speaker')===2);
+    const count=run('transcriptEntries.length');run('syncNativeRecorder()');check('native voice refresh does not duplicate utterances',run('transcriptEntries.length')===count);
+    state.active=false;state.recording=false;run("syncNativeRecorder();$('nativeVoiceModeSelect').value='manual';$('nativeVoiceModeSelect').onchange();");
+    check('manual attribution remains available after capture',calls.some(c=>c[0]==='voiceMode'&&c[1]===false));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

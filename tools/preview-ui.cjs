@@ -43,8 +43,8 @@ fs.mkdirSync(output,{recursive:true});
  if(!(await page.locator('#drawingCanvas').boundingBox())?.width) throw Error('Drawing canvas hidden');
  // The APK reveals controls hidden in the PWA: verify them at phone/tablet widths too.
  await page.addInitScript(()=>{
-  window.AndroidRecorder={canCapturePlayback:()=>true,startPlayback:()=>{},start:()=>{},
-   state:()=>JSON.stringify({active:false,recording:false,paused:false,status:'Pronto',entries:[]}),sessions:()=> '[]'};
+  window.AndroidRecorder={canCapturePlayback:()=>true,localVoicesAvailable:()=>true,setLocalVoices:()=>{},startPlayback:()=>{},start:()=>{},
+   state:()=>JSON.stringify({active:false,recording:false,paused:false,status:'Pronto',localVoices:true,voiceStatus:'Riconoscimento locale pronto',entries:[]}),sessions:()=> '[]'};
  });
  await page.reload({waitUntil:'networkidle'});
  for(const width of [320,390,768,1440]) {

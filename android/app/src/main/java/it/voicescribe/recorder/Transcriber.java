@@ -29,6 +29,12 @@ final class Transcriber {
         return text.toString();
     }
     static void transcribe(File wav, String key, String model, String language) throws Exception {
+        boolean nativeVoices=VoiceData.timeline(wav).exists();
+        if (nativeVoices && VoiceData.response(wav).exists()) {
+            if (!VoiceData.utterances(wav).exists()) VoiceData.align(wav,VoiceData.read(VoiceData.response(wav)));
+            if (!result(wav).exists()) Files.write(result(wav).toPath(),VoiceData.read(VoiceData.response(wav)).optString("text","").getBytes(StandardCharsets.UTF_8));
+            return;
+        }
         if (result(wav).exists()) return;
         // Keep silence in the exported WAV/timeline, but never ask Whisper to invent text.
         // Also applies to retry/recovery after a process interruption.
@@ -49,7 +55,10 @@ final class Transcriber {
         // The WAV is already stored on disk: stream it with a known Content-Length, without buffering the audio.
         ByteArrayOutputStream prefix = new ByteArrayOutputStream();
         field(prefix, boundary, "model", model); field(prefix, boundary, "language", language);
-        field(prefix, boundary, "response_format", "json"); field(prefix, boundary, "temperature", "0");
+        boolean nativeVoices=VoiceData.timeline(wav).exists();
+        field(prefix, boundary, "response_format", nativeVoices ? "verbose_json" : "json");
+        if(nativeVoices)field(prefix,boundary,"timestamp_granularities[]","word");
+        field(prefix, boundary, "temperature", "0");
         bytes(prefix, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
         byte[] suffix = ("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8);
         conn.setFixedLengthStreamingMode((long) prefix.size() + wav.length() + suffix.length);
@@ -72,6 +81,7 @@ final class Transcriber {
             }
             JSONObject json = new JSONObject(body.toString("UTF-8"));
             if (!json.has("text")) throw new IOException("Risposta Groq senza testo");
+            if(nativeVoices){VoiceData.write(VoiceData.response(wav),json);VoiceData.align(wav,json);}
             File tmp = new File(result(wav).getPath() + ".tmp");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(json.getString("text").trim().getBytes(StandardCharsets.UTF_8)); out.getFD().sync();

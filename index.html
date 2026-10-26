@@ -676,10 +676,18 @@
 
                 <div class="speaker-quick-select">
                     <div class="section-title">Partecipanti <span class="section-kicker">Chi sta parlando?</span></div>
+                    <div id="nativeVoiceControls" hidden>
+                        <label for="nativeVoiceModeSelect" class="retranscribe-info">Attribuzione delle voci</label>
+                        <select id="nativeVoiceModeSelect" class="control-select" style="width:100%;min-height:44px;margin:8px 0">
+                            <option value="local">Automatica sul dispositivo</option><option value="manual">Selezione manuale</option>
+                        </select>
+                        <p id="nativeVoiceStatus" role="status" class="retranscribe-info">Riconoscimento voci pronto</p>
+                        <p class="retranscribe-info">Le voci vengono distinte dall’audio sul dispositivo. La trascrizione usa ancora il servizio configurato. Rinomina le voci con ✎; gli interventi incerti restano da verificare.</p>
+                    </div>
                     <div class="speaker-chips" id="speakerChips"></div>
                     <p class="retranscribe-info">Seleziona chi parla durante la registrazione. ✎ rinomina tutte le sue frasi.</p>
                     <details style="margin-top:0.8rem">
-                        <summary>Distingui le voci con AI</summary>
+                        <summary>Analisi cloud opzionale (Deepgram)</summary>
                         <p class="retranscribe-info">A registrazione conclusa, invia l’audio a Deepgram per distinguere le voci. Richiede una chiave Deepgram e credito API; Groq e la chiave del modello chat non sono utilizzati. I nomi reali si assegnano manualmente.</p>
                         <label for="diarizationKey">Chiave API Deepgram (solo per questa apertura)</label>
                         <input id="diarizationKey" type="password" class="modal-input" autocomplete="off" placeholder="Chiave Deepgram">
@@ -1872,7 +1880,7 @@
             const c = $('speakerChips'); c.innerHTML = '';
             speakers.forEach((name, i) => {
                 const chip = document.createElement('button');
-                chip.className = `speaker-chip speaker-${i%5+1} ${i+1 === currentSpeaker ? 'active' : ''} ${isRecording && i+1 === currentSpeaker ? 'recording-active' : ''}`;
+                chip.className = `speaker-chip speaker-${i%5+1} ${i+1 === currentSpeaker ? 'active' : ''} ${isRecording && !window.nativeVoicesEnabled?.() && i+1 === currentSpeaker ? 'recording-active' : ''}`;
                 chip.textContent = name; chip.onclick = () => selectSpeaker(i+1);
                 const group = document.createElement('span'); group.className = 'speaker-control'; group.appendChild(chip); c.appendChild(group);
                 const rename = document.createElement('button'); rename.className = 'speaker-chip'; rename.textContent = '✎';
@@ -1893,6 +1901,7 @@
 
         let diarizationBusy = false, assigningEntry = null;
         function selectSpeaker(id) {
+            if(isRecording && window.nativeVoicesEnabled?.()) return showToast('Le voci sono attribuite automaticamente. Puoi rinominarle con ✎.');
             currentSpeaker = id;
             if (window.AndroidRecorder?.selectSpeaker) window.AndroidRecorder.selectSpeaker(id, speakers[id-1]);
             else if (isRecording) rotateChunk(true).catch(e => showToast(e.message));
@@ -1906,6 +1915,10 @@
             // Update queued snapshots as well as the active native capture.
             [...liveQueue, ...failedChunks].forEach(item => { if (item.speaker?.speaker === id) item.speaker.speakerName = name; });
             if (currentSpeaker === id && window.AndroidRecorder?.selectSpeaker) window.AndroidRecorder.selectSpeaker(id, name);
+            if(window.AndroidRecorder?.renameVoice){
+                const tokens=new Set(transcriptEntries.filter(e=>e.speaker===id&&e.nativeVoiceId&&e.speakerSource==='local').map(e=>e.nativeVoiceId));
+                tokens.forEach(token=>window.AndroidRecorder.renameVoice(token,name));
+            }
             saveSpeakers(); refreshTranscript(); updateSpeakerChips(); scheduleAutosave(true);
         }
         window.chooseEntrySpeaker = index => {
@@ -2775,6 +2788,9 @@
                 offsetMs: ms,
                 ...(Number.isFinite(participant.endMs) && participant.endMs > ms ? {endMs:participant.endMs} : {}),
                 speakerSource: participant.speakerSource || (participant.speaker ? 'manual' : 'unknown'),
+                ...(participant.nativeVoiceId ? {nativeVoiceId:participant.nativeVoiceId} : {}),
+                ...(typeof participant.speakerReview==='boolean' ? {speakerReview:participant.speakerReview} : {}),
+                ...(Number.isFinite(participant.speakerSimilarity) ? {speakerSimilarity:participant.speakerSimilarity} : {}),
                 timestamp: Date.now()
             };
             if (!entry.text) return;

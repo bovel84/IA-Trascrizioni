@@ -157,15 +157,35 @@ public final class MainActivity extends Activity {
     private JSONObject snapshot(String id) throws Exception {
         File dir = session(id); JSONArray entries = new JSONArray(); long size = 0;
         int pending = 0; File[] files = Transcriber.segments(dir);
+        boolean local=VoiceData.enabled(dir); JSONObject voiceNames=VoiceData.names(dir);
         for (File wav : files) {
             size += Math.max(0, wav.length() - 44);
             if (Transcriber.result(wav).exists()) {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
                 if (text.trim().isEmpty()) continue;
+                if(local && VoiceData.utterances(wav).exists()) {
+                    try {
+                        JSONArray groups=VoiceData.read(VoiceData.utterances(wav)).getJSONArray("groups");
+                        long base=Long.parseLong(wav.getName().replace(".wav",""));
+                        for(int i=0;i<groups.length();i++){
+                            JSONObject group=groups.getJSONObject(i);int speaker=group.optInt("speaker",0);
+                            JSONObject turn=new JSONObject().put("nativeSegmentId",id+"/"+wav.getName()+"#"+i)
+                                .put("offsetMs",base+group.getLong("start")).put("endMs",base+group.getLong("end"))
+                                .put("text",group.getString("text")).put("speaker",speaker)
+                                .put("speakerName",speaker==0?"Non assegnato":voiceNames.optString(String.valueOf(speaker),"Voce "+speaker))
+                                .put("speakerSource","local").put("speakerReview",speaker==0||group.optBoolean("review",true))
+                                .put("speakerSimilarity",group.optDouble("similarity",-1));
+                            if(speaker>0)turn.put("nativeVoiceId",id+"/voice-"+speaker);
+                            entries.put(turn);
+                        }
+                        if(groups.length()>0)continue;
+                    }catch(Exception ignored){ /* Raw transcript remains available below. */ }
+                }
                 JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);
                 entry.put("endMs", entry.getLong("offsetMs") + Math.max(0, wav.length() - 44) * 1000 / WavFile.BYTES_PER_SECOND);
                 File label = new File(wav.getPath() + ".speaker.json");
-                if (label.exists()) {
+                if(local)entry.put("speaker",0).put("speakerName","Non assegnato").put("speakerSource","local").put("speakerReview",true);
+                if (!local && label.exists()) {
                     try {
                         JSONObject speaker = new JSONObject(new String(Files.readAllBytes(label.toPath()), StandardCharsets.UTF_8));
                         entry.put("speaker", speaker.optInt("speaker", 0)).put("speakerName", speaker.optString("speakerName", "Non assegnato"));
@@ -176,7 +196,7 @@ public final class MainActivity extends Activity {
         }
         File[] partials = dir.listFiles((d,n) -> n.endsWith(".part"));
         if (partials != null) for (File partial : partials) size += Math.max(0, partial.length() - 44);
-        return new JSONObject().put("sessionId", id).put("entries", entries).put("elapsedMs", size * 1000 / WavFile.BYTES_PER_SECOND).put("chunkCount", files.length).put("pending", pending);
+        return new JSONObject().put("sessionId", id).put("entries", entries).put("elapsedMs", size * 1000 / WavFile.BYTES_PER_SECOND).put("chunkCount", files.length).put("pending", pending).put("sessionLocalVoices",local);
     }
     private void repair(File dir) throws IOException {
         if (RecordingService.active && dir.getName().equals(latest())) return;
@@ -256,6 +276,18 @@ public final class MainActivity extends Activity {
             if (text == null || text.length() > 2_000_000) return;
             ui.post(() -> getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("VoiceScribe", text)));
         }
+        @JavascriptInterface public boolean localVoicesAvailable() {
+            try(InputStream in=getAssets().open("voices/segmentation.onnx")){return in.read()!=-1;}catch(Exception e){return false;}
+        }
+        @JavascriptInterface public void setLocalVoices(boolean enabled) {
+            ui.post(()->{if(!RecordingService.active&&!starting&&!retrying&&!diarizing)getSharedPreferences("native",0).edit().putBoolean("localVoices",enabled).apply();});
+        }
+        @JavascriptInterface public void renameVoice(String token,String value) {
+            if(token==null||!token.matches("session-[0-9]{13}/voice-[0-9]{1,2}")||value==null||value.trim().isEmpty())return;
+            worker.execute(()->{try{String[] parts=token.split("/");int voice=Integer.parseInt(parts[1].substring(6));
+                if(voice<1||voice>32)return;String name=value.trim();VoiceData.rename(session(parts[0]),voice,name.substring(0,Math.min(80,name.length())));
+            }catch(Exception e){ui.post(()->toast("Nome vocale non salvato: riprova"));}});
+        }
         @JavascriptInterface public boolean canCapturePlayback() { return Build.VERSION.SDK_INT >= 29; }
         @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.MICROPHONE)); }
         @JavascriptInterface public void startPlayback(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.PLAYBACK)); }
@@ -266,7 +298,7 @@ public final class MainActivity extends Activity {
                 String id = latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
                     .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level)
-                    .put("source", RecordingService.source).put("status", RecordingService.status).toString();
+                    .put("source", RecordingService.source).put("localVoices",RecordingService.active?RecordingService.localVoices:getSharedPreferences("native",0).getBoolean("localVoices",true)).put("voiceStatus",RecordingService.voiceStatus).put("status", RecordingService.status).toString();
             } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
         }
         @JavascriptInterface public String sessions() {
@@ -281,7 +313,16 @@ public final class MainActivity extends Activity {
                 worker.execute(() -> {
                     try {
                         File dir = session(id); repair(dir);
-                        for (File wav : Transcriber.segments(dir)) Transcriber.transcribe(wav, apiKey, selectedModel, lang);
+                        NativeVoiceEngine engine=null;
+                        try {
+                            for(File wav:Transcriber.segments(dir)){
+                                if(VoiceData.enabled(dir)&&!VoiceData.timeline(wav).exists()){
+                                    try{if(engine==null)engine=new NativeVoiceEngine(MainActivity.this,dir);engine.analyse(wav);}
+                                    catch(Exception|LinkageError e){NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}
+                                }
+                                Transcriber.transcribe(wav,apiKey,selectedModel,lang);
+                            }
+                        }finally{if(engine!=null)engine.close();}
                         RecordingService.status = "Sessione recuperata e trascritta";
                     } catch (Exception e) { RecordingService.status = "Audio conservato · " + e.getMessage(); }
                     finally { retrying = false; }

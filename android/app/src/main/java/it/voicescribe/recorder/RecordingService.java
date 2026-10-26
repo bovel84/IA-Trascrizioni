@@ -17,6 +17,9 @@ public final class RecordingService extends Service {
     static volatile boolean active, recording, paused;
     static volatile String status = "Pronto";
     static volatile double level;
+    static volatile String voiceStatus="Riconoscimento voci pronto";
+    static volatile boolean localVoices;
+    private NativeVoiceEngine voiceEngine;
     private static final long SEGMENT_SECONDS = 30L; // First transcript appears sooner than after a 2-minute segment.
     private volatile boolean stopping;
     private volatile String captureIssue;
@@ -88,6 +91,9 @@ public final class RecordingService extends Service {
             }
             session = new File(getFilesDir(), "session-" + System.currentTimeMillis());
             if (!session.mkdir()) throw new IOException("Impossibile creare la sessione");
+            localVoices=getSharedPreferences("native",0).getBoolean("localVoices",true);
+            VoiceData.write(new File(session,"native-voices.json"),new org.json.JSONObject().put("enabled",localVoices).put("model",VoiceData.MODEL));
+            voiceStatus=localVoices ? "Riconoscimento sul dispositivo · attendo il primo segmento" : "Attribuzione manuale dei partecipanti";
             getSharedPreferences("native", 0).edit().putString("latest", session.getName()).apply();
             active = recording = true; paused = false; stopping = false;
             // AudioRecord delivers PCM to application code: that thread must keep writing
@@ -158,7 +164,7 @@ public final class RecordingService extends Service {
                     else if (!silent && silenceWarning) announce(captureStatus);
                     silenceWarning = silent;
                 }
-                SpeakerSelection selected = selectedSpeaker;
+                SpeakerSelection selected = localVoices ? new SpeakerSelection(0,"Non assegnato") : selectedSpeaker;
                 if (wav != null && selected.id != capturedSpeaker.id) {
                     wav.close(); wav = null; submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
                 }
@@ -197,6 +203,7 @@ public final class RecordingService extends Service {
                 if (captureFailure != null) status = captureFailure;
                 else if (pending == 0 && stopping) status = "Sessione salvata e trascritta";
                 else if (pending > 0) status = "Audio salvato · " + pending + " segmenti da ritrascrivere";
+                if(voiceEngine!=null){voiceEngine.close();voiceEngine=null;}
                 releaseCpu();
                 new Handler(getMainLooper()).post(() -> { active = false; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); });
             });
@@ -210,7 +217,19 @@ public final class RecordingService extends Service {
     }
     private void submit(File file) {
         uploads.execute(() -> {
-            try { Transcriber.transcribe(file, key, model, language); }
+            try {
+                if(localVoices && !VoiceData.timeline(file).exists()){
+                    voiceStatus="Analisi voci sul dispositivo in corso…";
+                    try{
+                        if(voiceEngine==null)voiceEngine=new NativeVoiceEngine(this,session);
+                        voiceEngine.analyse(file);
+                        voiceStatus=voiceEngine.voices()>0?voiceEngine.voices()+" voci distinte sul dispositivo · rinomina con ✎":"Audio breve o ambiguo · voci da verificare";
+                    }catch(Exception|LinkageError e){
+                        voiceStatus="Voci locali da verificare: "+e.getMessage();NativeVoiceEngine.unavailable(file,voiceStatus);
+                    }
+                }
+                Transcriber.transcribe(file, key, model, language);
+            }
             catch (Exception e) { status = "Audio salvato · " + e.getMessage() + " · usa Riprova"; }
         });
     }

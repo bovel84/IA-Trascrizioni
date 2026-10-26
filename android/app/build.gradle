@@ -1,5 +1,18 @@
 plugins { id 'com.android.application' }
-dependencies { testImplementation 'junit:junit:4.13.2' }
+def prepareVoices = tasks.register('prepareNativeVoices', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'python3', 'tools/prepare-voices.py'
+    inputs.files(rootProject.file('../tools/prepare-voices.py'), rootProject.file('VOICE-NOTICES.txt'))
+    inputs.dir(rootProject.file('licenses'))
+    outputs.dirs(rootProject.layout.buildDirectory.dir('voice-deps'), rootProject.layout.buildDirectory.dir('voice-assets'), rootProject.layout.buildDirectory.dir('voice-test-assets'))
+}
+dependencies {
+    implementation files(rootProject.layout.buildDirectory.file('voice-deps/sherpa.aar')).builtBy(prepareVoices)
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
 android {
     namespace 'it.voicescribe.recorder'
     compileSdk 35
@@ -7,8 +20,10 @@ android {
         applicationId 'it.voicescribe.pro'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '2.2'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
+        versionCode 14
+        versionName '2.3'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
@@ -24,3 +39,7 @@ tasks.register('syncVoiceScribeAssets', Copy) {
 }
 android.sourceSets.main.assets.srcDir(webAssets)
 tasks.named('preBuild').configure { dependsOn('syncVoiceScribeAssets') }
+
+android.sourceSets.main.assets.srcDir(rootProject.layout.buildDirectory.dir('voice-assets'))
+android.sourceSets.androidTest.assets.srcDir(rootProject.layout.buildDirectory.dir('voice-test-assets'))
+tasks.named('preBuild').configure { dependsOn(prepareVoices) }

@@ -1,5 +1,38 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Riconoscimento nativo delle voci (2.3)
+
+La registrazione Android usa **Attribuzione delle voci → Automatica sul dispositivo**.
+L'APK contiene i modelli: non serve una chiave Deepgram e non viene scaricato un modello
+al primo utilizzo. È sempre possibile scegliere **Selezione manuale** prima di registrare.
+
+- Motore JNI **sherpa-onnx 2.0.1**, segmentazione **pyannote 3.0 int8** e identificatori
+  vocali **WeSpeaker ResNet34 LM**, CPU con due thread. Modelli scaricati solo durante
+  la build da release ufficiali, con SHA-256 verificati; attribuzioni e licenze incluse.
+- A ogni segmento audio (circa 30 secondi, o prima se si ferma/mette in pausa), il motore
+  rileva intervalli vocali e speaker. Un registro di embedding nella cartella privata
+  della sessione mantiene ID coerenti tra segmenti. Questi profili non vengono inviati
+  al provider e non sono condivisi tra registrazioni diverse.
+- La trascrizione rimane affidata al servizio Whisper configurato: l'audio continua
+  quindi a essere inviato a Groq. La stessa richiesta per segmento richiede i tempi
+  delle parole; i cambi di voce vengono allineati a quei tempi, senza una chiamata
+  aggiuntiva a Deepgram né richieste separate per ogni persona.
+- Le voci iniziano come **Voce 1**, **Voce 2**, ecc. Usare **✎** per associare il nome;
+  il nome si conserva nella sessione e viene applicato ai nuovi interventi della stessa
+  voce. Il motore distingue le voci ma non conosce automaticamente i nomi anagrafici.
+  Nuove registrazioni ripartono con etichette anonime.
+- Campioni troppo brevi, parole tra due speaker, voci sovrapposte e corrispondenze
+  ambigue rimangono **Non assegnato · da verificare**. È possibile correggere il
+  partecipante dal testo. Le soglie di similarità non sono probabilità di identità.
+- I risultati locali, gli ID vocali e i tempi vengono conservati con il progetto.
+  Riprova recupera i risultati remoti già presenti senza reinviarli; errori del motore
+  non cancellano l'audio o il testo e non comportano una falsa attribuzione manuale.
+
+I test JVM coprono stabilità degli ID, ambiguità, sovrapposizioni e allineamento.
+Un test strumentale Android carica **gli stessi modelli/JNI dell'APK** e un campione
+ufficiale a due voci, verifica due speaker, ripristino dei profili e allineamento JSON.
+Le prestazioni e l'accuratezza nel rumore reale dipendono dal dispositivo e dalla registrazione.
+
 ## Strumenti e risultati del progetto (2.2)
 
 La scheda **Analisi AI** permette di scegliere trascrizione, appunti o entrambi.
