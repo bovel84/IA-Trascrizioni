@@ -50,8 +50,14 @@ fs.mkdirSync(output,{recursive:true});
   await page.screenshot({path:path.join(output,`tools-${width}.png`),fullPage:true});
  }
  async function download(action){
+  const panel=['exportTXT','exportMarkdown','exportSRT','exportVTT','exportPDF','exportDrawing'].includes(action)?'export':'ai';
+  await page.locator(`[data-tab="${panel}"]`).click();
+  const button=page.locator(`[onclick="${action}()"]`);
+  await button.scrollIntoViewIfNeeded();
+  // Exercise real user actions, with time to finish each browser download.
+  await page.waitForTimeout(150);
   let file;
-  try { [file]=await Promise.all([page.waitForEvent('download'),page.evaluate(action=>window[action](),action)]); }
+  try { [file]=await Promise.all([page.waitForEvent('download'),button.click()]); }
   catch(error) { throw new Error(action+': '+error.message+' · '+await page.locator('#toast').innerText()); }
   assert.equal(await file.failure(),null);const target=path.join(output,file.suggestedFilename());await file.saveAs(target);downloads.push(target);return target;
  }
