@@ -29,15 +29,13 @@ final class Transcriber {
         return text.toString();
     }
     static void transcribe(File wav, String key, String model, String language) throws Exception {
-        boolean nativeVoices=wantsVoices(wav);
-        if (nativeVoices && VoiceData.response(wav).exists()) {
-            if(result(wav).exists())return;
+        if(result(wav).exists())return;
+        if (VoiceData.response(wav).exists()) {
             JSONObject cached=null;
             try{cached=VoiceData.read(VoiceData.response(wav));if(!(cached.opt("text") instanceof String))cached=null;}
             catch(Exception invalid){ /* Recover an unreadable response from the original WAV. */ }
             if(cached!=null){saveResponse(wav,cached);return;}
         }
-        if (result(wav).exists()) return;
         // Keep silence in the exported WAV/timeline, but never ask Whisper to invent text.
         // Also applies to retry/recovery after a process interruption.
         if (!WavFile.hasSignal(wav)) { Files.write(result(wav).toPath(), new byte[0]); return; }

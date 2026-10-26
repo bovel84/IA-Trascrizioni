@@ -33,7 +33,7 @@ public class TranscriptionIntegrityTest {
         Files.write(VoiceData.timeline(wav).toPath(),"{broken".getBytes(StandardCharsets.UTF_8));
         Transcriber.saveResponse(wav,response());assertEquals(FULL,saved());unknown();
     }
-    @Test public void missingVoiceTimelineStillRequestsAndStoresNativeResults()throws Exception{
+    @Test public void missingVoiceTimelineStillStoresTheFullResponse()throws Exception{
         Transcriber.saveResponse(wav,response());assertTrue(VoiceData.response(wav).isFile());assertEquals(FULL,saved());unknown();
     }
     @Test public void malformedWordObjectsCannotHideTheTranscript()throws Exception{
@@ -53,6 +53,11 @@ public class TranscriptionIntegrityTest {
         VoiceData.write(VoiceData.response(wav),response());
         Files.write(VoiceData.timeline(wav).toPath(),"{broken".getBytes(StandardCharsets.UTF_8));
         Transcriber.transcribe(wav,"","","");assertEquals(FULL,saved());unknown();
+    }
+    @Test public void cachedTextRecoveryDoesNotDependOnVoiceSettingsOrSignalDetection()throws Exception{
+        VoiceData.write(VoiceData.response(wav),response());
+        assertTrue(new File(session,"native-voices.json").delete());assertFalse(WavFile.hasSignal(wav));
+        Transcriber.transcribe(wav,"","","");assertEquals(FULL,saved());
     }
     private void cacheGroup(String text)throws Exception{
         VoiceData.write(VoiceData.utterances(wav),new JSONObject().put("groups",new JSONArray().put(new JSONObject().put("start",100).put("end",1000).put("speaker",1).put("text",text))));
