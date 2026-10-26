@@ -1,5 +1,22 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Integrità della trascrizione (2.3.1)
+
+Il testo completo ricevuto da Whisper viene conservato indipendentemente dall'esito
+dell'attribuzione delle voci. Una timeline danneggiata, parole senza tempi validi o
+un errore di scrittura dei file vocali non impediscono il salvataggio del TXT.
+Prima di mostrare gli interventi, l'app confronta tutto il loro testo con il TXT:
+se mancano parole, numeri o punteggiatura mostra il testo intero come
+**Non assegnato · da verificare**. Le parole fuori dagli intervalli vocali non vengono scartate.
+
+Per recuperare segmenti già ricevuti ma rimasti senza TXT nelle versioni precedenti,
+aprire la registrazione e usare **Riprova audio non trascritto**. Una risposta valida
+nella cache viene riutilizzata senza una nuova richiesta API. L'audio originale resta
+disponibile; la correzione non può ricostruire parole che il servizio Whisper non ha restituito.
+
+Test di regressione su timeline/cache incomplete, errori di scrittura dei risultati
+vocali, tempi mancanti e recupero senza rete; verificati anche sul filesystem/JSON Android.
+
 ## Riconoscimento nativo delle voci (2.3)
 
 La registrazione Android usa **Attribuzione delle voci → Automatica sul dispositivo**.

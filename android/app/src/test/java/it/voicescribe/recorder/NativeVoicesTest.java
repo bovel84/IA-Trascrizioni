@@ -61,4 +61,29 @@ public class NativeVoicesTest {
         List<VoiceTimeline.Group> groups=timeline().align(Collections.singletonList(new VoiceTimeline.Word(-1,500,"Parziale")),"Originale intero.",4000);
         assertEquals("Originale intero.",groups.get(0).text);assertEquals(0,groups.get(0).speaker);
     }
+    @Test public void speechOutsideDetectedTurnsIsNeverDiscarded(){
+        List<VoiceTimeline.Group> groups=timeline().align(Arrays.asList(new VoiceTimeline.Word(100,300,"Prima"),new VoiceTimeline.Word(4100,4500,"anche"),new VoiceTimeline.Word(5000,5500,"dopo")),"Prima, anche dopo!",6000);
+        assertEquals(2,groups.size());assertEquals(0,groups.get(1).speaker);
+        assertEquals("anche dopo!",groups.get(1).text);
+        assertTrue(VoiceTimeline.preservesText(Arrays.asList(groups.get(0).text,groups.get(1).text),"Prima, anche dopo!"));
+    }
+    @Test public void noRecognizedVoiceStillKeepsEveryWord(){
+        List<VoiceTimeline.Group> groups=new VoiceTimeline(Collections.emptyList()).align(Arrays.asList(new VoiceTimeline.Word(100,300,"Sì"),new VoiceTimeline.Word(400,600,"è"),new VoiceTimeline.Word(700,900,"12,50")),"Sì, è 12,50 €!",4000);
+        assertEquals("Sì, è 12,50 €!",groups.get(0).text);assertEquals(0,groups.get(0).speaker);
+    }
+    @Test public void incompleteWordTimesAtTheEndCannotTruncateText(){
+        String text="Inizio, centro e conclusione.";
+        List<VoiceTimeline.Group> groups=timeline().align(Arrays.asList(new VoiceTimeline.Word(100,300,"Inizio"),new VoiceTimeline.Word(500,700,"centro"),new VoiceTimeline.Word(2100,2300,"e"),new VoiceTimeline.Word(3500,9000,"conclusione")),text,4000);
+        assertEquals(1,groups.size());assertEquals(text,groups.get(0).text);assertEquals(0,groups.get(0).speaker);
+    }
+    @Test public void persistedGroupsMustPreservePunctuationNumbersAndRepeatedWords(){
+        assertFalse(VoiceTimeline.preservesText(Arrays.asList("È 12,50 €", "sì."),"È 12,50 €: sì, sì."));
+        assertFalse(VoiceTimeline.preservesText(Arrays.asList("È 1250 €", "sì, sì."),"È 12,50 €: sì, sì."));
+        assertTrue(VoiceTimeline.preservesText(Arrays.asList("È 12,50 €:","sì, sì."),"È 12,50 €: sì, sì."));
+    }
+    @Test public void coverageAllowsOnlyWhitespaceChanges(){
+        assertTrue(VoiceTimeline.preservesText(Arrays.asList("Ciao,", "🙂 Marco!"),"Ciao,\n🙂\u00a0Marco!"));
+        assertFalse(VoiceTimeline.preservesText(Arrays.asList("Ciao, Marco!"),"Ciao, 🙂 Marco!"));
+        assertFalse(VoiceTimeline.preservesText(Arrays.asList("ciao,", "Marco!"),"Ciao, Marco!"));
+    }
 }

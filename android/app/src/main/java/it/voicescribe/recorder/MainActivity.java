@@ -163,9 +163,9 @@ public final class MainActivity extends Activity {
             if (Transcriber.result(wav).exists()) {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
                 if (text.trim().isEmpty()) continue;
-                if(local && VoiceData.utterances(wav).exists()) {
+                if(local) {
                     try {
-                        JSONArray groups=VoiceData.read(VoiceData.utterances(wav)).getJSONArray("groups"),recognized=new JSONArray();
+                        JSONArray groups=VoiceData.completeGroups(wav,text),recognized=new JSONArray();
                         long base=Long.parseLong(wav.getName().replace(".wav",""));
                         for(int i=0;i<groups.length();i++){
                             JSONObject group=groups.getJSONObject(i);int speaker=group.optInt("speaker",0);
@@ -318,7 +318,7 @@ public final class MainActivity extends Activity {
                             for(File wav:Transcriber.segments(dir)){
                                 if(VoiceData.enabled(dir)&&!VoiceData.timeline(wav).exists()){
                                     try{if(engine==null)engine=new NativeVoiceEngine(MainActivity.this,dir);engine.analyse(wav);}
-                                    catch(Exception|LinkageError e){NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}
+                                    catch(Exception|LinkageError e){try{NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}catch(Exception ignored){ /* Transcribe the entire WAV even if voice metadata cannot be saved. */ }}
                                 }
                                 Transcriber.transcribe(wav,apiKey,selectedModel,lang);
                             }

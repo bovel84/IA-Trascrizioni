@@ -50,8 +50,15 @@ final class VoiceTimeline {
             else groups.add(new Group(word,match));
         }
         for(Group group:groups)group.text=group.text.trim();
-        return groups.isEmpty()?fallback(original,duration):groups;
+        List<String> parts=new ArrayList<>();for(Group group:groups)parts.add(group.text);
+        return groups.isEmpty()||!preservesText(parts,original)?fallback(original,duration):groups;
     }
+    /** Attribution may change whitespace between turns, never wording or punctuation. */
+    static boolean preservesText(List<String> parts,String original){
+        StringBuilder joined=new StringBuilder();for(String part:parts){if(part==null)return false;joined.append(part);}
+        return compact(joined.toString()).equals(compact(original==null?"":original));
+    }
+    private static String compact(String text){StringBuilder out=new StringBuilder();text.codePoints().filter(c->!Character.isWhitespace(c)&&!Character.isSpaceChar(c)).forEach(out::appendCodePoint);return out.toString();}
     private static String key(String text){StringBuilder out=new StringBuilder();for(char c:text.toCharArray())if(Character.isLetterOrDigit(c))out.append(Character.toLowerCase(c));return out.toString();}
     private static List<Group> fallback(String text,long duration){
         if(text==null||text.trim().isEmpty())return new ArrayList<>();

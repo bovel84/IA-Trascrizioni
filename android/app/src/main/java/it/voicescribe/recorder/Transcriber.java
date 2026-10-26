@@ -29,11 +29,13 @@ final class Transcriber {
         return text.toString();
     }
     static void transcribe(File wav, String key, String model, String language) throws Exception {
-        boolean nativeVoices=VoiceData.timeline(wav).exists();
+        boolean nativeVoices=wantsVoices(wav);
         if (nativeVoices && VoiceData.response(wav).exists()) {
-            if (!VoiceData.utterances(wav).exists()) VoiceData.align(wav,VoiceData.read(VoiceData.response(wav)));
-            if (!result(wav).exists()) Files.write(result(wav).toPath(),VoiceData.read(VoiceData.response(wav)).optString("text","").getBytes(StandardCharsets.UTF_8));
-            return;
+            if(result(wav).exists())return;
+            JSONObject cached=null;
+            try{cached=VoiceData.read(VoiceData.response(wav));if(!(cached.opt("text") instanceof String))cached=null;}
+            catch(Exception invalid){ /* Recover an unreadable response from the original WAV. */ }
+            if(cached!=null){saveResponse(wav,cached);return;}
         }
         if (result(wav).exists()) return;
         // Keep silence in the exported WAV/timeline, but never ask Whisper to invent text.
@@ -55,7 +57,7 @@ final class Transcriber {
         // The WAV is already stored on disk: stream it with a known Content-Length, without buffering the audio.
         ByteArrayOutputStream prefix = new ByteArrayOutputStream();
         field(prefix, boundary, "model", model); field(prefix, boundary, "language", language);
-        boolean nativeVoices=VoiceData.timeline(wav).exists();
+        boolean nativeVoices=wantsVoices(wav);
         field(prefix, boundary, "response_format", nativeVoices ? "verbose_json" : "json");
         if(nativeVoices)field(prefix,boundary,"timestamp_granularities[]","word");
         field(prefix, boundary, "temperature", "0");
@@ -80,16 +82,24 @@ final class Transcriber {
                 while ((n = input.read(buf)) != -1) body.write(buf, 0, n);
             }
             JSONObject json = new JSONObject(body.toString("UTF-8"));
-            if (!json.has("text")) throw new IOException("Risposta Groq senza testo");
-            if(nativeVoices){VoiceData.write(VoiceData.response(wav),json);VoiceData.align(wav,json);}
-            File tmp = new File(result(wav).getPath() + ".tmp");
-            try (FileOutputStream out = new FileOutputStream(tmp)) {
-                out.write(json.getString("text").trim().getBytes(StandardCharsets.UTF_8)); out.getFD().sync();
-            }
-            if (!tmp.renameTo(result(wav))) throw new IOException("Salvataggio trascrizione fallito");
+            saveResponse(wav,json);
         } catch (SocketTimeoutException | ConnectException | UnknownHostException e) {
             throw new Retryable("Rete non disponibile o timeout");
         } finally { conn.disconnect(); }
+    }
+    private static boolean wantsVoices(File wav){return VoiceData.enabled(wav.getParentFile())||VoiceData.timeline(wav).exists();}
+    static void saveResponse(File wav,JSONObject json)throws Exception{
+        if(!(json.opt("text") instanceof String))throw new IOException("Risposta Groq senza testo");
+        String text=json.getString("text").trim();
+        // Fsync the full text before optional attribution. Publish the TXT after that
+        // bounded local step, so polling cannot import a raw chunk followed by duplicate turns.
+        File tmp=new File(result(wav).getPath()+".tmp");
+        try(FileOutputStream out=new FileOutputStream(tmp)){out.write(text.getBytes(StandardCharsets.UTF_8));out.getFD().sync();}
+        if(wantsVoices(wav)){
+            try{VoiceData.write(VoiceData.response(wav),json);}catch(Exception ignored){ /* Full TXT still publishes below. */ }
+            try{VoiceData.align(wav,json);}catch(Exception ignored){ /* UI falls back to the entire TXT, unassigned. */ }
+        }
+        if(!tmp.renameTo(result(wav)))throw new IOException("Salvataggio trascrizione fallito");
     }
     private static String errorDetail(HttpURLConnection conn) {
         try (InputStream stream = conn.getErrorStream()) {

@@ -225,7 +225,8 @@ public final class RecordingService extends Service {
                         voiceEngine.analyse(file);
                         voiceStatus=voiceEngine.voices()>0?voiceEngine.voices()+" voci distinte sul dispositivo · rinomina con ✎":"Audio breve o ambiguo · voci da verificare";
                     }catch(Exception|LinkageError e){
-                        voiceStatus="Voci locali da verificare: "+e.getMessage();NativeVoiceEngine.unavailable(file,voiceStatus);
+                        voiceStatus="Voci locali da verificare: "+e.getMessage();
+                        try{NativeVoiceEngine.unavailable(file,voiceStatus);}catch(Exception ignored){ /* Voice sidecars cannot block full-WAV transcription. */ }
                     }
                 }
                 Transcriber.transcribe(file, key, model, language);
