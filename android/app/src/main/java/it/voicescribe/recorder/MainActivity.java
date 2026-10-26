@@ -165,7 +165,7 @@ public final class MainActivity extends Activity {
                 if (text.trim().isEmpty()) continue;
                 if(local && VoiceData.utterances(wav).exists()) {
                     try {
-                        JSONArray groups=VoiceData.read(VoiceData.utterances(wav)).getJSONArray("groups");
+                        JSONArray groups=VoiceData.read(VoiceData.utterances(wav)).getJSONArray("groups"),recognized=new JSONArray();
                         long base=Long.parseLong(wav.getName().replace(".wav",""));
                         for(int i=0;i<groups.length();i++){
                             JSONObject group=groups.getJSONObject(i);int speaker=group.optInt("speaker",0);
@@ -176,9 +176,9 @@ public final class MainActivity extends Activity {
                                 .put("speakerSource","local").put("speakerReview",speaker==0||group.optBoolean("review",true))
                                 .put("speakerSimilarity",group.optDouble("similarity",-1));
                             if(speaker>0)turn.put("nativeVoiceId",id+"/voice-"+speaker);
-                            entries.put(turn);
+                            recognized.put(turn);
                         }
-                        if(groups.length()>0)continue;
+                        if(groups.length()>0){for(int i=0;i<recognized.length();i++)entries.put(recognized.getJSONObject(i));continue;}
                     }catch(Exception ignored){ /* Raw transcript remains available below. */ }
                 }
                 JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);

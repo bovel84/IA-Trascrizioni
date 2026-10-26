@@ -42,8 +42,16 @@ public class NativeVoicesTest {
     }
     @Test public void missingSpeechIsNotAssignedToLastSpeaker(){assertEquals(0,timeline().at(5000,5500).id);}
     @Test public void alignmentSplitsWhenPeopleChangeAndPreservesAllWords(){
-        List<VoiceTimeline.Group> groups=timeline().align(Arrays.asList(new VoiceTimeline.Word(100,400,"Prima"),new VoiceTimeline.Word(500,800,"frase."),new VoiceTimeline.Word(2100,2400,"Seconda")),"originale",4000);
+        List<VoiceTimeline.Group> groups=timeline().align(Arrays.asList(new VoiceTimeline.Word(100,400,"Prima"),new VoiceTimeline.Word(500,800,"frase."),new VoiceTimeline.Word(2100,2400,"Seconda")),"Prima frase. Seconda",4000);
         assertEquals(2,groups.size());assertEquals("Prima frase.",groups.get(0).text);assertEquals(2,groups.get(1).speaker);assertEquals(2400,groups.get(1).end);
+    }
+    @Test public void incompleteWordListCannotDropTheRestOfTheTranscript(){
+        List<VoiceTimeline.Group> groups=timeline().align(Collections.singletonList(new VoiceTimeline.Word(100,500,"Solo")),"Solo una parte del testo.",4000);
+        assertEquals("Solo una parte del testo.",groups.get(0).text);assertEquals(0,groups.get(0).speaker);
+    }
+    @Test public void originalPunctuationSurvivesWordAlignment(){
+        List<VoiceTimeline.Group> groups=timeline().align(Arrays.asList(new VoiceTimeline.Word(100,300,"Ciao"),new VoiceTimeline.Word(400,700,"Marco")),"Ciao, Marco!",4000);
+        assertEquals("Ciao, Marco!",groups.get(0).text);assertEquals(1,groups.get(0).speaker);
     }
     @Test public void unavailableWordTimestampsPreserveTextWithoutGuessing(){
         List<VoiceTimeline.Group> groups=timeline().align(Collections.emptyList(),"Testo completo.",4000);

@@ -17,7 +17,7 @@ final class VoiceTimeline {
     }
     static final class Group {
         long start,end;final int speaker;final boolean review;double similarity;String text;
-        Group(Word word,VoiceProfiles.Match match){start=word.start;end=word.end;text=word.text.trim();speaker=match.id;review=match.review;similarity=match.similarity;}
+        Group(Word word,VoiceProfiles.Match match){start=word.start;end=word.end;text=word.text;speaker=match.id;review=match.review;similarity=match.similarity;}
     }
     final List<Turn> turns;
     VoiceTimeline(List<Turn> turns){this.turns=new ArrayList<>(turns);this.turns.sort(Comparator.comparingLong(t->t.start));}
@@ -33,16 +33,26 @@ final class VoiceTimeline {
     }
     List<Group> align(List<Word> words,String fallback,long duration) {
         List<Group> groups=new ArrayList<>();long previous=-1;
-        for(Word word:words){
+        String original=fallback==null?"":fallback;
+        StringBuilder recognized=new StringBuilder();for(Word word:words)if(word.text!=null)recognized.append(word.text);
+        if(!key(recognized.toString()).equals(key(original)))return fallback(original,duration);
+        List<Integer> positions=new ArrayList<>();for(int i=0;i<original.length();i++)if(Character.isLetterOrDigit(original.charAt(i)))positions.add(i);
+        int consumed=0,cursor=0;
+        for(Word raw:words){
+            int letters=key(raw.text==null?"":raw.text).length();if(letters==0)continue;
+            consumed+=letters;int end=consumed<positions.size()?positions.get(consumed):original.length();
+            Word word=new Word(raw.start,raw.end,original.substring(cursor,end));cursor=end;
             if(word.text==null||word.text.trim().isEmpty())continue;
             if(word.start<0||word.end<=word.start||word.end>duration+500||word.start<previous) return fallback(fallback,duration);
             previous=word.start;VoiceProfiles.Match match=at(word.start,word.end);
             Group last=groups.isEmpty()?null:groups.get(groups.size()-1);
-            if(last!=null&&last.speaker==match.id&&last.review==match.review&&word.start-last.end<=1200){last.text+=' '+word.text.trim();last.end=word.end;last.similarity=Math.min(last.similarity,match.similarity);}
+            if(last!=null&&last.speaker==match.id&&last.review==match.review&&word.start-last.end<=1200){last.text+=word.text;last.end=word.end;last.similarity=Math.min(last.similarity,match.similarity);}
             else groups.add(new Group(word,match));
         }
-        return groups.isEmpty()?fallback(fallback,duration):groups;
+        for(Group group:groups)group.text=group.text.trim();
+        return groups.isEmpty()?fallback(original,duration):groups;
     }
+    private static String key(String text){StringBuilder out=new StringBuilder();for(char c:text.toCharArray())if(Character.isLetterOrDigit(c))out.append(Character.toLowerCase(c));return out.toString();}
     private static List<Group> fallback(String text,long duration){
         if(text==null||text.trim().isEmpty())return new ArrayList<>();
         return new ArrayList<>(Collections.singletonList(new Group(new Word(0,Math.max(1,duration),text),new VoiceProfiles.Match(0,-1,true))));

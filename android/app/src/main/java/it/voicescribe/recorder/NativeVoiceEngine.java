@@ -43,9 +43,9 @@ final class NativeVoiceEngine implements AutoCloseable {
         if(VoiceData.timeline(wav).exists())return;
         if(wav.length()<44 || wav.length()>WavFile.BYTES_PER_SECOND*60L+44)throw new IOException("Segmento vocale troppo lungo o incompleto");
         float[] samples=new float[(int)((wav.length()-44)/2)];
-        try(RandomAccessFile input=new RandomAccessFile(wav,"r")){
-            input.seek(44);for(int i=0;i<samples.length;i++){int lo=input.read(),hi=input.read();if(hi<0)throw new EOFException();samples[i]=(short)((lo&255)|(hi<<8))/32768f;}
-        }
+        byte[] pcm=new byte[samples.length*2];
+        try(RandomAccessFile input=new RandomAccessFile(wav,"r")){input.seek(44);input.readFully(pcm);}
+        for(int i=0;i<samples.length;i++)samples[i]=(short)((pcm[2*i]&255)|(pcm[2*i+1]<<8))/32768f;
         if(!WavFile.hasSignal(wav)){VoiceData.write(VoiceData.timeline(wav),new JSONObject().put("model",VoiceData.MODEL).put("turns",new JSONArray()));return;}
         OfflineSpeakerDiarizationSegment[] segments=diarizer.process(samples);
         Arrays.sort(segments,Comparator.comparingDouble(OfflineSpeakerDiarizationSegment::getStart));

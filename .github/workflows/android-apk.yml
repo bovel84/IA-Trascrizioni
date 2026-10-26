@@ -93,6 +93,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Android-test-report
-          path: android/app/build/reports/tests/testDebugUnitTest/
+          path: |
+            android/app/build/reports/tests/testDebugUnitTest/
+            android/app/build/reports/androidTests/connected/
+            android/app/build/outputs/androidTest-results/connected/
           if-no-files-found: ignore
           retention-days: 2
