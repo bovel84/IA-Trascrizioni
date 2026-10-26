@@ -30,6 +30,9 @@ final class Transcriber {
     }
     static void transcribe(File wav, String key, String model, String language) throws Exception {
         if (result(wav).exists()) return;
+        // Keep silence in the exported WAV/timeline, but never ask Whisper to invent text.
+        // Also applies to retry/recovery after a process interruption.
+        if (!WavFile.hasSignal(wav)) { Files.write(result(wav).toPath(), new byte[0]); return; }
         for (int attempt = 0; ; attempt++) {
             try { upload(wav, key, model, language); return; }
             catch (Retryable e) { if (attempt == 2) throw e; Thread.sleep(1500L * (attempt + 1)); }

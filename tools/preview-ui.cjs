@@ -41,6 +41,20 @@ fs.mkdirSync(output,{recursive:true});
  if(await page.locator('button.export-card').count()!==8) throw Error('Export actions lost');
  await page.locator('[data-tab="notes"]').click();await page.waitForTimeout(200);
  if(!(await page.locator('#drawingCanvas').boundingBox())?.width) throw Error('Drawing canvas hidden');
+ // The APK reveals controls hidden in the PWA: verify them at phone/tablet widths too.
+ await page.addInitScript(()=>{
+  window.AndroidRecorder={canCapturePlayback:()=>true,startPlayback:()=>{},start:()=>{},
+   state:()=>JSON.stringify({active:false,recording:false,paused:false,status:'Pronto',entries:[]}),sessions:()=> '[]'};
+ });
+ await page.reload({waitUntil:'networkidle'});
+ for(const width of [320,390,768,1440]) {
+  await page.setViewportSize({width,height:900});
+  await page.locator('[data-tab="record"]').click();
+  await page.locator('#captureSourceSelect').selectOption('playback');
+  if(!await page.locator('#nativeAudioSource').isVisible() || !await page.locator('#captureSourceHint').innerText()) throw Error('Android audio source unavailable');
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)) layoutErrors.push({width,name:'android-playback'});
+  if(width===390 || width===768) await page.screenshot({path:path.join(output,`android-playback-${width}.png`),fullPage:true});
+ }
  console.log(JSON.stringify({panels:results.length,errors,layoutErrors,exports:8,canvas:'visible'}));
  await browser.close();if(errors.length || layoutErrors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -1,4 +1,40 @@
-# VoiceScribe Pro Android — grafica originale e schermo spento
+# VoiceScribe Pro Android — microfono e audio dei video
+
+## Audio riprodotto sullo stesso telefono o tablet (2.1)
+
+Nella scheda **Rec**, scegliere **Sorgente audio → Audio del dispositivo (video)**.
+Premere **Registra**, consentire i permessi richiesti e confermare la condivisione Android.
+Passare all'app del video e avviarne la riproduzione. Tornare a VoiceScribe per leggere la
+trascrizione, mettere in pausa o fermare; **Ferma** funziona anche dalla notifica.
+Salvataggio automatico, progetti, recupero dei segmenti e download WAV funzionano come
+con il microfono. Per tornare alle riunioni, fermare e scegliere **Microfono**.
+
+- Richiede l'APK su **Android 10+**; la scelta è disabilitata su Android 8/9 e con APK
+  precedenti. La PWA nel browser continua a registrare il microfono.
+- Acquisisce **solo l'audio interno**, senza aprire il microfono o registrare immagini.
+  Non richiede il vivavoce; l'audio passa dall'API di cattura Android anche usando cuffie.
+- Usa `AudioPlaybackCaptureConfiguration`/`MediaProjection` in un servizio di tipo
+  `mediaProjection`. Il consenso di sistema è richiesto **a ogni nuova registrazione**.
+  Su Android 14+ il servizio viene promosso prima di ottenere il token di proiezione;
+  il servizio microfono continua a dichiarare esclusivamente il tipo `microphone` a runtime.
+- Sono acquisibili i flussi media/game/unknown delle app che lo consentono, nello stesso
+  profilo Android. App che vietano la cattura, contenuti protetti, telefonate e flussi
+  di comunicazione non sono supportati. Nessun aggiramento o ripiego automatico sul microfono.
+- Dopo circa 8 secondi di silenzio digitale compare **Nessun audio ricevuto**: avviare
+  il video o provare un'app che consenta la cattura. I WAV mantengono silenzio e tempi,
+  ma i segmenti interamente silenziosi non vengono inviati a Whisper, anche al recupero.
+- Se Android revoca la condivisione (incluso il blocco schermo sui sistemi che la
+  interrompono), la cattura termina e l'audio acquisito viene finalizzato e conservato.
+  Lo schermo spento resta supportato dal registratore **Microfono**; per i video mantenere
+  la riproduzione attiva secondo le regole dell'app sorgente e del sistema.
+
+Prova aggiuntiva su dispositivo: riprodurre un video consentito sul telefono e sul tablet,
+anche con cuffie; verificare WAV e testo, cambio app, Pausa/Riprendi, Ferma dalla notifica,
+annullamento del consenso, revoca della condivisione e una seconda registrazione con
+nuovo consenso. Provare un'app che blocca la cattura: deve mostrare l'avviso, senza testo
+inventato o audio del microfono. I test UI simulati e la build non sostituiscono questa prova.
+
+Riferimento: [cattura audio di altre app](https://developer.android.com/media/platform/av-capture).
 
 L'APK 1.7 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
 

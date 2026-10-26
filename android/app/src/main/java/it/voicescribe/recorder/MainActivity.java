@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
+import android.media.projection.MediaProjectionConfig;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
@@ -16,7 +18,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Original VoiceScribe UI; the microphone belongs exclusively to the native service. */
+/** Original VoiceScribe UI; audio capture belongs exclusively to the native service. */
 public final class MainActivity extends Activity {
     private static final String PAGE = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
@@ -26,6 +28,11 @@ public final class MainActivity extends Activity {
     private volatile boolean starting, retrying, diarizing;
     private String key, model, language;
     private boolean pendingStart;
+    private static final int PLAYBACK_PERMISSION = 40;
+    private String captureSource = RecordingService.MICROPHONE;
+    private boolean awaitingProjection;
+    private Intent projectionData;
+    private int projectionResult;
     private ValueCallback<Uri[]> filePicker;
     private File download;
     private final Deque<Download> downloads = new ArrayDeque<>();
@@ -88,12 +95,15 @@ public final class MainActivity extends Activity {
     private void toast(String text) { Toast.makeText(this, text, Toast.LENGTH_LONG).show(); }
     private void startError(String message) {
         starting = false; pendingStart = false; RecordingService.status = message;
+        awaitingProjection = false; projectionData = null; key = null;
         if (web != null) web.evaluateJavascript("window.nativeRecorderError && window.nativeRecorderError(" + JSONObject.quote(message) + ")", null);
     }
-    private void requestStart(String apiKey, String selectedModel, String lang) {
+    private void requestStart(String apiKey, String selectedModel, String lang, String source) {
         if (RecordingService.active || starting || retrying || diarizing) return;
-        if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare il microfono"); return; }
+        if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare la registrazione"); return; }
+        if (RecordingService.PLAYBACK.equals(source) && Build.VERSION.SDK_INT < 29) { startError("L'audio del dispositivo richiede Android 10 o successivo"); return; }
         if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
+        captureSource = source; projectionData = null;
         key = apiKey; model = selectedModel; language = lang; starting = true;
         ArrayList<String> permissions = new ArrayList<>();
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
@@ -117,7 +127,21 @@ public final class MainActivity extends Activity {
     private void begin() {
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app e premi Registra"); return; }
         try {
-            startForegroundService(new Intent(this, RecordingService.class).putExtra("key", key).putExtra("model", model).putExtra("language", language));
+            if (RecordingService.PLAYBACK.equals(captureSource) && projectionData == null) {
+                if (awaitingProjection) return;
+                MediaProjectionManager manager = getSystemService(MediaProjectionManager.class);
+                Intent consent = Build.VERSION.SDK_INT >= 34
+                    ? manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+                    : manager.createScreenCaptureIntent();
+                awaitingProjection = true;
+                startActivityForResult(consent, PLAYBACK_PERMISSION);
+                return;
+            }
+            Intent service = new Intent(this, RecordingService.class).putExtra("key", key).putExtra("model", model).putExtra("language", language)
+                .putExtra("source", captureSource);
+            if (projectionData != null) service.putExtra("projectionResult", projectionResult).putExtra("projectionData", projectionData);
+            startForegroundService(service);
+            projectionData = null; // A consent token is consumed once, never reused for another recording.
             ui.postDelayed(() -> { starting = false; key = null; }, 400);
         } catch (Exception e) { startError("Avvio non consentito: " + e.getMessage()); }
     }
@@ -135,6 +159,7 @@ public final class MainActivity extends Activity {
             size += Math.max(0, wav.length() - 44);
             if (Transcriber.result(wav).exists()) {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
+                if (text.trim().isEmpty()) continue;
                 JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);
                 File label = new File(wav.getPath() + ".speaker.json");
                 if (label.exists()) {
@@ -217,14 +242,17 @@ public final class MainActivity extends Activity {
             try { aiWorker.execute(request); }
             catch (RejectedExecutionException e) { aiReply(id, 0, "", "Troppe richieste AI: attendi e riprova."); }
         }
-        @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang)); }
+        @JavascriptInterface public boolean canCapturePlayback() { return Build.VERSION.SDK_INT >= 29; }
+        @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.MICROPHONE)); }
+        @JavascriptInterface public void startPlayback(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.PLAYBACK)); }
         @JavascriptInterface public void stop() { ui.post(() -> { if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP)); }); }
         @JavascriptInterface public void pause(boolean value) { if (RecordingService.recording) RecordingService.paused = value; }
         @JavascriptInterface public String state() {
             try {
                 String id = latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
-                    .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("status", RecordingService.status).toString();
+                    .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level)
+                    .put("source", RecordingService.source).put("status", RecordingService.status).toString();
             } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
         }
         @JavascriptInterface public String sessions() {
@@ -272,6 +300,15 @@ public final class MainActivity extends Activity {
     }
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == PLAYBACK_PERMISSION) {
+            if (!starting || !awaitingProjection) return;
+            awaitingProjection = false;
+            if (result != RESULT_OK || data == null) { startError("Cattura audio del dispositivo annullata"); return; }
+            projectionData = data; projectionResult = result;
+            pendingStart = true;
+            if (hasWindowFocus()) { pendingStart = false; begin(); }
+            return;
+        }
         if (request == 10 && filePicker != null) { filePicker.onReceiveValue(result == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null); filePicker = null; }
         if (request == 30) {
             File file = download; download = null;

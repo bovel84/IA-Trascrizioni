@@ -34,6 +34,22 @@ window.initNativeRecorder = function () {
     if (!window.AndroidRecorder || window.nativeRecorderReady) return;
     window.nativeRecorderReady = true;
     const bridge = window.AndroidRecorder;
+    const sourceSelect = $('captureSourceSelect');
+    const playbackSupported = typeof bridge.canCapturePlayback === 'function' && bridge.canCapturePlayback();
+    $('nativeAudioSource').hidden = false;
+    $('playbackSourceOption').disabled = !playbackSupported;
+    sourceSelect.value = playbackSupported && localStorage.getItem('voicescribe_capture_source') === 'playback' ? 'playback' : 'microphone';
+    function updateSourceHint() {
+        $('captureSourceHint').textContent = sourceSelect.value === 'playback'
+            ? 'Premi Registra, autorizza la condivisione Android, poi apri il video nell’altra app. Viene acquisito solo l’audio; alcune app ne impediscono la cattura.'
+            : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'Audio dei video disponibile nell’app Android aggiornata, da Android 10.';
+    }
+    sourceSelect.onchange = () => {
+        if (sourceSelect.disabled) return;
+        try { localStorage.setItem('voicescribe_capture_source', sourceSelect.value); } catch (e) { }
+        updateSourceHint();
+    };
+    updateSourceHint();
     let startRequested = false, wasActive = false, wasRetrying = false, lastArchive = '';
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
@@ -96,7 +112,7 @@ window.initNativeRecorder = function () {
         }
     }
     window.nativeRecorderError = message => {
-        startRequested = false; isProcessing = false; updateUI(); showToast(message);
+        startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
     };
     window.applyNativeRecorderState = state => {
         if (state.active) {
@@ -108,6 +124,9 @@ window.initNativeRecorder = function () {
         isRecording = !!state.recording;
         isPaused = !!state.paused;
         isProcessing = diarizationBusy || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
+        sourceSelect.disabled = !!state.active || isProcessing;
+        if (state.active && (state.source === 'playback' || state.source === 'microphone')) sourceSelect.value = state.source;
+        updateSourceHint();
         if (window.nativeAudioSession === state.sessionId) {
             importEntries(state);
             $('timer').textContent = formatDuration(state.elapsedMs || 0);
@@ -116,6 +135,9 @@ window.initNativeRecorder = function () {
         updateUI(); updateSpeakerChips();
         $('bgBadge').style.display = state.recording ? 'flex' : 'none';
         $('bgWarning').classList.toggle('active', !!state.recording);
+        $('bgWarning').textContent = state.source === 'playback'
+            ? 'AUDIO DEL DISPOSITIVO · PUOI PASSARE ALL’APP DEL VIDEO'
+            : 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
         $('chunkIndicator').textContent = `Chunk: ${state.chunkCount || 0}${state.pending ? ` · in coda: ${state.pending}` : ''}`;
         $('chunkIndicator').classList.toggle('active', !!state.active || !!state.pending);
         $('recordHint').textContent = state.active || state.retrying ? (state.status || 'Registrazione in corso') : 'Tocca per registrare';
@@ -138,8 +160,14 @@ window.initNativeRecorder = function () {
     startRecording = async function () {
         if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
-        audioBlob = null; startRequested = true; isProcessing = true; updateUI();
-        try { if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]); bridge.start(whisperKey, sttModel, $('languageSelect').value); }
+        audioBlob = null; startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
+        try {
+            if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]);
+            if (sourceSelect.value === 'playback') {
+                if (!playbackSupported || typeof bridge.startPlayback !== 'function') throw new Error('Aggiorna l’app Android per acquisire l’audio dei video');
+                bridge.startPlayback(whisperKey, sttModel, $('languageSelect').value);
+            } else bridge.start(whisperKey, sttModel, $('languageSelect').value);
+        }
         catch (error) { window.nativeRecorderError('Impossibile avviare il servizio Android: ' + (error.message || 'errore sconosciuto')); }
     };
     stopRecording = async function () { bridge.stop(); };

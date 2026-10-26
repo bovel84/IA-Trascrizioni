@@ -22,6 +22,8 @@ ctx.AndroidRecorder = {
     state: () => JSON.stringify(state),
     sessions: () => JSON.stringify(state.sessionId ? [state] : []),
     start: (...args) => calls.push(['start', ...args]),
+    canCapturePlayback: () => true,
+    startPlayback: (...args) => calls.push(['startPlayback', ...args]),
     stop: () => calls.push(['stop']),
     pause: value => calls.push(['pause', value]),
     exportAudio: id => calls.push(['exportAudio', id]),
@@ -103,6 +105,29 @@ async function main() {
     state.entries.push({ nativeSegmentId: state.sessionId + '/late.wav', offsetMs: 300000, text: 'Late raw transcript' });
     run('syncNativeRecorder()');
     check('raw native refresh cannot duplicate an already diarized session', run('transcriptEntries.length') === diarizedCount);
+    check('Android exposes the device audio choice', !ctx.__elements.get('nativeAudioSource').hidden && !ctx.__elements.get('playbackSourceOption').disabled);
+    run("$('captureSourceSelect').value = 'playback'; $('captureSourceSelect').onchange();");
+    check('device source preference survives UI reloads', run("localStorage.getItem('voicescribe_capture_source')") === 'playback');
+    const microphoneStarts = calls.filter(c => c[0] === 'start').length;
+    await run('startRecording()');
+    check('device audio requests native projection rather than microphone capture', calls.some(c => c[0] === 'startPlayback' && c[1] === 'gsk_test' && c[3] === 'it') && calls.filter(c => c[0] === 'start').length === microphoneStarts);
+    check('source is locked while waiting for Android consent', ctx.__elements.get('captureSourceSelect').disabled && run('isProcessing'));
+    state = { ...state, active: true, recording: true, source: 'playback', status: 'Audio del dispositivo', sessionId: 'session-1790766000100', entries: [] };
+    run("$('captureSourceSelect').value = 'microphone'; syncNativeRecorder();");
+    check('returning to an active capture restores and locks the actual source', ctx.__elements.get('captureSourceSelect').value === 'playback' && ctx.__elements.get('captureSourceSelect').disabled);
+    check('device capture tells the user to switch to the video app', ctx.__elements.get('bgWarning').textContent.includes('APP DEL VIDEO'));
+    const stops = calls.filter(c => c[0] === 'stop').length;
+    run("document.visibilityState = 'hidden';"); await run('handleVisibilityChange()');
+    check('switching to the video app keeps device capture running', calls.filter(c => c[0] === 'stop').length === stops && run('isRecording'));
+    state = { ...state, active: false, recording: false, status: 'Condivisione audio terminata da Android' };
+    run("document.visibilityState = 'visible'; syncNativeRecorder();");
+    check('projection revocation releases controls and shows the native reason', !ctx.__elements.get('captureSourceSelect').disabled && !run('isProcessing') && ctx.__elements.get('recordHint').textContent.includes('terminata da Android'));
+    await run('startRecording()');
+    run("nativeRecorderError('Cattura audio del dispositivo annullata');");
+    check('cancelled projection consent leaves recording controls usable', !run('isProcessing') && !ctx.__elements.get('captureSourceSelect').disabled);
+    delete ctx.AndroidRecorder.startPlayback;
+    await run('startRecording()');
+    check('unavailable projection never silently falls back to the microphone', !run('isProcessing') && calls.filter(c => c[0] === 'start').length === microphoneStarts);
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });
