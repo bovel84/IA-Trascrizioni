@@ -48,6 +48,7 @@ jobs:
           node tools/native-bridge-test.js
           node tools/provider-test.js
           node tools/speakers-test.js
+          node tools/analysis-test.js
       - name: Verify responsive layout and capture previews
         env:
           CHROME_BIN: /usr/bin/google-chrome
@@ -56,6 +57,7 @@ jobs:
           npm install --no-save --prefix "$RUNNER_TEMP/voicescribe-browser" playwright@1.56.1
           python3 -m http.server 8088 --bind 127.0.0.1 > "$RUNNER_TEMP/voicescribe-server.log" 2>&1 &
           NODE_PATH="$RUNNER_TEMP/voicescribe-browser/node_modules" node tools/preview-ui.cjs
+          NODE_PATH="$RUNNER_TEMP/voicescribe-browser/node_modules" node tools/analysis-ui-test.cjs
       - name: Upload interface previews
         if: always()
         uses: actions/upload-artifact@v4

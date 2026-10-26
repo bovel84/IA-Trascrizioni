@@ -1,5 +1,40 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Strumenti e risultati del progetto (2.2)
+
+La scheda **Analisi AI** permette di scegliere trascrizione, appunti o entrambi.
+**Correggi** preserva il significato, **Migliora** rielabora il registro, **Riassumi**
+separa sintesi/decisioni/questioni/prossimi passi, **Punti chiave** distingue azioni,
+responsabili, scadenze e proposte. Le istruzioni vietano di inventare dati mancanti.
+I testi lunghi vengono suddivisi e consolidati; gli output troncati sono segnalati,
+senza salvare un risultato incompleto. I limiti di contesto effettivi dipendono dal modello.
+
+- **Grafico**: il conteggio delle parole per partecipante è calcolato sul testo e non
+  richiede una chiamata AI. In modalità **Dati numerici citati** ogni valore deve avere
+  una citazione presente nel contenuto, con etichetta e numero verificabili; la citazione
+  compare nel risultato e nel CSV. Non sono stime della durata del parlato. Le evidenze
+  verificano la corrispondenza testuale, non sostituiscono una revisione umana del contesto.
+- **Mappa**: ID, nodi e collegamenti validati, etichette leggibili, impaginazione adattata
+  alla larghezza disponibile. Il testo delle relazioni rimane consultabile nel risultato.
+- Ogni strumento conserva il suo ultimo risultato, selezionabile, copiabile, scaricabile
+  e aggiungibile agli appunti. Risultati e diagrammi vengono salvati nel progetto/bozza;
+  PDF, TXT e Markdown includono i risultati testuali. Grafici: PNG/CSV. Mappe: SVG/PNG.
+- **Annulla** interrompe l'attesa e chiede al bridge Android di chiudere la connessione.
+  Le risposte tardive non possono modificare un altro progetto o un contenuto cambiato.
+  Un annullamento non revoca l'elaborazione già ricevuta dal provider.
+- Errori di rete o di formato conservano i risultati precedenti. Non vengono effettuati
+  reinvii automatici per errori di rete della generazione AI. Rimangono solo i fallback
+  per parametri esplicitamente rifiutati dal provider.
+- Import audio: file fino a 25 MB; una trascrizione fallita conserva la sessione precedente.
+  Un'importazione riuscita diventa una nuova sessione e viene conservata in IndexedDB.
+- Le bozze con soli appunti/disegni sono recuperabili; disegni con annulla/ripristina e
+  coordinate adattate al ridimensionamento. La copia dei risultati usa la clipboard nativa
+  nell'APK. Gli errori di salvataggio audio/disegno sono mostrati prima di dichiarare il successo.
+
+Verifiche aggiunte: test di analisi con risposte simulate, flussi browser dei sei strumenti,
+11 download reali, riapertura del progetto e layout 320/390/768/1440 px. Non sono una prova
+con le chiavi reali dell'utente né della registrazione sul suo dispositivo.
+
 ## Audio riprodotto sullo stesso telefono o tablet (2.1)
 
 Nella scheda **Rec**, scegliere **Sorgente audio → Audio del dispositivo (video)**.

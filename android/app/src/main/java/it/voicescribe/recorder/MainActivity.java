@@ -26,6 +26,8 @@ public final class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService aiWorker = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
     private volatile boolean starting, retrying, diarizing;
+    private final ExecutorService aiCancellation = Executors.newSingleThreadExecutor();
+    private final ConcurrentMap<String, AiHttp.Control> aiRequests = new ConcurrentHashMap<>();
     private String key, model, language;
     private boolean pendingStart;
     private static final int PLAYBACK_PERMISSION = 40;
@@ -161,6 +163,7 @@ public final class MainActivity extends Activity {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
                 if (text.trim().isEmpty()) continue;
                 JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);
+                entry.put("endMs", entry.getLong("offsetMs") + Math.max(0, wav.length() - 44) * 1000 / WavFile.BYTES_PER_SECOND);
                 File label = new File(wav.getPath() + ".speaker.json");
                 if (label.exists()) {
                     try {
@@ -233,14 +236,25 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void aiRequest(String id, String provider, String path, String apiKey, String body) {
             if (!id.matches("[0-9]{1,12}")) return;
+            AiHttp.Control control = new AiHttp.Control();
+            if (aiRequests.putIfAbsent(id, control) != null) return;
             Runnable request = () -> {
                 try {
-                    AiHttp.Result result = AiHttp.request(provider, path, apiKey, body);
-                    aiReply(id, result.status, result.body, "");
-                } catch (Exception e) { aiReply(id, 0, "", "Richiesta AI non riuscita: controlla connessione, chiave e modello."); }
+                    AiHttp.Result result = AiHttp.request(provider, path, apiKey, body, control);
+                    if (!control.isCancelled()) aiReply(id, result.status, result.body, "");
+                } catch (Exception e) { if (!control.isCancelled()) aiReply(id, 0, "", "Richiesta AI non riuscita: controlla connessione, chiave e modello."); }
+                finally { aiRequests.remove(id, control); }
             };
             try { aiWorker.execute(request); }
-            catch (RejectedExecutionException e) { aiReply(id, 0, "", "Troppe richieste AI: attendi e riprova."); }
+            catch (RejectedExecutionException e) { aiRequests.remove(id, control); aiReply(id, 0, "", "Troppe richieste AI: attendi e riprova."); }
+        }
+        @JavascriptInterface public void cancelAiRequest(String id) {
+            AiHttp.Control control = aiRequests.remove(id);
+            if (control != null) aiCancellation.execute(control::cancel);
+        }
+        @JavascriptInterface public void copyText(String text) {
+            if (text == null || text.length() > 2_000_000) return;
+            ui.post(() -> getSystemService(android.content.ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("VoiceScribe", text)));
         }
         @JavascriptInterface public boolean canCapturePlayback() { return Build.VERSION.SDK_INT >= 29; }
         @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.MICROPHONE)); }
@@ -332,6 +346,7 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         if (filePicker != null) filePicker.onReceiveValue(null);
         if (web != null) { web.removeJavascriptInterface("AndroidRecorder"); web.destroy(); web = null; }
-        worker.shutdown(); aiWorker.shutdownNow(); super.onDestroy();
+        for (AiHttp.Control control : aiRequests.values()) aiCancellation.execute(control::cancel);
+        aiRequests.clear(); aiCancellation.shutdown(); worker.shutdown(); aiWorker.shutdownNow(); super.onDestroy();
     }
 }

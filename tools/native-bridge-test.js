@@ -45,11 +45,12 @@ async function main() {
     check('Record delegates microphone to the native service', calls[0]?.[0] === 'start' && calls[0][1] === 'gsk_test' && calls[0][3] === 'it');
     check('permission/start wait uses original processing UI', run('isProcessing'));
     state = { ...state, active: true, recording: true, sessionId: 'session-1790766000000', elapsedMs: 120000, chunkCount: 1, pending: 0,
-        entries: [{ nativeSegmentId: 'session-1790766000000/000000000000.wav', offsetMs: 0, text: 'Prima frase', speaker: 2, speakerName: 'Persona 2' }] };
+        entries: [{ nativeSegmentId: 'session-1790766000000/000000000000.wav', offsetMs: 0, endMs: 30000, text: 'Prima frase', speaker: 2, speakerName: 'Persona 2' }] };
     run('syncNativeRecorder()');
     check('original recording button reflects native state', ctx.__elements.get('recordBtn').classList.contains('recording'));
     check('native transcript appears in the original transcript panel', run('transcriptEntries.length') === 1 && run('transcriptEntries[0].text') === 'Prima frase');
     check('native capture preserves selected speaker rather than arrival-time selection', run('transcriptEntries[0].speaker') === 2);
+    check('native subtitles retain actual segment ending', run('transcriptEntries[0].endMs') === 30000);
     check('timer uses captured audio duration', ctx.__elements.get('timer').textContent === '02:00');
     run('syncNativeRecorder(); syncNativeRecorder();');
     check('repeated refresh does not duplicate transcript entries', run('transcriptEntries.length') === 1);
@@ -93,7 +94,15 @@ async function main() {
     check('audio export uses the selected native session', calls.some(c => c[0] === 'exportAudio' && c[1] === state.sessionId));
     run("$('audioFileInput').files = [new Blob(['audio'], { type: 'audio/wav' })];");
     ctx.__elements.get('audioFileInput').files[0].name = 'test.wav';
+    const beforeImportFetch = ctx.fetch;
+    ctx.fetch = async () => ({ ok: false, status: 401, json: async () => ({error:{message:'Chiave non valida'}}) });
     await run("$('audioFileInput').onchange({ target: $('audioFileInput') })");
+    check('failed audio import preserves previous native audio and transcript', ctx.nativeAudioSession === state.sessionId && run('transcriptEntries.length') > 0);
+    ctx.fetch = async () => ({ ok: true, status: 200, json: async () => ({text:'Nuovo audio importato'}) });
+    await run("$('audioFileInput').onchange({ target: $('audioFileInput') })");
+    ctx.fetch = beforeImportFetch;
+    check('imported audio replaces the source transcript after success', run('transcriptEntries.length') === 1 && run('transcriptEntries[0].text') === 'Nuovo audio importato');
+    check('imported audio is retained for draft recovery', (await run('getChunksFromDB(AUDIO_SESSION)')).length === 1);
     check('imported audio detaches the previous native audio reference', ctx.nativeAudioSession === null);
     run("nativeRecorderError('Permesso microfono negato')");
     check('denied permission leaves controls usable', !run('isProcessing'));

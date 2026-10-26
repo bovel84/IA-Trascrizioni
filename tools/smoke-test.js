@@ -142,7 +142,7 @@ async function main() {
     const aiBox = el('aiResult');
     check('AI riassunto mostrato (con textContent)', aiBox.children.length === 2 && aiBox.children[1].textContent.length > 0);
     await run('runAI("chart")');
-    check('AI grafico normalizzato', ev('chartData && chartData.labels && chartData.labels.length') === 2, JSON.stringify(ev('chartData')));
+    check('grafico di partecipazione usa parole reali della trascrizione', ev('chartData.series[0].data.reduce((a,b)=>a+b,0)') === ev("transcriptEntries.map(e=>e.text).join(' ').split(/\\s+/).filter(Boolean).length"), JSON.stringify(ev('chartData')));
     await run('runAI("concept")');
     check('AI mappa estratta dal blocco ```json', ev('conceptMapData && conceptMapData.nodes.length') === 2);
     const chatCalls = ctx.__calls.fetch.filter(c => /chat\/completions/.test(c.url));
