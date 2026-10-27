@@ -48,6 +48,7 @@ jobs:
           node tools/native-bridge-test.js
           node tools/provider-test.js
           node tools/speakers-test.js
+          node tools/transcript-turns-test.js
           node tools/analysis-test.js
       - name: Verify responsive layout and capture previews
         env:

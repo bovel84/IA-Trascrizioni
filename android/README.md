@@ -1,5 +1,19 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Testo continuo per partecipante (2.3.2)
+
+I segmenti consecutivi attribuiti alla stessa persona vengono mostrati come un unico
+intervento, anche quando la trascrizione arriva in più richieste. La cronologia dei
+cambi reali di persona rimane invariata. I frammenti non assegnati restano distinti:
+assegnarli dal dettaglio li unisce agli interventi consecutivi del partecipante scelto.
+Il dettaglio **Modifica o assegna i frammenti** conserva le azioni sui testi originali.
+
+Correggi e Migliora ricevono già il testo riunito, con il nome una volta per intervento,
+e producono paragrafi senza timestamp o intestazioni delle parti tecniche. TXT, Markdown
+e PDF usano gli stessi interventi riuniti. SRT/VTT conservano i tempi dei segmenti originali.
+I dati dei progetti non vengono riscritti: la vista continua funziona anche riaprendo
+registrazioni precedenti. Nessuna richiesta AI aggiuntiva per il raggruppamento.
+
 ## Integrità della trascrizione (2.3.1)
 
 Il testo completo ricevuto da Whisper viene conservato indipendentemente dall'esito

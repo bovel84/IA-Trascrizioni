@@ -41,6 +41,23 @@ fs.mkdirSync(output,{recursive:true});
  if(await page.locator('button.export-card').count()!==8) throw Error('Export actions lost');
  await page.locator('[data-tab="notes"]').click();await page.waitForTimeout(200);
  if(!(await page.locator('#drawingCanvas').boundingBox())?.width) throw Error('Drawing canvas hidden');
+ // Technical chunks are one visible intervention; original edits retain their indices.
+ await page.locator('[data-tab="record"]').click();
+ await page.evaluate(()=>{
+  speakers=['Anna'];transcriptEntries=[
+   {speaker:1,speakerName:'Anna',text:'Prima frase',offsetMs:0,time:'00:00'},
+   {speaker:1,speakerName:'Anna',text:'e continuazione.',offsetMs:30000,time:'00:30'},
+   {speaker:0,speakerName:'Non assegnato',text:'Voce incerta.',offsetMs:60000,time:'01:00'}];refreshTranscript();
+ });
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==2)throw Error('Technical chunks were not joined');
+ if(await page.locator('#transcriptArea > .transcript-entry').first().locator(':scope > .transcript-text').innerText()!=='Prima frase e continuazione.')throw Error('Continuous text lost words');
+ await page.evaluate(()=>{$('transcriptSearch').value='frase e';refreshTranscript();});
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Search cannot cross chunk boundaries');
+ await page.evaluate(()=>{$('transcriptSearch').value='';refreshTranscript();});
+ await page.locator('.transcript-fragments summary').click();
+ page.once('dialog',dialog=>dialog.accept('Continuazione modificata.'));
+ await page.locator('.transcript-fragments [onclick="editEntry(1)"]').click();
+ if(await page.evaluate(()=>transcriptEntries[1].text)!=='Continuazione modificata.' || !(await page.locator('#transcriptArea > .transcript-entry').first().innerText()).includes('Prima frase Continuazione modificata.'))throw Error('Grouped editing changed the wrong fragment');
  // The APK reveals controls hidden in the PWA: verify them at phone/tablet widths too.
  await page.addInitScript(()=>{
   window.AndroidRecorder={canCapturePlayback:()=>true,localVoicesAvailable:()=>true,setLocalVoices:()=>{},startPlayback:()=>{},start:()=>{},
