@@ -150,12 +150,13 @@ async function main() {
     state={active:true,recording:true,paused:false,source:'microphone',localVoices:true,sessionLocalVoices:true,voiceStatus:'2 voci distinte sul dispositivo',status:'Registrazione',sessionId:'session-1790766999000',elapsedMs:30000,chunkCount:1,entries:[
         {nativeSegmentId:'session-1790766999000/000000000000.wav#0',nativeVoiceId:'session-1790766999000/voice-1',speaker:1,speakerName:'Voce 1',speakerSource:'local',speakerReview:false,text:'Prima voce',offsetMs:100,endMs:900},
         {nativeSegmentId:'session-1790766999000/000000000000.wav#1',nativeVoiceId:'session-1790766999000/voice-2',speaker:2,speakerName:'Voce 2',speakerSource:'local',speakerReview:false,text:'Seconda voce',offsetMs:1100,endMs:1900},
-        {nativeSegmentId:'session-1790766999000/000000000000.wav#2',speaker:0,speakerName:'Non assegnato',speakerSource:'local',speakerReview:true,text:'Voci sovrapposte',offsetMs:2100,endMs:2400}
+        {nativeSegmentId:'session-1790766999000/000000000000.wav#2',speaker:0,speakerName:'Non assegnato',speakerSource:'local',speakerReview:true,speakerUnassignedReason:'overlap',text:'Voci sovrapposte',offsetMs:2100,endMs:2400}
     ]};run('syncNativeRecorder()');
     check('automatic native voices never inherit an unrelated participant name',run('transcriptEntries[1].speakerName')==='Voce 1'&&run('transcriptEntries[1].speaker')===2);
     check('distinct detected voices remain distinct in the project',run('transcriptEntries[2].speaker')===3&&run('transcriptEntries[2].speakerName')==='Voce 2');
     check('native voice provenance and timing survive import',run('transcriptEntries[1].speakerSource')==='local'&&run('transcriptEntries[1].nativeVoiceId')==='session-1790766999000/voice-1'&&run('transcriptEntries[1].endMs')===900);
     check('ambiguous audio stays visibly unassigned',run('transcriptEntries[3].speaker')===0&&run('transcriptEntries[3].speakerReview'));
+    check('native overlap evidence survives import and prevents timing-only smoothing',run('transcriptEntries[3].speakerUnassignedReason')==='overlap');
     check('voice mode cannot change while capture is active',ctx.__elements.get('nativeVoiceModeSelect').disabled);
     ctx.prompt=()=> 'Marco';run('renameSpeaker(2)');
     check('renaming a local voice persists its session identity in native storage',calls.some(c=>c[0]==='renameVoice'&&c[1]==='session-1790766999000/voice-1'&&c[2]==='Marco'));
@@ -164,6 +165,14 @@ async function main() {
     const count=run('transcriptEntries.length');run('syncNativeRecorder()');check('native voice refresh does not duplicate utterances',run('transcriptEntries.length')===count);
     state.active=false;state.recording=false;run("syncNativeRecorder();$('nativeVoiceModeSelect').value='manual';$('nativeVoiceModeSelect').onchange();");
     check('manual attribution remains available after capture',calls.some(c=>c[0]==='voiceMode'&&c[1]===false));
+    run("transcriptEntries=[];speakers=['Persona 1'];");
+    state={...state,active:true,recording:true,sessionId:'session-1790767999000',chunkCount:2,entries:[
+        {nativeSegmentId:'session-1790767999000/000000000000.wav#0',nativeVoiceId:'session-1790767999000/voice-1',speaker:1,speakerName:'Voce 1',speakerSource:'local',text:"anche l'audio",offsetMs:29000,endMs:35080},
+        {nativeSegmentId:'session-1790767999000/000000035000.wav#0',speaker:0,speakerName:'Non assegnato',speakerSource:'local',speakerReview:true,speakerUnassignedReason:'timing',text:'è',offsetMs:35000,endMs:35380}
+    ]};run('syncNativeRecorder()');
+    check('live native import renders a short boundary word inline before the continuation arrives',run('transcriptTurns().length')===1&&run('transcriptTurns()[0].text').endsWith('[Non assegnato: è]'));
+    state.entries.push({...state.entries[0],nativeSegmentId:'session-1790767999000/000000035000.wav#1',text:'molto convincente.',offsetMs:35300,endMs:38000});run('syncNativeRecorder()');
+    check('the next native WAV completes one sentence without duplication or reassignment',run('transcriptTurns().length')===1&&run('transcriptTurns()[0].displayText')==="anche l'audio è molto convincente."&&run('transcriptEntries.length')===3&&run('transcriptEntries[1].speaker')===0&&run('subtitleBlocks().length')===3);
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

@@ -2900,6 +2900,7 @@
                 speakerSource: participant.speakerSource || (participant.speaker ? 'manual' : 'unknown'),
                 ...(participant.nativeVoiceId ? {nativeVoiceId:participant.nativeVoiceId} : {}),
                 ...(typeof participant.speakerReview==='boolean' ? {speakerReview:participant.speakerReview} : {}),
+                ...(typeof participant.speakerUnassignedReason==='string' ? {speakerUnassignedReason:participant.speakerUnassignedReason.slice(0,40)} : {}),
                 ...(Number.isFinite(participant.speakerSimilarity) ? {speakerSimilarity:participant.speakerSimilarity} : {}),
                 ...(typeof participant.transcriptReview==='boolean'?{transcriptReview:participant.transcriptReview,transcriptReviewReason:String(participant.transcriptReviewReason||'').slice(0,280)}:{}),
                 ...(typeof participant.transcriptQualityAvailable==='boolean'?{transcriptQualityAvailable:participant.transcriptQualityAvailable}:{}),
@@ -2948,32 +2949,52 @@
 
         // Presentation only: retain every source segment and subtitle time for edits/recovery.
         function fragmentSession(entry){return (entry.nativeSegmentId||entry.nativeVoiceId||'').split('/')[0];}
-        function transcriptTurns() {
-            const turns=[], indices=new Map(transcriptEntries.map((entry,index)=>[entry,index]));
-            const list=orderedEntries(),inline=new Set();
+        function inlineTranscriptFragments(list){
+            const inline=new Map(),blocked=new Set(['overlap','speaker-change','unavailable']);
+            const gap=(left,right)=>entryOffset(right)-left.endMs;
+            const close=(left,right,limit)=>Number.isFinite(left?.endMs)&&gap(left,right)>=-350&&gap(left,right)<=limit;
             for(let i=0;i<list.length;i++){
                 if(list[i].speaker>0)continue;
                 let end=i;while(end+1<list.length&&!(list[end+1].speaker>0))end++;
                 const left=list[i-1],right=list[end+1],run=list.slice(i,end+1);
-                const timed=left&&right&&Number.isFinite(left.endMs)&&run.every(e=>Number.isFinite(e.endMs)&&e.endMs>entryOffset(e));
-                if(timed&&left.speaker>0&&left.speaker===right.speaker&&left.speakerName===right.speakerName
+                const words=run.map(e=>String(e.text||'')).join(' ').trim().split(/\s+/).filter(Boolean).length;
+                const span=run.reduce((end,e)=>Math.max(end,e.endMs),0)-entryOffset(run[0]);
+                const timed=run.every((e,n)=>Number.isFinite(entryOffset(e))&&Number.isFinite(e.endMs)&&e.endMs>entryOffset(e)
+                    &&!blocked.has(e.speakerUnassignedReason)&&(!n||close(run[n-1],e,800)));
+                let anchor=null;
+                if(timed&&words<=5&&span<=2400&&left&&right&&left.speaker>0&&left.speaker===right.speaker&&left.speakerName===right.speakerName
                     &&[...run,right].every(e=>fragmentSession(e)===fragmentSession(left))
-                    &&entryOffset(list[i])>=left.endMs&&entryOffset(right)>=list[end].endMs
-                    &&entryOffset(list[i])-left.endMs<=650&&entryOffset(right)-list[end].endMs<=650
-                    &&list[end].endMs-entryOffset(list[i])<=1200&&entryOffset(right)-left.endMs<=2000
-                    &&run.map(e=>e.text).join(' ').trim().split(/\s+/).length<=3)run.forEach(e=>inline.add(e));
+                    &&close(left,run[0],1200)&&close(run.at(-1),right,1200)&&entryOffset(right)-left.endMs<=4000)anchor=left;
+                // A provisional leading/trailing word is visibly unassigned, never a new identity.
+                // Re-evaluate once the next chunk arrives: different speakers must stay separate.
+                if(!anchor&&timed&&words<=2&&span<=900&&(!left||!right)){
+                    const neighbor=left||right;
+                    if(neighbor?.speaker>0&&fragmentSession(neighbor)&&run.every(e=>fragmentSession(e)===fragmentSession(neighbor)&&e.speakerUnassignedReason!=='unknown-voice')
+                        &&(left?close(left,run[0],500):close(run.at(-1),right,500)))anchor=neighbor;
+                }
+                if(anchor)run.forEach(e=>inline.set(e,anchor));
                 i=end;
-            }
+            }return inline;
+        }
+        function transcriptTurns() {
+            const turns=[], indices=new Map(transcriptEntries.map((entry,index)=>[entry,index]));
+            const list=orderedEntries(),inline=inlineTranscriptFragments(list);
             for(const entry of list) {
                 const index=indices.get(entry), last=turns[turns.length-1];
-                const identity=inline.has(entry)?last?.identity:entry.speaker>0?`participant-${entry.speaker}`:'unassigned';
+                const label=inline.get(entry)||entry;
+                const identity=label.speaker>0?`participant-${label.speaker}`:'unassigned';
                 const previous=last?.fragments.at(-1)?.entry;
+                const origin=fragmentSession(entry)||fragmentSession(label);
+                const sameSession=!last?.recordingOrigin||!origin||last.recordingOrigin===origin;
                 const closeUnknown=identity!=='unassigned'||previous&&fragmentSession(previous)===fragmentSession(entry)&&Number.isFinite(previous.endMs)&&entryOffset(entry)-previous.endMs<=2000;
-                if(last&&last.identity===identity&&closeUnknown&&(inline.has(entry)||last.speakerName===entry.speakerName)) {
+                if(last&&last.identity===identity&&sameSession&&closeUnknown&&last.speakerName===label.speakerName) {
                     last.fragments.push({entry,index,inlineUnassigned:inline.has(entry)});
-                    last.endMs=entry.endMs;if(!inline.has(entry))last.speakerReview=last.speakerReview||entry.speakerReview;
+                    last.endMs=Number.isFinite(last.endMs)&&Number.isFinite(entry.endMs)?Math.max(last.endMs,entry.endMs):entry.endMs;
+                    last.recordingOrigin=last.recordingOrigin||origin;
+                    if(!inline.has(entry))last.speakerReview=last.speakerReview||entry.speakerReview;
                     last.transcriptReview=last.transcriptReview||entry.transcriptReview;
-                } else turns.push({...entry,identity,fragments:[{entry,index}],text:joinTranscriptFragments([entry.text])});
+                } else turns.push({...label,offsetMs:entryOffset(entry),endMs:entry.endMs,time:entry.time,identity,recordingOrigin:origin,
+                    transcriptReview:entry.transcriptReview,fragments:[{entry,index,inlineUnassigned:inline.has(entry)}]});
             }
             return turns.map(composeTranscriptTurn);
         }

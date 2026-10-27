@@ -94,4 +94,22 @@ public class NativeVoicesTest {
     @Test public void anotherVoiceOverlappingTheWordBlocksContinuity(){VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1700,1,.9,false),new VoiceTimeline.Turn(1500,1680,2,.9,false),new VoiceTimeline.Turn(2000,4000,1,.9,false)));assertEquals(0,t.at(1550,1950).id);}
     @Test public void longSilenceNeverBecomesRecognizedSpeech(){VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1000,1,.9,false),new VoiceTimeline.Turn(3000,4000,1,.9,false)));assertEquals(0,t.at(1500,2000).id);}
     @Test public void gapAlignmentRetainsTheSmallWordAndItsTimestamps(){List<VoiceTimeline.Group> groups=shortGap(1,false).align(Arrays.asList(new VoiceTimeline.Word(1500,1650,"anche"),new VoiceTimeline.Word(1750,1950,"con"),new VoiceTimeline.Word(2100,2300,"loro")),"anche con loro",4000);assertEquals(3,groups.size());assertEquals("con",groups.get(1).text);assertEquals(1,groups.get(1).speaker);assertEquals(1750,groups.get(1).start);assertTrue(groups.get(1).review);}
+    @Test public void overlappingSpeechCarriesAnExplicitReasonForTheContinuousView(){
+        VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,3000,1,.9,false),new VoiceTimeline.Turn(1000,2000,2,.9,false)));
+        VoiceTimeline.Group word=t.align(Collections.singletonList(new VoiceTimeline.Word(1200,1500,"è")),"è",4000).get(0);
+        assertEquals(0,word.speaker);assertEquals("overlap",word.unassignedReason);assertEquals("è",word.text);
+    }
+    @Test public void aWordStraddlingDifferentSpeakersIsNotJustTimestampJitter(){
+        VoiceTimeline.Group word=timeline().align(Collections.singletonList(new VoiceTimeline.Word(1800,2200,"con")),"con",4000).get(0);
+        assertEquals(0,word.speaker);assertEquals("speaker-change",word.unassignedReason);
+    }
+    @Test public void aWordOutsideDetectedSpeechIsDistinguishedFromAnUnknownVoice(){
+        VoiceTimeline.Group missing=timeline().align(Collections.singletonList(new VoiceTimeline.Word(4100,4400,"è")),"è",5000).get(0);
+        assertEquals("timing",missing.unassignedReason);
+        VoiceTimeline t=new VoiceTimeline(Collections.singletonList(new VoiceTimeline.Turn(1000,2000,0,-1,true)));
+        assertEquals("unknown-voice",t.align(Collections.singletonList(new VoiceTimeline.Word(1200,1500,"è")),"è",4000).get(0).unassignedReason);
+    }
+    @Test public void missingWordTimesCannotMasqueradeAsAShortUnassignedWord(){
+        assertEquals("unavailable",timeline().align(Collections.emptyList(),"è",4000).get(0).unassignedReason);
+    }
 }

@@ -179,6 +179,7 @@ public final class MainActivity extends Activity {
                                 .put("speakerSource","local").put("speakerReview",speaker==0||group.optBoolean("review",true))
                                 .put("speakerSimilarity",group.optDouble("similarity",-1));
                             if(speaker>0)turn.put("nativeVoiceId",id+"/voice-"+speaker);
+                            else turn.put("speakerUnassignedReason",group.optString("unassignedReason",""));
                             recognized.put(VoiceData.annotateQuality(turn,quality));
                         }
                         if(groups.length()>0){for(int i=0;i<recognized.length();i++)entries.put(recognized.getJSONObject(i));continue;}
@@ -187,7 +188,7 @@ public final class MainActivity extends Activity {
                 JSONObject entry = new JSONObject().put("nativeSegmentId", id + "/" + wav.getName()).put("offsetMs", Long.parseLong(wav.getName().replace(".wav", ""))).put("text", text);
                 entry.put("endMs", entry.getLong("offsetMs") + Math.max(0, wav.length() - 44) * 1000 / WavFile.BYTES_PER_SECOND);
                 File label = new File(wav.getPath() + ".speaker.json");
-                if(local)entry.put("speaker",0).put("speakerName","Non assegnato").put("speakerSource","local").put("speakerReview",true);
+                if(local)entry.put("speaker",0).put("speakerName","Non assegnato").put("speakerSource","local").put("speakerReview",true).put("speakerUnassignedReason","unavailable");
                 if (!local && label.exists()) {
                     try {
                         JSONObject speaker = new JSONObject(new String(Files.readAllBytes(label.toPath()), StandardCharsets.UTF_8));

@@ -116,4 +116,16 @@ public class TranscriptionIntegrityTest {
         Transcriber.saveResponse(wav,response);JSONObject group=VoiceData.completeGroups(wav,"con").getJSONObject(0);
         assertEquals("con",saved());assertEquals(1,group.getInt("speaker"));assertTrue(group.getBoolean("review"));assertEquals(1450,group.getLong("start"));assertEquals(1650,group.getLong("end"));
     }
+    @Test public void shortOverlappingWordKeepsItsReasonAfterSavingAndReloading()throws Exception{
+        VoiceData.write(VoiceData.timeline(wav),new JSONObject().put("turns",new JSONArray()
+            .put(new JSONObject().put("start",0).put("end",4000).put("speaker",1).put("review",false))
+            .put(new JSONObject().put("start",1000).put("end",2000).put("speaker",2).put("review",false))));
+        JSONObject json=new JSONObject().put("text","audio è convincente.").put("words",new JSONArray()
+            .put(new JSONObject().put("word","audio").put("start",.1).put("end",.8))
+            .put(new JSONObject().put("word","è").put("start",1.2).put("end",1.5))
+            .put(new JSONObject().put("word","convincente").put("start",2.2).put("end",3.4)));
+        Transcriber.saveResponse(wav,json);JSONArray groups=VoiceData.completeGroups(wav,"audio è convincente.");
+        assertEquals("audio è convincente.",saved());assertEquals(3,groups.length());JSONObject word=groups.getJSONObject(1);
+        assertEquals(0,word.getInt("speaker"));assertTrue(word.getBoolean("review"));assertEquals("overlap",word.getString("unassignedReason"));assertEquals("è",word.getString("text"));assertEquals(1200,word.getLong("start"));
+    }
 }

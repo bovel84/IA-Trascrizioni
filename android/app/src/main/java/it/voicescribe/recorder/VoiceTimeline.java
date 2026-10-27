@@ -16,8 +16,9 @@ final class VoiceTimeline {
         Word(long start,long end,String text){this.start=start;this.end=end;this.text=text;}
     }
     static final class Group {
-        long start,end;final int speaker;final boolean review;double similarity;String text;
-        Group(Word word,VoiceProfiles.Match match){start=word.start;end=word.end;text=word.text;speaker=match.id;review=match.review;similarity=match.similarity;}
+        long start,end;final int speaker;final boolean review;final String unassignedReason;double similarity;String text;
+        Group(Word word,VoiceProfiles.Match match){this(word,match,match.id==0?"unavailable":"");}
+        Group(Word word,VoiceProfiles.Match match,String reason){start=word.start;end=word.end;text=word.text;speaker=match.id;review=match.review;similarity=match.similarity;unassignedReason=reason;}
     }
     final List<Turn> turns;
     private final List<Turn[]> bridges=new ArrayList<>();
@@ -52,6 +53,18 @@ final class VoiceTimeline {
         }
         return new VoiceProfiles.Match(0,-1,true);
     }
+    private String unassignedReason(long start,long end){
+        List<Turn> active=new ArrayList<>();Set<Integer> speakers=new HashSet<>();boolean unknown=false;
+        for(Turn turn:turns)if(turn.start<end&&turn.end>start){
+            if(turn.speaker==0)unknown=true;else{active.add(turn);speakers.add(turn.speaker);}
+        }
+        if(speakers.size()>1){
+            for(Turn left:active)for(Turn right:active)if(left.speaker!=right.speaker
+                &&Math.max(start,Math.max(left.start,right.start))<Math.min(end,Math.min(left.end,right.end)))return "overlap";
+            return "speaker-change";
+        }
+        return unknown?"unknown-voice":"timing";
+    }
     List<Group> align(List<Word> words,String fallback,long duration) {
         List<Group> groups=new ArrayList<>();long previous=-1;
         String original=fallback==null?"":fallback;
@@ -66,9 +79,10 @@ final class VoiceTimeline {
             if(word.text==null||word.text.trim().isEmpty())continue;
             if(word.start<0||word.end<=word.start||word.end>duration+500||word.start<previous) return fallback(fallback,duration);
             previous=word.start;VoiceProfiles.Match match=at(word.start,word.end);
+            String reason=match.id==0?unassignedReason(word.start,word.end):"";
             Group last=groups.isEmpty()?null:groups.get(groups.size()-1);
-            if(last!=null&&last.speaker==match.id&&last.review==match.review&&word.start-last.end<=1200){last.text+=word.text;last.end=word.end;last.similarity=Math.min(last.similarity,match.similarity);}
-            else groups.add(new Group(word,match));
+            if(last!=null&&last.speaker==match.id&&last.review==match.review&&last.unassignedReason.equals(reason)&&word.start-last.end<=1200){last.text+=word.text;last.end=word.end;last.similarity=Math.min(last.similarity,match.similarity);}
+            else groups.add(new Group(word,match,reason));
         }
         for(Group group:groups)group.text=group.text.trim();
         List<String> parts=new ArrayList<>();for(Group group:groups)parts.add(group.text);

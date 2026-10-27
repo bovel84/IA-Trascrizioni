@@ -1,5 +1,26 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Parole brevi e confini dei blocchi audio (2.4.2)
+
+La ricomposizione gestisce anche piccoli scarti dei tempi fra WAV consecutivi: fino a
+350 ms di sovrapposizione dei timestamp, senza alterare audio o sottotitoli. Un breve
+passaggio non assegnato (massimo 5 parole in 2,4 s), fra due parti della stessa voce,
+può restare nel paragrafo con sottolineatura e marcatore esplicito nei report/AI.
+I vuoti fra parti vicine devono essere entro 1,2 s e l'intero raccordo entro 4 s.
+Queste soglie regolano la presentazione, non certificano chi ha pronunciato le parole.
+
+All'inizio/fine della registrazione, anche mentre si attende il WAV successivo, fino
+a due parole entro 900 ms possono comparire nella scheda vicina come **non assegnate**,
+solo nella stessa sessione nativa ed entro 500 ms. All'arrivo di una voce diversa il
+raccordo viene ricalcolato e le parole tornano separate. Un'origine diversa non viene
+unita soltanto perché usa la stessa etichetta Voce 1.
+
+L'allineamento locale conserva il motivo della mancata attribuzione: disallineamento
+temporale, voce sconosciuta, sovrapposizione/cambio di persona, metadati indisponibili.
+I cambi di persona e le sovrapposizioni esplicitamente rilevati non vengono ricomposti;
+le voci sconosciute non vengono agganciate con il solo contesto di un lato. I vecchi
+progetti senza questi metadati mantengono l'attribuzione originale e i segnali di revisione.
+
 ## Pause e continuità del parlato (2.4.1)
 
 Le brevi pause del rilevatore vocale non devono creare una scheda per parole come
@@ -8,9 +29,9 @@ voce non già incerta, senza altre voci o intervalli sconosciuti in mezzo. Le pa
 attribuite per questa continuità restano marcate da verificare. Non vengono estesi
 gli intervalli attraverso cambi di persona, sovrapposizioni o silenzi lunghi.
 
-La vista continua funziona anche sui frammenti già salvati: una breve isola di massimo
-tre parole, entro 1,2 secondi, fra due parti con la stessa etichetta vocale può comparire
-nel paragrafo, sottolineata come non assegnata. I dati originali e i sottotitoli mantengono
+La vista continua funziona anche sui frammenti già salvati: una breve isola fra due
+parti con la stessa etichetta vocale può comparire nel paragrafo, sottolineata come
+non assegnata (soglie aggiornate nella 2.4.2). I dati originali e i sottotitoli mantengono
 la vera attribuzione; analisi AI e report usano un esplicito marcatore
 `[Non assegnato: ...]`. Le voci candidate già incerte restano segnalate. Nessun trasferimento di identità tra registrazioni diverse.
 I frammenti sconosciuti adiacenti possono formare un passaggio chiaramente non assegnato;

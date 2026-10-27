@@ -56,7 +56,7 @@ final class VoiceData {
                 words.add(new VoiceTimeline.Word(Math.round(start*1000),Math.round(end*1000),w.getString("word")));}
         }catch(Exception invalid){words.clear();}
         long duration=duration(wav);JSONArray groups=new JSONArray();
-        for(VoiceTimeline.Group group:new VoiceTimeline(turns).align(words,transcription.optString("text",""),duration))groups.put(new JSONObject().put("start",group.start).put("end",group.end).put("speaker",group.speaker).put("review",group.review).put("similarity",group.similarity).put("text",group.text));
+        for(VoiceTimeline.Group group:new VoiceTimeline(turns).align(words,transcription.optString("text",""),duration))groups.put(new JSONObject().put("start",group.start).put("end",group.end).put("speaker",group.speaker).put("review",group.review).put("similarity",group.similarity).put("unassignedReason",group.unassignedReason).put("text",group.text));
         write(utterances(wav),new JSONObject().put("model",MODEL).put("groups",groups));
     }
     static long duration(File wav){return Math.max(1,Math.max(0,wav.length()-44)*1000/WavFile.BYTES_PER_SECOND);}
@@ -71,6 +71,6 @@ final class VoiceData {
             }
             if(groups.length()>0&&VoiceTimeline.preservesText(parts,original))return groups;
         }catch(Exception invalid){ /* Use the entire TXT, never a partial/corrupt attribution cache. */ }
-        return new JSONArray().put(new JSONObject().put("start",0).put("end",duration(wav)).put("speaker",0).put("review",true).put("similarity",-1).put("text",original));
+        return new JSONArray().put(new JSONObject().put("start",0).put("end",duration(wav)).put("speaker",0).put("review",true).put("similarity",-1).put("unassignedReason","unavailable").put("text",original));
     }
 }

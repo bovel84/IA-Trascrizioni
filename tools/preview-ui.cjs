@@ -79,6 +79,35 @@ fs.mkdirSync(output,{recursive:true});
  if(await page.locator('.unassigned-inline').innerText()!=='con')throw Error('Unassigned word lost its inline review cue');
  if(!(await page.evaluate(()=>analysisSource('transcript').text)).includes('[Non assegnato: con]'))throw Error('AI source lost attribution uncertainty');
  await page.setViewportSize({width:390,height:900});await page.locator('#transcriptArea').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,'continuous-speech.png'),fullPage:true});
+ // The second screenshot: the short è straddles two WAVs with imprecise timings.
+ await page.evaluate(()=>{
+  transcriptEntries=[
+   {speaker:1,speakerName:'Voce 1',nativeSegmentId:'session-test/000000000000.wav#0',text:"davvero difficile notare dei difetti. Ma se il display fa la sua parte, anche l'audio",offsetMs:27000,endMs:35080,time:'00:27'},
+   {speaker:0,speakerName:'Non assegnato',nativeSegmentId:'session-test/000000035000.wav#0',text:'è',offsetMs:35000,endMs:35380,time:'00:35',speakerReview:true},
+   {speaker:1,speakerName:'Voce 1',nativeSegmentId:'session-test/000000035000.wav#1',text:'molto convincente. Ci sono 6 speaker lungo la scocca.',offsetMs:35300,endMs:40000,time:'00:35'}];refreshTranscript();
+ });
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1||await page.locator('.unassigned-inline').innerText()!=='è')throw Error('Cross-WAV è still creates an isolated card');
+ if(await page.locator('#transcriptCount').innerText()!=='1 intervento')throw Error('The count still reports word fragments');
+ await page.locator('#transcriptSearch').fill("l'audio è molto");
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Cross-WAV sentence cannot be searched');
+ await page.locator('#transcriptSearch').fill('');
+ await page.locator('#transcriptReviewBtn').click();
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Inline word disappeared from review filter');
+ await page.locator('#transcriptReviewBtn').click();
+ await page.locator('#transcriptArea').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,'continuous-boundary-word.png'),fullPage:true});
+ await page.locator('.transcript-fragments summary').click();
+ await page.locator('.transcript-fragments [onclick="chooseEntrySpeaker(1)"]').click();
+ await page.locator('#entrySpeakerSelect').selectOption('1');
+ await page.evaluate(()=>confirmEntrySpeaker());
+ if(await page.locator('.unassigned-inline').count()!==0||await page.evaluate(()=>transcriptEntries[1].text)!=='è')throw Error('Assigning the inline word removed or changed it');
+ await page.evaluate(()=>{
+  transcriptEntries.splice(2,1);Object.assign(transcriptEntries[0],{endMs:35000});Object.assign(transcriptEntries[1],{speaker:0,speakerName:'Non assegnato',speakerReview:true,speakerUnassignedReason:'timing',offsetMs:35050,endMs:35350});refreshTranscript();
+ });
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Live trailing word still creates a separate card');
+ await page.evaluate(()=>{
+  transcriptEntries.push({speaker:2,speakerName:'Voce 2',nativeSegmentId:'session-test/000000035000.wav#1',text:'Risponde una seconda persona.',offsetMs:35400,endMs:38000,time:'00:35'});refreshTranscript();
+ });
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==3)throw Error('Later different voice was incorrectly swallowed');
  // Real browser playback of an original PCM WAV, without any provider request.
  await page.evaluate(()=>{
   const data=new Uint8Array(44+32000*2),view=new DataView(data.buffer),put=(at,text)=>{for(let i=0;i<text.length;i++)data[at+i]=text.charCodeAt(i);};
