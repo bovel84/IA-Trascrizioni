@@ -2,6 +2,10 @@
 
 ## Trascrizione ed elaborazione con revisione (2.4)
 
+- Il registratore preferisce una pausa energetica dopo circa 30 secondi, fino al
+  limite di 35 secondi. È una scelta euristica per ridurre i tagli nel parlato, non
+  un rilevatore infallibile di fine parola. Nessun campione viene eliminato o
+  duplicato; pausa, stop e cambi manuali di partecipante continuano a chiudere il file.
 - Le nuove installazioni selezionano `whisper-large-v3`; le scelte già salvate, incluso
   Turbo, restano valide. La terminologia nelle impostazioni accetta un breve elenco
   di nomi/sigle/grafie. Il contesto audio usa questa lista e le ultime parole del

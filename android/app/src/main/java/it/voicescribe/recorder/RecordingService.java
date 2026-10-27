@@ -20,7 +20,6 @@ public final class RecordingService extends Service {
     static volatile String voiceStatus="Riconoscimento voci pronto";
     static volatile boolean localVoices;
     private NativeVoiceEngine voiceEngine;
-    private static final long SEGMENT_SECONDS = 30L; // First transcript appears sooner than after a 2-minute segment.
     private volatile boolean stopping;
     private boolean quotaLimited;
     private volatile String captureIssue;
@@ -112,6 +111,7 @@ public final class RecordingService extends Service {
     }
     private void captureAudio() {
         WavFile wav = null; File partial = null;
+        AudioChunkPolicy boundary=new AudioChunkPolicy();
         long totalBytes = 0, segmentBytes = 0;
         long silentBytes = 0;
         boolean silenceWarning = false;
@@ -144,7 +144,7 @@ public final class RecordingService extends Service {
                     }
                 }
             });
-            String captureStatus = PLAYBACK.equals(source) ? "Audio del dispositivo · apri l'app e avvia il video" : "Registrazione in corso · schermo bloccabile · segmenti da 30 s";
+            String captureStatus = PLAYBACK.equals(source) ? "Audio del dispositivo · apri l'app e avvia il video" : "Registrazione in corso · schermo bloccabile · segmenti di circa 30 s";
             announce(captureStatus);
             byte[] buf = new byte[4096];
             while (recording) {
@@ -171,6 +171,7 @@ public final class RecordingService extends Service {
                     wav.close(); wav = null; submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
                 }
                 if (wav == null) {
+                    boundary=new AudioChunkPolicy();
                     String offset = String.format(java.util.Locale.ROOT, "%012d", totalBytes * 1000 / WavFile.BYTES_PER_SECOND);
                     partial = new File(session, offset + ".part"); wav = new WavFile(partial);
                     capturedSpeaker = selected;
@@ -178,7 +179,7 @@ public final class RecordingService extends Service {
                     java.nio.file.Files.write(new File(session, offset + ".wav.speaker.json").toPath(), label.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
                 wav.write(buf, n); totalBytes += n; segmentBytes += n;
-                if (segmentBytes >= WavFile.BYTES_PER_SECOND * SEGMENT_SECONDS) {
+                if (boundary.shouldClose(segmentBytes,n,AudioChunkPolicy.rms(buf,n))) {
                     wav.close(); wav = null;
                     submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
                 }
