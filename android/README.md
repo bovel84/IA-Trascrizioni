@@ -1,5 +1,25 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Pause e continuità del parlato (2.4.1)
+
+Le brevi pause del rilevatore vocale non devono creare una scheda per parole come
+"con". L'allineamento raccorda vuoti fino a 800 ms solo fra intervalli della stessa
+voce non già incerta, senza altre voci o intervalli sconosciuti in mezzo. Le parole
+attribuite per questa continuità restano marcate da verificare. Non vengono estesi
+gli intervalli attraverso cambi di persona, sovrapposizioni o silenzi lunghi.
+
+La vista continua funziona anche sui frammenti già salvati: una breve isola di massimo
+tre parole, entro 1,2 secondi, fra due parti con la stessa etichetta vocale può comparire
+nel paragrafo, sottolineata come non assegnata. I dati originali e i sottotitoli mantengono
+la vera attribuzione; analisi AI e report usano un esplicito marcatore
+`[Non assegnato: ...]`. Le voci candidate già incerte restano segnalate. Nessun trasferimento di identità tra registrazioni diverse.
+I frammenti sconosciuti adiacenti possono formare un passaggio chiaramente non assegnato;
+una pausa significativa fra parti della stessa persona diventa un nuovo paragrafo.
+Il contatore principale mostra gli interventi, separatamente dai frammenti audio.
+
+Non viene ritagliato né eliminato alcun silenzio dal WAV, nessuna parola viene scartata
+e per applicare la vista ai vecchi progetti non serve una nuova richiesta a Groq.
+
 ## Trascrizione ed elaborazione con revisione (2.4)
 
 - Il registratore preferisce una pausa energetica dopo circa 30 secondi, fino al

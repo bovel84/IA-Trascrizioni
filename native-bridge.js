@@ -142,9 +142,10 @@ window.initNativeRecorder = function () {
     function importEntries(state) {
         if (window.nativeAudioSession !== state.sessionId || window.nativeDiarizedSession === state.sessionId) return;
         let changed = false;
+        const byId=new Map(transcriptEntries.filter(e=>e.nativeSegmentId).map(e=>[e.nativeSegmentId,e]));
         for (const entry of state.entries || []) {
             if (seen.has(entry.nativeSegmentId)) {
-                const existing=transcriptEntries.find(e=>e.nativeSegmentId===entry.nativeSegmentId);
+                const existing=byId.get(entry.nativeSegmentId);
                 if(existing&&typeof entry.transcriptReview==='boolean'){
                     const fields={transcriptReview:entry.transcriptReview,transcriptReviewReason:entry.transcriptReviewReason,transcriptQualityAvailable:entry.transcriptQualityAvailable};
                     if(Object.keys(fields).some(k=>existing[k]!==fields[k])){Object.assign(existing,fields);changed=true;}
@@ -154,8 +155,8 @@ window.initNativeRecorder = function () {
             const before = transcriptEntries.length;
             const participant = entryFromNative(entry,true);
             if (participant.speakerSource!=='local' && participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
-            addEntry(entry.text, entry.offsetMs, participant);
-            if (transcriptEntries.length > before) transcriptEntries[transcriptEntries.length - 1].nativeSegmentId = entry.nativeSegmentId;
+            addEntry(entry.text, entry.offsetMs, participant,false);
+            if (transcriptEntries.length > before) {const added=transcriptEntries[transcriptEntries.length-1];added.nativeSegmentId=entry.nativeSegmentId;byId.set(entry.nativeSegmentId,added);}
             seen.add(entry.nativeSegmentId); changed = true;
         }
         if (changed) {

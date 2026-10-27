@@ -108,4 +108,12 @@ public class TranscriptionIntegrityTest {
     @Test public void corruptedCacheCannotBypassAnUploadQuotaPause()throws Exception{
         Files.write(VoiceData.response(wav).toPath(),"{broken".getBytes(StandardCharsets.UTF_8));assertFalse(Transcriber.hasCachedResponse(wav));VoiceData.write(VoiceData.response(wav),response());assertTrue(Transcriber.hasCachedResponse(wav));
     }
+    @Test public void smallSilenceInsideOneVoiceKeepsTheWordReviewableAndComplete()throws Exception{
+        VoiceData.write(VoiceData.timeline(wav),new JSONObject().put("turns",new JSONArray()
+            .put(new JSONObject().put("start",0).put("end",1400).put("speaker",1).put("review",false))
+            .put(new JSONObject().put("start",1750).put("end",4000).put("speaker",1).put("review",false))));
+        JSONObject response=new JSONObject().put("text","con").put("words",new JSONArray().put(new JSONObject().put("word","con").put("start",1.45).put("end",1.65)));
+        Transcriber.saveResponse(wav,response);JSONObject group=VoiceData.completeGroups(wav,"con").getJSONObject(0);
+        assertEquals("con",saved());assertEquals(1,group.getInt("speaker"));assertTrue(group.getBoolean("review"));assertEquals(1450,group.getLong("start"));assertEquals(1650,group.getLong("end"));
+    }
 }

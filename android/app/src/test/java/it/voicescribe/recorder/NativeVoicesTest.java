@@ -86,4 +86,12 @@ public class NativeVoicesTest {
         assertFalse(VoiceTimeline.preservesText(Arrays.asList("Ciao, Marco!"),"Ciao, 🙂 Marco!"));
         assertFalse(VoiceTimeline.preservesText(Arrays.asList("ciao,", "Marco!"),"Ciao, Marco!"));
     }
+    private VoiceTimeline shortGap(int secondSpeaker,boolean review){return new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1700,1,.9,false),new VoiceTimeline.Turn(2000,4000,secondSpeaker,.85,review)));}
+    @Test public void shortQuietGapBetweenTheSameVoiceKeepsContinuityForReview(){VoiceProfiles.Match match=shortGap(1,false).at(1750,1950);assertEquals(1,match.id);assertTrue(match.review);assertEquals(.85,match.similarity,.001);}
+    @Test public void aPauseBetweenDifferentPeopleCannotBorrowEitherVoice(){assertEquals(0,shortGap(2,false).at(1750,1950).id);}
+    @Test public void uncertainNeighborsCannotConfirmAGap(){assertEquals(0,shortGap(1,true).at(1750,1950).id);}
+    @Test public void explicitUnknownSpeechInsideAGapIsNotTreatedAsSilence(){VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1700,1,.9,false),new VoiceTimeline.Turn(1720,1980,0,-1,true),new VoiceTimeline.Turn(2000,4000,1,.9,false)));assertEquals(0,t.at(1750,1950).id);}
+    @Test public void anotherVoiceOverlappingTheWordBlocksContinuity(){VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1700,1,.9,false),new VoiceTimeline.Turn(1500,1680,2,.9,false),new VoiceTimeline.Turn(2000,4000,1,.9,false)));assertEquals(0,t.at(1550,1950).id);}
+    @Test public void longSilenceNeverBecomesRecognizedSpeech(){VoiceTimeline t=new VoiceTimeline(Arrays.asList(new VoiceTimeline.Turn(0,1000,1,.9,false),new VoiceTimeline.Turn(3000,4000,1,.9,false)));assertEquals(0,t.at(1500,2000).id);}
+    @Test public void gapAlignmentRetainsTheSmallWordAndItsTimestamps(){List<VoiceTimeline.Group> groups=shortGap(1,false).align(Arrays.asList(new VoiceTimeline.Word(1500,1650,"anche"),new VoiceTimeline.Word(1750,1950,"con"),new VoiceTimeline.Word(2100,2300,"loro")),"anche con loro",4000);assertEquals(3,groups.size());assertEquals("con",groups.get(1).text);assertEquals(1,groups.get(1).speaker);assertEquals(1750,groups.get(1).start);assertTrue(groups.get(1).review);}
 }

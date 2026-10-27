@@ -67,6 +67,18 @@ fs.mkdirSync(output,{recursive:true});
  page.once('dialog',dialog=>dialog.accept('Continuazione modificata.'));
  await page.locator('.transcript-fragments [onclick="editEntry(1)"]').click();
  if(await page.evaluate(()=>transcriptEntries[1].text)!=='Continuazione modificata.' || !(await page.locator('#transcriptArea > .transcript-entry').first().innerText()).includes('Prima frase Continuazione modificata.'))throw Error('Grouped editing changed the wrong fragment');
+ // Reproduce the isolated unassigned "con" from the reported screenshot.
+ await page.evaluate(()=>{
+  speakers=['Voce 1','Voce 2'];updateSpeakerChips();
+  transcriptEntries=[
+   {speaker:1,speakerName:'Voce 1',text:'proprio nelle scorse settimane anche',offsetMs:13000,endMs:17000,time:'00:13'},
+   {speaker:0,speakerName:'Non assegnato',speakerReview:true,text:'con',offsetMs:17100,endMs:17500,time:'00:17'},
+   {speaker:1,speakerName:'Voce 1',text:'i serbi di Bosnia.',offsetMs:17800,endMs:24000,time:'00:17'}];refreshTranscript();
+ });
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Short unassigned island still splits the intervention');
+ if(await page.locator('.unassigned-inline').innerText()!=='con')throw Error('Unassigned word lost its inline review cue');
+ if(!(await page.evaluate(()=>analysisSource('transcript').text)).includes('[Non assegnato: con]'))throw Error('AI source lost attribution uncertainty');
+ await page.setViewportSize({width:390,height:900});await page.locator('#transcriptArea').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,'continuous-speech.png'),fullPage:true});
  // Real browser playback of an original PCM WAV, without any provider request.
  await page.evaluate(()=>{
   const data=new Uint8Array(44+32000*2),view=new DataView(data.buffer),put=(at,text)=>{for(let i=0;i<text.length;i++)data[at+i]=text.charCodeAt(i);};
