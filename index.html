@@ -548,11 +548,48 @@
         .concept-viewport { max-height: 560px; overflow: auto; border-radius: 10px; background: #111b18; }
         .concept-map { width: 100%; min-width: 0; height: auto; display: block; border: 0; background: none; }
         .insight-grid { grid-template-columns: repeat(auto-fit,minmax(min(100%,360px),1fr)); }
+        .model-capacity { margin:16px 0 8px; }.model-capacity input { display:block; width:100%; margin-top:6px; }
+        .ai-btn[data-ai-action="correct"],.ai-result[data-tool="correct"] { --tool-color:#a7e9bb; }
+        .ai-btn[data-ai-action="summary"],.ai-result[data-tool="summary"] { --tool-color:#9bcaff; }
+        .ai-btn[data-ai-action="keypoints"],.ai-result[data-tool="keypoints"] { --tool-color:#f2ce85; }
+        .ai-btn[data-ai-action="improve"],.ai-result[data-tool="improve"] { --tool-color:#cfb4f3; }
+        .ai-btn[data-ai-action="chart"],.ai-result[data-tool="chart"] { --tool-color:#7edbcf; }
+        .ai-btn[data-ai-action="concept"],.ai-result[data-tool="concept"] { --tool-color:#eeb8cc; }
+        .ai-btn .ai-tool-icon { color:var(--tool-color,var(--accent)); }
+        .ai-btn:hover:not(:disabled),.ai-btn[aria-pressed="true"] { border-color:var(--tool-color,var(--accent)); }
+        .ai-result { border-top:3px solid var(--tool-color,var(--accent)); min-width:0; }
+        .ai-result-title { color:var(--tool-color,var(--accent)); margin-bottom:18px; font-size:18px; }
+        .rich-document { white-space:normal; min-width:0; line-height:1.75; color:var(--text-primary); }
+        .rich-document p { margin:0 0 16px; }.rich-document>:last-child { margin-bottom:0; }
+        .rich-document h2,.rich-document h3,.rich-document h4 { color:var(--tool-color,var(--accent)); font-weight:650; line-height:1.4; margin:24px 0 12px; }
+        .rich-document h2 { font-size:19px; }.rich-document h3 { font-size:16px; }.rich-document h4 { font-size:15px; }
+        .rich-document>:first-child { margin-top:0; }.rich-document strong { color:#f3f7f5; font-weight:650; }
+        .rich-document ul,.rich-document ol { padding-left:22px; margin:12px 0 20px; }.rich-document li { padding-left:3px; margin:8px 0; }
+        .rich-document li::marker { color:var(--tool-color,var(--accent)); }.task-state { color:var(--accent); }
+        .rich-document a { color:#a8d2ff; text-decoration:underline; text-underline-offset:3px; }
+        .rich-document blockquote { margin:16px 0; border-left:3px solid #8ab6df; padding:12px 16px; background:#101a22; color:#bfccd4; border-radius:0 10px 10px 0; }
+        .rich-document code { background:#0d151b; border:1px solid #35434b; padding:1px 5px; border-radius:5px; font-size:.9em; }
+        .rich-document pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#0d151b; padding:16px; border-radius:10px; }.rich-document pre code { border:0; padding:0; }
+        .rich-document hr { border:0; border-top:1px solid var(--border); margin:24px 0; }
+        .result-table-wrap { max-width:100%; overflow-x:auto; margin:18px 0; border:1px solid #3b4b54; border-radius:12px; }
+        .rich-document table { width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
+        .rich-document th,.rich-document td { padding:12px; border-bottom:1px solid #34424a; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+        .rich-document th { background:#23333c; color:#c8e4f4; font-weight:650; }.rich-document tbody tr:nth-child(even) { background:#ffffff04; }
+        .rich-document tbody tr:last-child td { border-bottom:0; }.chart-data-details { margin:12px 0; font-size:12px; }.chart-data-details summary { cursor:pointer; padding:8px 0; color:#a8d2ff; }
+        .chart-type-label { display:flex; align-items:center; gap:12px; margin:12px 0; font-size:12px; color:var(--text-secondary); }.chart-type-label select { flex:1; min-width:0; }
         @media (max-width: 620px) {
             .ai-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
             .ai-btn { min-height: 132px; padding: 16px 12px; font-size: 13px; }
             .analysis-controls { grid-template-columns: 1fr; }
             .ai-result { padding: 18px; }
+            .rich-document { font-size:15px; }.result-table-wrap { border:0; overflow:visible; }
+            .rich-document table,.rich-document tbody { display:block; width:100%; }
+            .rich-document thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+            .rich-document tbody tr { display:block; padding:4px 14px; margin:0 0 14px; border:1px solid #3b4b54; border-radius:12px; background:#101a20; }
+            .rich-document tbody tr:nth-child(even) { background:#142129; }
+            .rich-document td { display:block; padding:10px 0; border-bottom:1px solid #2d3c44; font-size:14px; }
+            .rich-document td::before { content:attr(data-label); display:block; color:#9bcaff; font-size:11px; font-weight:650; letter-spacing:.3px; margin-bottom:4px; }
+            .rich-document tbody tr:last-child td { border-bottom:1px solid #2d3c44; }.rich-document tbody tr td:last-child { border-bottom:0; }
         }
     </style>
     <script src="native-bridge.js"></script>
@@ -625,6 +662,11 @@
                     </div>
                 </div>
                 <button class="model-refresh" id="refreshModelsBtn">🔄 Verifica i modelli disponibili con la tua chiave</button>
+                <div class="analysis-controls model-capacity">
+                    <label for="aiContextTokens">Contesto del modello · token<input id="aiContextTokens" class="modal-input" type="number" inputmode="numeric" min="4096" max="2000000" step="1" placeholder="Automatico" onchange="saveAnalysisLimits()" aria-describedby="aiCapacityStatus"></label>
+                    <label for="aiOutputTokens">Spazio massimo per la risposta · token<input id="aiOutputTokens" class="modal-input" type="number" inputmode="numeric" min="1024" max="131072" step="1" placeholder="Automatico" onchange="saveAnalysisLimits()" aria-describedby="aiCapacityStatus"></label>
+                </div>
+                <p id="aiCapacityStatus" class="analysis-context" role="status"></p>
                 <label for="transcriptionGlossary" class="api-box-title">TERMINOLOGIA DELLA REGISTRAZIONE</label>
                 <textarea id="transcriptionGlossary" class="modal-input" rows="2" maxlength="160" placeholder="Breve elenco di nomi, sigle e termini tecnici" style="width:100%;resize:vertical" aria-describedby="glossaryStatus"></textarea>
                 <p id="glossaryStatus" role="status" class="retranscribe-info">Breve elenco facoltativo, inviato al servizio con l’audio per aiutare la grafia. Non aggiunge fatti al testo.</p>
@@ -834,13 +876,16 @@
                     <section class="insight-card" id="chartCard" hidden>
                         <h4>Grafico</h4>
                         <div class="insight-meta" id="chartStatus">Nessun grafico</div>
+                        <label class="chart-type-label" for="chartTypeSelect">Visualizzazione<select id="chartTypeSelect" class="control-select" onchange="changeChartType(this.value)"><option value="bar">Barre</option><option value="line">Linee</option><option value="pie">Torta</option><option value="radar">Radar</option></select></label>
                         <div class="chart-wrapper"><canvas id="aiChart" role="img" aria-label="Grafico dei dati analizzati"></canvas></div>
+                        <details class="chart-data-details"><summary>Dati e riscontri nel testo</summary><div id="chartDataTable" class="rich-document"></div></details>
                         <div class="analysis-toolbar"><button type="button" class="analysis-button" onclick="exportChart()">Scarica PNG</button><button type="button" class="analysis-button" onclick="exportChartData()">Scarica dati CSV</button></div>
                     </section>
                     <section class="insight-card" id="mapCard" hidden>
                         <h4>Mappa concettuale</h4>
                         <div class="insight-meta" id="mapStatus">Nessuna mappa</div>
                         <div class="concept-viewport"><svg id="conceptMap" class="concept-map" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mappa dei concetti analizzati"></svg></div>
+                        <details class="chart-data-details"><summary>Leggi tutti i collegamenti</summary><div id="mapRelations" class="rich-document"></div></details>
                         <div class="analysis-toolbar"><button type="button" class="analysis-button" onclick="exportConceptSvg()">Scarica SVG</button><button type="button" class="analysis-button" onclick="exportConceptPng()">Scarica PNG</button></div>
                     </section>
                 </div>
@@ -1577,6 +1622,7 @@
                 llmModel = llm.value; localStorage.setItem(aiStorage('model'), llmModel);
                 $('customLlmModel').value = '';
                 showToast('🤖 ' + llm.options[llm.selectedIndex].text);
+                updateCapacityControls();updateAIControls();
             };
             $('customLlmModel').onchange = () => {
                 const id = normalizeAiModel(aiProvider, $('customLlmModel').value);
@@ -1584,6 +1630,7 @@
                 llmModel = id; localStorage.setItem(aiStorage('model'), id);
                 $('customLlmModel').value = id;
                 fillModelSelect(llm, [...new Set([id, ...Array.from(llm.options).map(o => o.value)])], id);
+                updateCapacityControls();updateAIControls();
                 setProviderStatus('Modello selezionato: ' + id + '. Premi Prova modello per verificare l’accesso.');
             };
             $('refreshModelsBtn').onclick = refreshAvailableModels;
@@ -1606,6 +1653,7 @@
             fillModelSelect($('llmModelSelect'), cached.length ? [...new Set([llmModel, ...cached])] : [...new Set([llmModel, ...provider.models])], llmModel);
             $('customLlmModel').value = '';
             $('refreshModelsBtn').disabled = false; $('refreshModelsBtn').textContent = MODEL_REFRESH_LABEL;
+            updateCapacityControls();
             updateAIControls();
             setProviderStatus(!hasAiKey ? (aiProvider === 'ollama' ? 'Catalogo Ollama pubblico: premi Verifica i modelli; per eseguire un modello inserisci la chiave API.' : 'Inserisci una chiave API per usare i modelli LLM.') :
                 (aiProvider === 'groq' && !llamaKey ? 'Groq: uso la chiave Whisper anche per l’AI. Premi Prova modello per verificare.' :
@@ -1613,6 +1661,56 @@
         }
 
         function catalogStorage(provider) { return `voicescribe_${provider}_models_cache_v1`; }
+        function capacityStorage(provider,model){return 'voicescribe_capacity_'+provider+'_'+encodeURIComponent(normalizeAiModel(provider,model));}
+        function modelCapabilities(provider,model){
+            try{const all=JSON.parse(localStorage.getItem('voicescribe_'+provider+'_model_limits_v1')||'{}');return Object.hasOwn(all,normalizeAiModel(provider,model))?all[normalizeAiModel(provider,model)]:{};}catch(e){return {};}
+        }
+        function saveModelCapabilities(provider,models){
+            const all=Object.create(null);const valid=value=>Number.isSafeInteger(value)&&value>0?value:0;
+            for(const item of models){
+                const id=normalizeAiModel(provider,item?.id||item?.name||item?.model);if(!id)continue;
+                const contexts=[item.context_length,item.context_window,item.max_model_len,item.top_provider?.context_length].map(valid).filter(Boolean);
+                const outputs=[item.max_completion_tokens,item.max_output_tokens,item.top_provider?.max_completion_tokens].map(valid).filter(Boolean);
+                all[id]={context:contexts.length?Math.min(...contexts):0,output:outputs.length?Math.min(...outputs):0};
+            }localStorage.setItem('voicescribe_'+provider+'_model_limits_v1',JSON.stringify(all));
+        }
+        function analysisLimits(provider=aiProvider,model=llmModel){
+            const cap=modelCapabilities(provider,model);let saved={};
+            try{saved=JSON.parse(localStorage.getItem(capacityStorage(provider,model))||'{}');}catch(e){}
+            const manual=Number.isSafeInteger(saved.context)&&saved.context>=4096&&saved.context<=2000000?saved.context:0;
+            const configured=manual||cap.context||32768;
+            const context=Math.min(configured,cap.context||2000000,2000000);
+            const wanted=Number.isSafeInteger(saved.output)&&saved.output>=1024&&saved.output<=131072?saved.output:Math.min(16384,Math.floor(context/2));
+            const output=Math.max(256,Math.min(wanted,cap.output||131072,context-2048));
+            return {context,output,input:Math.max(256,context-output-1600),origin:manual?'impostazione':cap.context?'catalogo':'limite prudenziale',catalogContext:cap.context||0};
+        }
+        function updateCapacityControls(){
+            let saved={};try{saved=JSON.parse(localStorage.getItem(capacityStorage(aiProvider,llmModel))||'{}');}catch(e){}
+            $('aiContextTokens').value=String(saved.context||'');$('aiOutputTokens').value=String(saved.output||'');
+            const limits=analysisLimits();
+            $('aiCapacityStatus').textContent=`Contesto: ${limits.context.toLocaleString('it-IT')} token · risposta: fino a ${limits.output.toLocaleString('it-IT')} · ${limits.origin}. `
+                +(limits.catalogContext?'I valori rispettano i limiti pubblicati dal provider. ':'Se il catalogo non indica i limiti, inserisci quelli del modello, anche 1000000. ')
+                +'Il contesto include ingresso e risposta; questa impostazione non aumenta la capacità del provider.';
+        }
+        window.saveAnalysisLimits=()=>{
+            const context=$('aiContextTokens').value.trim(),output=$('aiOutputTokens').value.trim(),settings={};
+            if(context&&(!Number.isSafeInteger(Number(context))||Number(context)<4096||Number(context)>2000000)
+                ||output&&(!Number.isSafeInteger(Number(output))||Number(output)<1024||Number(output)>131072)){
+                $('aiCapacityStatus').textContent='Inserisci un contesto da 4096 a 2000000 e una risposta da 1024 a 131072 token, oppure lascia Automatico.';return;
+            }
+            if(context)settings.context=Number(context);if(output)settings.output=Number(output);
+            localStorage.setItem(capacityStorage(aiProvider,llmModel),JSON.stringify(settings));updateCapacityControls();updateAIControls();
+        };
+        // Heuristic across different tokenizers; provider context errors trigger smaller complete parts.
+        function estimateAnalysisTokens(text){return Math.ceil(new TextEncoder().encode(String(text)).length/3);}
+        function splitAnalysisBudget(text,budget){
+            const parts=[];
+            const add=part=>{
+                if(estimateAnalysisTokens(part)<=budget||part.length<=2){parts.push(part);return;}
+                splitAnalysisText(part,Math.max(2,Math.floor(part.length/2))).forEach(add);
+            };
+            splitAnalysisText(text,Math.max(2,Math.floor(budget*3))).forEach(add);return parts;
+        }
         function normalizeAiModel(provider, model) {
             // Direct cloud API IDs omit Ollama app/CLI cloud suffixes.
             const id = String(model || '').trim();
@@ -1659,7 +1757,7 @@
                 // Public catalog: Authorization on GET can trigger a provider/proxy HTTP 403.
                 headers: { ...(publicCatalog ? {} : { Authorization: `Bearer ${key}` }), ...(body == null ? {} : { 'Content-Type': 'application/json' }) },
                 ...(body == null ? {} : { body: JSON.stringify(body) })
-            }, 90000).catch(e => {
+            }, path==='/chat/completions'?360000:90000).catch(e => {
                 if (e.name === 'AbortError') throw e;
                 throw new Error('Connessione al provider non riuscita. Nella versione web il browser può bloccare il servizio; usa l’APK Android.');
             });
@@ -1690,9 +1788,11 @@
                 }
                 if (chatIds.length) {
                     localStorage.setItem(catalogStorage(provider), JSON.stringify(chatIds));
+                    saveModelCapabilities(provider,models.filter(m=>m&&typeof m==='object'));
                     fillModelSelect($('llmModelSelect'), chatIds, llmModel);
                     llmModel = $('llmModelSelect').value; localStorage.setItem(aiStorage('model'), llmModel);
                     $('customLlmModel').value = '';
+                    updateCapacityControls();updateAIControls();
                 }
                 if (!chatIds.length) throw new Error('Il provider non ha restituito modelli di testo. Controlla accesso e catalogo nel tuo account.');
                 setProviderStatus(provider === 'ollama'
@@ -1720,11 +1820,9 @@
             try {
                 const data = await groqChat({
                     messages: [{ role: 'user', content: 'Rispondi soltanto OK.' }],
-                    maxTokens: 128
+                    maxTokens: Math.min(2048,analysisLimits(provider,model).output)
                 });
-                const answer = data.choices?.[0]?.message?.content;
-                if (typeof answer !== 'string' || !answer.trim())
-                    throw new Error('Il provider ha risposto ma non ha restituito testo. Verifica la compatibilità del modello.');
+                responseText(data);
                 if (aiProvider === provider && llmModel === model)
                     setProviderStatus('✓ ' + AI_PROVIDERS[provider].name + ' · ' + model + ' risponde correttamente.');
             } catch (error) {
@@ -2406,7 +2504,8 @@
         async function groqChat({ messages, temperature = 0.3, maxTokens = 2048, jsonMode = false, signal, connection }) {
             const { provider, key, model } = connection || { provider: aiProvider, key: activeAiKey(), model: llmModel };
             if (!key) throw new Error('Inserisci la chiave di ' + AI_PROVIDERS[provider].name);
-            const base = { model: normalizeAiModel(provider, model), messages, temperature };
+            const base = { model: normalizeAiModel(provider, model), messages, temperature,
+                ...(/gpt-oss/i.test(model)?{reasoning_effort:'low'}:{}) };
             const jsonOptions = jsonMode ? { response_format: { type: 'json_object' } } : {};
             const variants = [];
             if (provider === 'groq') variants.push({ ...base, max_completion_tokens: maxTokens, ...jsonOptions });
@@ -2414,13 +2513,14 @@
             if (jsonMode) variants.push({ ...base, max_tokens: maxTokens });
             // Some reasoning models reject temperature and/or token settings.
             variants.push({ model: base.model, messages, max_tokens: maxTokens });
-            variants.push({ model: base.model, messages });
+            variants.push({ model: base.model, messages, max_completion_tokens: maxTokens });
 
             let lastError = 'Errore AI';
             const tried = new Set();
             for (const body of variants) {
                 if (signal?.aborted) throw Object.assign(new Error('Analisi annullata'),{name:'AbortError'});
                 const signature = JSON.stringify(body);
+                if(new TextEncoder().encode(signature).length>7.5*1024*1024)throw Object.assign(new Error('Richiesta oltre la dimensione di trasporto: elaboro il documento in parti complete.'),{code:'AI_CONTEXT_LIMIT'});
                 if (tried.has(signature)) continue;
                 tried.add(signature);
                 let res, data;
@@ -2434,11 +2534,12 @@
                 if (res.ok) return data;
                 lastError = providerError(provider, res.status, data, key, base.model);
                 if (provider === aiProvider) setProviderStatus(lastError, true);
+                const detail = String(typeof data.error === 'string' ? data.error : data.error?.message || data.message || data.detail || '');
+                if([400,413,422].includes(res.status)&&/(context[_ ](?:length|window)|maximum context|prompt.{0,30}(?:too long|exceed)|input.{0,30}(?:too long|exceed)|too many (?:input )?tokens)/i.test(detail))
+                    throw Object.assign(new Error(lastError),{code:'AI_CONTEXT_LIMIT'});
                 if (res.status !== 400) throw new Error(lastError);
                 // Retry only for rejected optional parameters, not invalid models or keys.
-                const detail = String(typeof data.error === 'string' ? data.error :
-                    data.error?.message || data.message || data.detail || '');
-                if (!/(temperature|response_format|json_object|max_tokens|max_completion_tokens|sampling|top_p)/i.test(detail) ||
+                if (!/(temperature|response_format|json_object|max_tokens|max_completion_tokens|sampling|top_p|reasoning_effort)/i.test(detail) ||
                     !/(unsupported|not supported|unknown|unrecognized|not allowed|invalid|not permitted|not available)/i.test(detail))
                     throw new Error(lastError);
             }
@@ -2467,18 +2568,23 @@
             const palette = ['#a7e9bb','#8ab6df','#e7c581','#bf9cdb','#e69d9d','#7fd6ca'];
             const radial = data.type === 'pie' || data.type === 'radar';
             const datasets = data.series.map((item, i) => ({ label: item.name, data: item.data,
-                backgroundColor: data.type === 'pie' ? data.labels.map((_, j) => palette[j % palette.length]) : palette[i % palette.length] + 'bb',
-                borderColor: palette[i % palette.length], borderWidth: 2, tension: .2 }));
+                backgroundColor: data.type === 'pie'||data.type==='bar'&&data.series.length===1 ? data.labels.map((_, j) => palette[j % palette.length]+'bb') : palette[i % palette.length] + '55',
+                borderColor: data.type==='pie'?data.labels.map((_,j)=>palette[j%palette.length]):palette[i % palette.length], borderWidth: 2, tension: .2 }));
             if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
             $('chartCard').hidden = false;
             chartInstance = new Chart(canvas.getContext('2d'), { type: data.type, data: { labels: data.labels, datasets }, options: {
                 responsive: true, maintainAspectRatio: false, animation: false,
                 plugins: { legend: { display: data.type === 'pie' || datasets.length > 1, labels: { color: '#dbe8df' } }, title: { display: true, text: data.title, color: '#dbe8df' } },
-                ...(radial ? {} : { scales: { x: { ticks: { color: '#acbdb2', maxRotation: 35 }, grid: { color: '#ffffff10' } }, y: { beginAtZero: true, ticks: { color: '#acbdb2' }, title: { display: !!data.unit, text: data.unit, color: '#acbdb2' }, grid: { color: '#ffffff10' } } } })
+                ...(data.type==='radar'?{scales:{r:{ticks:{color:'#bacac2',backdropColor:'#172027'},pointLabels:{color:'#dbe8df'},grid:{color:'#ffffff25'},angleLines:{color:'#ffffff25'}}}}:radial ? {} : { scales: { x: { ticks: { color: '#acbdb2', maxRotation: 35 }, grid: { color: '#ffffff10' } }, y: { beginAtZero: true, ticks: { color: '#acbdb2' }, title: { display: !!data.unit, text: data.unit, color: '#acbdb2' }, grid: { color: '#ffffff10' } } } })
             } });
             chartData = data;
+            $('chartTypeSelect').value=data.type;canvas.setAttribute('aria-label',data.title+(data.unit?' · '+data.unit:''));
+            const headers=['Categoria',...data.series.flatMap(series=>[series.name+(data.unit?' ('+data.unit+')':''),'Riscontro · '+series.name])];
+            const rows=data.labels.map((label,i)=>[label,...data.series.flatMap(series=>[series.data[i]===null?'Non disponibile':String(series.data[i]),series.evidence?.[i]||data.basis||'Conteggio sul testo'])]);
+            $('chartDataTable').innerHTML=richTableHtml(headers,rows);
             $('chartStatus').textContent = [data.title, data.basis, data.unit].filter(Boolean).join(' · ');
         }
+        window.changeChartType=type=>{if(!chartData)return;const previous=chartData.type;try{renderChart({...chartData,type});scheduleAutosave(true);}catch(error){$('chartTypeSelect').value=previous;showToast(error.message);}};
 
         function normalizeConceptMap(map) {
             if (!map || !Array.isArray(map.nodes) || !map.nodes.length || map.nodes.length > 16 || !Array.isArray(map.links) || map.links.length > 32) throw new Error('Mappa non valida: servono fino a 16 concetti e 32 collegamenti.');
@@ -2497,6 +2603,7 @@
 
         function renderConceptMap(input) {
             const map = normalizeConceptMap(input), svg = $('conceptMap'), ns = 'http://www.w3.org/2000/svg';
+            const palette=[['#233e35','#91ceb2'],['#24384d','#96bfe9'],['#3e344a','#c3a7e0'],['#413b2a','#d7c18b'],['#40303c','#d8a9c9']];
             $('mapCard').hidden = false;
             const width = Math.min(680, Math.max(280,svg.parentElement?.clientWidth || 680));
             const columns = width < 560 ? 1 : 2, nodeWidth = (width-56-(columns-1)*58)/columns;
@@ -2525,9 +2632,10 @@
                 const edge=element('path', { d, fill: 'none', stroke: '#8ebfa1', 'stroke-width': 1.8, 'marker-end': 'url(#conceptArrow)' });
                 edge.appendChild(element('title',{},link.label)); svg.appendChild(edge);
             }
-            for (const node of map.nodes) {
+            for (const [index,node] of map.nodes.entries()) {
                 const pos = positions.get(node.id), group = element('g');
-                group.appendChild(element('rect', { x: pos.x, y: pos.y, width: nodeWidth, height: 80, rx: 12, fill: '#21382a', stroke: '#7daa8b' }));
+                const colors=palette[index%palette.length];
+                group.appendChild(element('rect', { x: pos.x, y: pos.y, width: nodeWidth, height: 80, rx: 12, fill: colors[0], stroke: colors[1] }));
                 group.appendChild(element('title', {}, node.label));
                 const wrap = Math.max(16,Math.floor(nodeWidth/8));
                 const lines = node.label.match(new RegExp(`.{1,${wrap}}(?:\\s|$)|.{1,${wrap}}`,'g')) || [node.label];
@@ -2536,6 +2644,8 @@
                 svg.appendChild(group);
             }
             conceptMapData = map; $('mapCard').hidden = false;
+            const names=new Map(map.nodes.map(node=>[node.id,node.label]));
+            $('mapRelations').innerHTML=richTableHtml(['Da','Relazione','A'],map.links.map(link=>[names.get(link.from),link.label||'collegato a',names.get(link.to)]));
             $('mapStatus').textContent = `${map.topic} · ${map.nodes.length} concetti · ${map.links.length} relazioni`;
         }
 
@@ -2567,15 +2677,121 @@
             const source = analysisSource(), busy = !!aiJob;
             document.querySelectorAll('[data-ai-action]').forEach(btn => { btn.disabled = busy || !source.text.trim(); btn.classList.toggle('processing', busy); btn.setAttribute('aria-pressed', String(aiJob?.action === btn.dataset.aiAction)); });
             $('aiSourceSelect').disabled = busy; $('chartModeSelect').disabled = busy;
+            $('aiContextTokens').disabled=busy;$('aiOutputTokens').disabled=busy;
             $('aiProgress').hidden = !busy; $('aiResult').setAttribute('aria-busy', String(busy));
             const result = aiResults.find(r => r.action === activeAIResult);
             ['copyAIResultBtn','appendAIResultBtn','exportAIResultBtn'].forEach(id => { $(id).disabled = !result || busy; });
-            $('aiContextStatus').textContent = source.text.trim() ? `${source.label} · ${source.text.split(/\s+/).filter(Boolean).length} parole · ${AI_PROVIDERS[aiProvider].name}` : 'Aggiungi una trascrizione o degli appunti per iniziare.';
+            const limits=analysisLimits();
+            $('aiContextStatus').textContent = source.text.trim() ? `${source.label} · ${source.text.split(/\s+/).filter(Boolean).length.toLocaleString('it-IT')} parole · circa ${estimateAnalysisTokens(source.text).toLocaleString('it-IT')} token · contesto ${limits.context.toLocaleString('it-IT')} · ${AI_PROVIDERS[aiProvider].name}` : 'Aggiungi una trascrizione o degli appunti per iniziare.';
         }
-        function renderAIResult(title, content) {
+        function markdownCells(line){
+            let value=line.trim();if(value.startsWith('|'))value=value.slice(1);if(value.endsWith('|')&&!value.endsWith('\\|'))value=value.slice(0,-1);
+            const cells=[];let cell='',code=false;
+            for(let i=0;i<value.length;i++){
+                const char=value[i];if(char==='\\'&&value[i+1]==='|'){cell+='|';i++;continue;}
+                if(char==='`')code=!code;
+                if(char==='|'&&!code){cells.push(cell.trim());cell='';}else cell+=char;
+            }cells.push(cell.trim());return cells;
+        }
+        function richDocumentBlocks(input){
+            const lines=String(input||'').replace(/\r\n?/g,'\n').split('\n'),blocks=[];
+            const divider=line=>/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line);
+            const heading=line=>/^\s{0,3}#{1,6}\s+/.test(line)||/^\s*\*\*[^*]+\*\*\s*$/.test(line)||/^[A-ZÀ-Ü][A-ZÀ-Ü0-9 ,:’'()\-]{4,79}$/.test(line.trim());
+            const list=line=>/^\s*(?:[-+*•]|\d+[.)])\s+/.test(line);
+            const table=i=>lines[i]?.includes('|')&&i+1<lines.length&&markdownCells(lines[i+1]).length>=2&&markdownCells(lines[i+1]).every(c=>/^:?-{3,}:?$/.test(c));
+            const special=i=>divider(lines[i])||heading(lines[i])||list(lines[i])||/^\s*(?:```|~~~|>)/.test(lines[i])||table(i);
+            for(let i=0;i<lines.length;){
+                const line=lines[i];if(!line.trim()){i++;continue;}
+                if(/^\s*(?:```|~~~)/.test(line)){
+                    const fence=line.trim().slice(0,3),body=[];i++;while(i<lines.length&&!lines[i].trim().startsWith(fence))body.push(lines[i++]);if(i<lines.length)i++;
+                    blocks.push({type:'code',text:body.join('\n')});continue;
+                }
+                if(table(i)){
+                    const headers=markdownCells(line),rows=[];i+=2;
+                    while(i<lines.length&&lines[i].trim()&&lines[i].includes('|')){
+                        const row=markdownCells(lines[i]);if(row.length!==headers.length)break;rows.push(row);i++;
+                    }blocks.push({type:'table',headers,rows});continue;
+                }
+                if(divider(line)){blocks.push({type:'rule'});i++;continue;}
+                if(heading(line)){
+                    const match=line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);blocks.push({type:'heading',level:match?Math.max(2,Math.min(4,match[1].length)):3,text:match?match[2]:line.trim().replace(/^\*\*|\*\*$/g,'')});i++;continue;
+                }
+                if(list(line)){
+                    const ordered=/^\s*\d+[.)]/.test(line),items=[];
+                    while(i<lines.length&&list(lines[i])&&/^\s*\d+[.)]/.test(lines[i])===ordered){
+                        let text=lines[i++].replace(/^\s*(?:[-+*•]|\d+[.)])\s+/,'');
+                        while(i<lines.length&&/^\s{2,}\S/.test(lines[i])&&!special(i))text+='\n'+lines[i++].trim();
+                        const task=text.match(/^\[([ xX])\]\s+/);items.push({text:task?text.slice(task[0].length):text,...(task?{checked:task[1].toLowerCase()==='x'}:{})});
+                    }blocks.push({type:'list',ordered,items});continue;
+                }
+                if(/^\s*>/.test(line)){
+                    const body=[];while(i<lines.length&&/^\s*>/.test(lines[i]))body.push(lines[i++].replace(/^\s*>\s?/,''));blocks.push({type:'quote',text:body.join('\n')});continue;
+                }
+                const body=[line];i++;while(i<lines.length&&lines[i].trim()&&!special(i))body.push(lines[i++]);blocks.push({type:'paragraph',text:body.join('\n')});
+            }return blocks;
+        }
+        function richInline(text,depth=0){
+            if(depth>3)return escapeHtml(text);
+            const pattern=/`([^`\n]+)`|\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\n]+)\*|_([^_\n]+)_|~~([^~]+)~~|\[([^\]\n]+)\]\(([^\s)]+)\)/g;
+            let html='',offset=0,match;
+            while((match=pattern.exec(text))){
+                html+=escapeHtml(text.slice(offset,match.index));offset=pattern.lastIndex;
+                if(match[1]!==undefined)html+='<code>'+escapeHtml(match[1])+'</code>';
+                else if(match[2]!==undefined||match[3]!==undefined)html+='<strong>'+richInline(match[2]??match[3],depth+1)+'</strong>';
+                else if(match[4]!==undefined||match[5]!==undefined)html+='<em>'+richInline(match[4]??match[5],depth+1)+'</em>';
+                else if(match[6]!==undefined)html+='<del>'+richInline(match[6],depth+1)+'</del>';
+                else html+=/^(https?:\/\/|mailto:)/i.test(match[8])?'<a target="_blank" rel="noopener noreferrer" href="'+escapeHtml(match[8])+'">'+richInline(match[7],depth+1)+'</a>':escapeHtml(match[7]);
+            }return (html+escapeHtml(text.slice(offset))).replace(/\n/g,'<br>');
+        }
+        function plainRichInline(text){return String(text).replace(/\[([^\]]+)\]\(([^)]+)\)/g,'$1 ($2)').replace(/\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*|_([^_]+)_|~~([^~]+)~~/g,(_,a,b,c,d,e,f)=>a??b??c??d??e??f);}
+        function richTableHtml(headers,rows){
+            return '<div class="result-table-wrap" role="region" aria-label="Tabella del risultato" tabindex="0"><table><thead><tr>'+headers.map(h=>'<th scope="col">'+richInline(h)+'</th>').join('')+'</tr></thead><tbody>'
+                +rows.map(row=>'<tr>'+row.map((cell,i)=>'<td data-label="'+escapeHtml(plainRichInline(headers[i]||''))+'">'+richInline(String(cell))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+        }
+        function richDocumentHtml(text){
+            return richDocumentBlocks(text).map(block=>{
+                if(block.type==='table')return richTableHtml(block.headers,block.rows);
+                if(block.type==='heading')return '<h'+block.level+'>'+richInline(block.text)+'</h'+block.level+'>';
+                if(block.type==='rule')return '<hr>';
+                if(block.type==='code')return '<pre><code>'+escapeHtml(block.text)+'</code></pre>';
+                if(block.type==='quote')return '<blockquote>'+richInline(block.text)+'</blockquote>';
+                if(block.type==='list'){const tag=block.ordered?'ol':'ul';return '<'+tag+'>'+block.items.map(item=>'<li>'+('checked' in item?'<span class="task-state">'+(item.checked?'✓':'○')+'</span> ':'')+richInline(item.text)+'</li>').join('')+'</'+tag+'>';}
+                return '<p>'+richInline(block.text)+'</p>';
+            }).join('');
+        }
+        function richPlainText(text){return richDocumentBlocks(text).map(block=>{
+            if(block.type==='table')return block.rows.map(row=>row.map((cell,i)=>plainRichInline(block.headers[i])+': '+plainRichInline(cell)).join('\n')).join('\n\n');
+            if(block.type==='list')return block.items.map((item,i)=>(block.ordered?(i+1)+'. ':'• ')+('checked' in item?(item.checked?'[✓] ':'[ ] '):'')+plainRichInline(item.text)).join('\n');
+            return block.type==='rule'?'':plainRichInline(block.text||'');
+        }).join('\n\n');}
+        function writeRichPdf(doc,text,y){
+            const safe=value=>plainRichInline(value).replace(/→/g,' -> ').replace(/[“”]/g,'"').replace(/[’]/g,"'").replace(/[✓]/g,'x');
+            const write=(value,{bold=false,size=9,color=[25,35,43],indent=0}={})=>{
+                doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);
+                for(const line of doc.splitTextToSize(safe(value),165-indent)){
+                    if(y>275){doc.addPage();y=20;}doc.text(line,20+indent,y);y+=size*.48;
+                }
+            };
+            for(const block of richDocumentBlocks(text)){
+                if(block.type==='heading'){if(y>245){doc.addPage();y=20;}y+=3;write(block.text,{bold:true,size:11,color:[23,93,115]});y+=3;}
+                else if(block.type==='table'){
+                    for(const row of block.rows){
+                        doc.setFont('helvetica','normal');doc.setFontSize(9);
+                        const rowHeight=row.reduce((height,cell,i)=>height+doc.splitTextToSize(safe(block.headers[i]+': '+cell),162).length*4.32,5);
+                        if(y+rowHeight>275&&rowHeight<230){doc.addPage();y=20;}
+                        doc.setFillColor(232,241,246);doc.rect(19,y-4,172,7,'F');
+                        row.forEach((cell,i)=>write(block.headers[i]+': '+cell,{bold:i===0,indent:i?3:0}));y+=5;
+                    }
+                }else if(block.type==='list'){block.items.forEach((item,i)=>write((block.ordered?(i+1)+'. ':'- ')+('checked' in item?(item.checked?'[x] ':'[ ] '):'')+item.text,{indent:3}));y+=4;}
+                else if(block.type==='rule'){y+=3;}
+                else{write(block.text,{color:block.type==='quote'?[75,92,107]:[25,35,43],indent:block.type==='quote'?4:0});y+=5;}
+            }doc.setFont('helvetica','normal');return y;
+        }
+        function renderAIResult(title, content,action='') {
             const box = $('aiResult'); box.innerHTML = '';
+            box.dataset.tool=action;
             const heading = document.createElement('div'); heading.className = 'ai-result-title'; heading.textContent = title;
-            const body = document.createElement('div'); body.className = 'ai-result-content'; body.textContent = content;
+            const body = document.createElement('div'); body.className = 'ai-result-content rich-document'; body.innerHTML = richDocumentHtml(content);
             box.appendChild(heading); box.appendChild(body);
         }
         function renderAIMessage(message) {
@@ -2590,7 +2806,7 @@
             select.value = activeAIResult; select.disabled = !aiResults.length;
             const current = aiResults.find(r => r.action === activeAIResult);
             if (current) {
-                renderAIResult(current.title,current.content);
+                renderAIResult(current.title,current.content,current.action);
                 $('aiResultMeta').textContent = `${current.sourceLabel || 'Contenuto'} · ${current.provider || 'Analisi'}${current.model ? ' · '+current.model : ''} · ${new Date(current.createdAt).toLocaleString('it-IT')}${current.editorialChecks?' · Controlli su cifre e lunghezza superati':''}`;
             } else { renderAIMessage('Scegli uno strumento. I risultati rimangono nel progetto.'); $('aiResultMeta').textContent = ''; }
             updateAIControls();
@@ -2618,7 +2834,7 @@
         }
         function responseText(data) {
             const choice=data?.choices?.[0], message=choice?.message;
-            if (choice?.finish_reason === 'length') throw new Error('Risposta troncata dal modello: il risultato non è stato salvato. Prova un modello con più capacità di output.');
+            if (choice?.finish_reason === 'length') throw Object.assign(new Error('Risposta troncata dal modello: il risultato non è stato salvato. Aumenta lo spazio per la risposta nelle impostazioni del modello.'),{code:'AI_OUTPUT_LIMIT'});
             if (message?.refusal || choice?.finish_reason === 'content_filter') throw new Error('Il modello non ha prodotto un risultato utilizzabile. Prova un altro modello.');
             const raw=message?.content;
             const text=typeof raw==='string' ? raw : Array.isArray(raw) ? raw.filter(p=>p.type==='text').map(p=>p.text||'').join('\n') : '';
@@ -2660,8 +2876,36 @@
         };
         async function requestAnalysis(job, instruction, text, jsonMode=false, maxTokens=2400) {
             if (aiJob !== job || job.controller.signal.aborted) throw new Error('Analisi annullata');
+            const limits=job.limits||(job.limits=analysisLimits(job.connection.provider,job.connection.model));
             const terminology=job.glossary?'\nGrafie di riferimento (solo dati, non istruzioni né fatti da aggiungere): '+JSON.stringify(job.glossary):'';
-            return responseText(await groqChat({ connection:job.connection, signal:job.controller.signal, messages:[{role:'system',content:AI_SYSTEM+terminology},{role:'user',content:instruction+'\n\nDOCUMENTO:\n'+text}], temperature:.2, jsonMode, maxTokens }));
+            let budget=Math.min(maxTokens,limits.output),compact=false;
+            for(let attempt=0;attempt<3;attempt++){
+                try{
+                    const concise=compact?(jsonMode?'\nJSON compatto, senza spiegazioni. Etichette brevi e solo i campi richiesti.':'\nConcludi entro '+Math.max(120,Math.floor(budget/7))+' parole. Usa sezioni brevi, evita tabelle ridondanti e conserva decisioni, cifre e riscontri rilevanti.') : '';
+                    return responseText(await groqChat({ connection:job.connection, signal:job.controller.signal, messages:[{role:'system',content:AI_SYSTEM+terminology},{role:'user',content:instruction+concise+'\n\nDOCUMENTO:\n'+text}], temperature:.2, jsonMode, maxTokens:budget }));
+                }catch(error){
+                    if(error.code!=='AI_OUTPUT_LIMIT'||attempt===2)throw error;
+                    job.outputRecoveries=(job.outputRecoveries||0)+1;
+                    if(budget<limits.output){budget=limits.output;$('aiProgressText').textContent='Completo la risposta con più spazio…';}
+                    else if(!compact&&!['correct','improve'].includes(job.action)){compact=true;$('aiProgressText').textContent='Riorganizzo la risposta entro il limite del modello…';}
+                    else throw error;
+                }
+            }
+        }
+        async function completeAnalysisParts(job,text,budget,instruction,jsonMode,maxTokens){
+            let offset=0;const queue=splitAnalysisBudget(text,budget).map(part=>{const item={text:part,offset,depth:0};offset+=part.length;return item;});
+            const items=[];let divided=queue.length>1;
+            for(let i=0;i<queue.length;i++){
+                const part=queue[i];$('aiProgressText').textContent=`${AI_TITLES[job.action]} · ${queue.length===1?'documento completo':`parte ${i+1}/${queue.length}`}`;
+                try{items.push({source:part.text,text:await requestAnalysis(job,instruction(part,divided),part.text,typeof jsonMode==='function'?jsonMode(part,divided):jsonMode,maxTokens)});}
+                catch(error){
+                    if(!['AI_CONTEXT_LIMIT','AI_OUTPUT_LIMIT'].includes(error.code)||part.depth>=6||part.text.length<512||(job.recoveries||0)>=8)throw error;
+                    const smaller=splitAnalysisBudget(part.text,Math.max(64,Math.floor(estimateAnalysisTokens(part.text)/2)));
+                    if(smaller.length<2)throw error;let start=part.offset;
+                    queue.splice(i,1,...smaller.map(value=>{const item={text:value,offset:start,depth:part.depth+1};start+=value.length;return item;}));
+                    job.recoveries=(job.recoveries||0)+1;divided=true;i--;
+                }
+            }return {items,divided};
         }
         function participationChart(kind) {
             if (kind === 'notes' || !transcriptEntries.length) throw new Error('Per il grafico di partecipazione serve una trascrizione. Per analizzare gli appunti scegli "Dati numerici citati".');
@@ -2687,11 +2931,11 @@
         }
         async function numericChart(job, chunks) {
             const charts=[];
-            for (let i=0;i<chunks.length;i++) {
-                $('aiProgressText').textContent=`Verifico dati numerici · parte ${i+1}/${chunks.length}`;
-                const parsed=extractJSON(await requestAnalysis(job,AI_INSTRUCTIONS.chart,chunks[i],true,2400));
+            const pass=await completeAnalysisParts(job,chunks.join(''),job.limits.input,()=>AI_INSTRUCTIONS.chart,true,Math.min(8192,job.limits.output));
+            for (const item of pass.items) {
+                const parsed=extractJSON(item.text);
                 if (parsed?.insufficient === true) continue;
-                const chart=normalizeChartData(parsed); validateChartEvidence(chart,chunks[i]); charts.push(chart);
+                const chart=normalizeChartData(parsed); validateChartEvidence(chart,item.source); charts.push(chart);
             }
             if (!charts.length) throw new Error('Non ci sono dati numerici confrontabili nel contenuto. Puoi usare il grafico "Parole per partecipante".');
             if (charts.length===1) { charts[0].basis='Valori citati e verificati nel testo'; return charts[0]; }
@@ -2706,33 +2950,34 @@
             return normalizeChartData({title:'Dati numerici citati',type:'bar',unit:charts[0].unit,labels,series,basis:'Valori citati e verificati nel testo'});
         }
         async function generateAnalysis(job, text) {
-            const chunks=splitAnalysisText(text,job.action==='correct'||job.action==='improve'?6500:10000);
-            if (chunks.length>24) throw new Error('Il contenuto supera la capacità di questa analisi. Analizza separatamente trascrizione e appunti o una sessione più breve.');
-            if (job.action==='chart') return {chart:await numericChart(job,chunks)};
-            const direct=job.action==='correct'||job.action==='improve', parts=[];let offset=0;
-            for (let i=0;i<chunks.length;i++) {
-                $('aiProgressText').textContent=`${AI_TITLES[job.action]} · parte ${i+1}/${chunks.length}`;
-                let instruction=chunks.length===1||direct ? AI_INSTRUCTIONS[job.action] : 'Estrai in modo compatto tutti i fatti rilevanti, concetti, relazioni, cifre, decisioni, azioni, responsabili e scadenze da questa parte. Conserva attribuzioni e incertezze. Non interpretare le parti mancanti.';
-                if(direct&&chunks.length>1)instruction+=editorialContext(text,offset,offset+chunks[i].length);
-                const part=await requestAnalysis(job,instruction,chunks[i],chunks.length===1&&job.action==='concept',direct?4096:chunks.length===1?3200:900);
-                if(direct)validateEditorialText(chunks[i],part,job.action);
-                parts.push(part);offset+=chunks[i].length;
+            const limits=job.limits||(job.limits=analysisLimits(job.connection.provider,job.connection.model));
+            if (job.action==='chart') return {chart:await numericChart(job,[text])};
+            const direct=['correct','improve'].includes(job.action);
+            // Full rewrites also have to fit in the output window, even with a million-token input.
+            const budget=direct?Math.min(limits.input,Math.max(128,Math.floor((limits.output*.72-768)/1.35))):limits.input;
+            const pass=await completeAnalysisParts(job,text,budget,(part,divided)=>{
+                let instruction=direct||!divided?AI_INSTRUCTIONS[job.action]:'Estrai in modo compatto tutti i fatti rilevanti, concetti, relazioni, cifre, decisioni, azioni, responsabili e scadenze da questa parte. Conserva attribuzioni e incertezze. Non interpretare le parti mancanti.';
+                if(direct&&divided)instruction+=editorialContext(text,part.offset,part.offset+part.text.length);
+                return instruction;
+            },(_,divided)=>!divided&&job.action==='concept',direct?limits.output:Math.min(8192,limits.output));
+            if(direct){
+                pass.items.forEach(item=>validateEditorialText(item.source,item.text,job.action));
+                const content=pass.items.map(item=>item.text).join('\n\n');return {content,editorialChecks:validateEditorialText(text,content,job.action)};
             }
-            if (direct){const content=parts.join('\n\n');return {content,editorialChecks:validateEditorialText(text,content,job.action)};}
-            let combined=parts.join('\n\n');
-            if (chunks.length>1) {
-                for (let round=0;combined.length>12000 && round<4;round++) {
-                    const groups=splitAnalysisText(combined,10000), reduced=[];
-                    for (let i=0;i<groups.length;i++) {
-                        $('aiProgressText').textContent=`Consolido il contenuto · parte ${i+1}/${groups.length}`;
-                        reduced.push(await requestAnalysis(job,'Consolida questi estratti senza perdere fatti, cifre, decisioni, attribuzioni e scadenze. Elimina ripetizioni. Massimo 500 parole.',groups[i],false,900));
+            let combined=pass.items.map(item=>item.text).join('\n\n');
+            if(pass.divided){
+                let inputBudget=limits.input;
+                for(let round=0;round<8;round++){
+                    if(estimateAnalysisTokens(combined)<=inputBudget){
+                        try{combined=await requestAnalysis(job,AI_INSTRUCTIONS[job.action],combined,job.action==='concept',Math.min(8192,limits.output));break;}
+                        catch(error){if(error.code!=='AI_CONTEXT_LIMIT')throw error;inputBudget=Math.max(128,Math.floor(estimateAnalysisTokens(combined)/2));}
                     }
-                    const next=reduced.join('\n\n'); if (next.length>=combined.length) throw new Error('Il modello non riesce a consolidare il contenuto senza superare i limiti. Prova un altro modello.'); combined=next;
+                    const reduced=await completeAnalysisParts(job,combined,inputBudget,()=> 'Consolida questi estratti senza perdere fatti, cifre, decisioni, attribuzioni e scadenze. Elimina ripetizioni. Massimo 500 parole.',false,Math.min(8192,limits.output));
+                    const next=reduced.items.map(item=>item.text).join('\n\n');
+                    if(next.length>=combined.length||round===7)throw new Error('Il modello non riesce a consolidare il documento entro i limiti configurati. Aumenta il contesto o scegli un altro modello.');combined=next;
                 }
-                if (combined.length>12000) throw new Error('Sintesi intermedia troppo lunga per completare l’analisi. Prova un altro modello.');
-                combined=await requestAnalysis(job,AI_INSTRUCTIONS[job.action],combined,job.action==='concept',3200);
             }
-            return job.action==='concept' ? {concept:normalizeConceptMap(extractJSON(combined))} : {content:combined};
+            return job.action==='concept'?{concept:normalizeConceptMap(extractJSON(combined))}:{content:combined};
         }
         function chartText(chart) {
             const sources = chart.series.flatMap(series=>chart.labels.map((label,i)=>series.evidence?.[i] ? '• '+label+': '+series.evidence[i] : '')).filter(Boolean);
@@ -2747,7 +2992,7 @@
             const source=analysisSource(), local=action==='chart' && $('chartModeSelect').value!=='numbers';
             if (!source.text.trim()) { renderAIMessage('Aggiungi una trascrizione o degli appunti per usare gli strumenti.'); return; }
             if (!local && !activeAiKey()) { openConnectionSettings(); $('aiToolStatus').textContent='Inserisci la chiave del provider e verifica il modello selezionato.'; return; }
-            const job={action,glossary:transcriptionGlossary,controller:new AbortController(),generation:analysisGeneration,connection:{provider:aiProvider,key:activeAiKey(),model:llmModel}};
+            const job={action,limits:analysisLimits(),glossary:transcriptionGlossary,controller:new AbortController(),generation:analysisGeneration,connection:{provider:aiProvider,key:activeAiKey(),model:llmModel}};
             aiJob=job; updateAIControls(); $('aiToolStatus').textContent='';
             try {
                 const output=local ? {chart:participationChart(source.kind)} : await generateAnalysis(job,source.text);
@@ -2758,6 +3003,8 @@
                 const result={action,title:AI_TITLES[action],content:output.content || (output.chart?chartText(output.chart):conceptText(output.concept)),...(output.editorialChecks?{editorialChecks:output.editorialChecks}:{}),createdAt:Date.now(),source:source.kind,sourceLabel:analysisSource(source.kind).label,sourceFingerprint:analysisFingerprint(source.text),provider:local?'Conteggio sul testo':AI_PROVIDERS[job.connection.provider].name,model:local?'':job.connection.model};
                 aiResults=aiResults.filter(r=>r.action!==action); aiResults.push(result); activeAIResult=action;
                 $('aiToolStatus').textContent='Risultato completato. Salva il progetto per conservarlo nell’archivio.';
+                if(!local&&(job.recoveries||job.outputRecoveries)&&aiProvider===job.connection.provider&&normalizeAiModel(aiProvider,llmModel)===normalizeAiModel(aiProvider,job.connection.model))
+                    setProviderStatus('✓ Analisi completata. I limiti di contesto e risposta sono stati gestiti mantenendo il documento completo.');
                 renderAIResults(); scheduleAutosave(true);
             } catch (error) {
                 if (aiJob===job && job.generation===analysisGeneration) {
@@ -2774,7 +3021,7 @@
         }
         window.copyAIResult = async () => {
             const result=aiResults.find(r=>r.action===activeAIResult); if (!result) return;
-            try { await copyTextToClipboard(result.title+'\n\n'+result.content); showToast('Risultato copiato'); } catch(e) { showToast('Copia non disponibile: usa Scarica risultato'); }
+            try { await copyTextToClipboard(result.title+'\n\n'+richPlainText(result.content)); showToast('Risultato copiato'); } catch(e) { showToast('Copia non disponibile: usa Scarica risultato'); }
         };
         window.appendAIResultToNotes = () => {
             const result=aiResults.find(r=>r.action===activeAIResult); if (!result) return;
@@ -2784,7 +3031,7 @@
             updateStats(); scheduleAutosave(true); showToast('Risultato aggiunto agli appunti');
         };
         function analysisExportText(markdown=false) {
-            return aiResults.map(r=>`${markdown?'## ':''}${r.title}\n${r.sourceLabel || 'Contenuto'} · ${r.provider || 'Analisi'}\n\n${r.content}`).join('\n\n');
+            return aiResults.map(r=>`${markdown?'## ':''}${r.title}\n${r.sourceLabel || 'Contenuto'} · ${r.provider || 'Analisi'}\n\n${markdown?r.content:richPlainText(r.content)}`).join('\n\n');
         }
         window.exportAIResult = () => {
             const result=aiResults.find(r=>r.action===activeAIResult); if (!result) return;
@@ -3120,8 +3367,10 @@
         };
 
         function getChartImage() {
-            if (chartInstance && typeof chartInstance.toBase64Image === 'function') return chartInstance.toBase64Image();
-            return null;
+            if(!chartInstance)return null;
+            const source=$('aiChart'),image=document.createElement('canvas');image.width=source.width;image.height=source.height;
+            const context=image.getContext('2d');context.fillStyle='#172027';context.fillRect(0,0,image.width,image.height);context.drawImage(source,0,0);
+            return image.toDataURL('image/png');
         }
 
         function getConceptMapImage() {
@@ -3181,8 +3430,7 @@
             if (notesText) {
                 y += 5; if (y > 250) { doc.addPage(); y = 20; }
                 doc.setFontSize(12); doc.setTextColor(0,150,120); doc.text('NOTE', 20, y); y += 8;
-                doc.setFontSize(9); doc.setTextColor(0);
-                doc.splitTextToSize(notesText, 165).forEach(l => { if (y > 270) { doc.addPage(); y = 20; } doc.text(l, 20, y); y += 4; });
+                y=writeRichPdf(doc,notesText,y);
             }
 
             // Text results belong to the exported meeting report too.
@@ -3190,8 +3438,7 @@
                 if (y>240) { doc.addPage(); y=20; }
                 doc.setFontSize(12); doc.setTextColor(0,150,120); doc.text(result.title.toUpperCase(),20,y); y+=8;
                 doc.setFontSize(9); doc.setTextColor(0);
-                const text=result.content.replace(/→/g,' -> ').replace(/[“”]/g,'"').replace(/[’]/g,"'");
-                doc.splitTextToSize(text,165).forEach(line=>{ if(y>270){doc.addPage();y=20;} doc.text(line,20,y);y+=4; }); y+=8;
+                y=writeRichPdf(doc,result.content,y)+8;
             }
 
             // Grafico
@@ -3200,6 +3447,7 @@
                 if (y > 200) { doc.addPage(); y = 20; }
                 doc.setFontSize(12); doc.setTextColor(0,150,120); doc.text('GRAFICO', 20, y); y += 6;
                 doc.addImage(chartImg, 'PNG', 20, y, 170, 90); y += 100;
+                if(chartData)y=writeRichPdf(doc,chartText(chartData),y);
             }
 
             // Mappa concettuale
@@ -3211,6 +3459,7 @@
                 const height = Math.min(215,170*box[3]/box[2]), width = height*box[2]/box[3];
                 if (y+height>280) { doc.addPage(); y=20; }
                 doc.addImage(mapImg, 'PNG', 20+(170-width)/2, y, width, height); y += height+10;
+                if(conceptMapData)y=writeRichPdf(doc,conceptText(conceptMapData),y);
             }
 
             // Drawing
@@ -3233,7 +3482,7 @@
                 transcriptTurns().forEach(e => { c += `${e.speakerName}:\n${e.text}\n\n`; });
             }
             const review=transcriptReviewNotes();if(review.length)c+='PASSAGGI DA VERIFICARE\n'+review.join('\n')+'\n\n';
-            if (notesText) { c += '\nNOTE\n' + '-'.repeat(20) + '\n\n' + notesText; }
+            if (notesText) { c += '\nNOTE\n' + '-'.repeat(20) + '\n\n' + richPlainText(notesText); }
             if (aiResults.length) c += '\n\nANALISI\n' + '-'.repeat(20) + '\n\n' + analysisExportText();
             downloadText(`voicescribe_${Date.now()}.txt`,c); showToast('✓ TXT');
         };

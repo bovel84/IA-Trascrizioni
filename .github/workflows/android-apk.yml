@@ -51,6 +51,8 @@ jobs:
           node tools/transcript-turns-test.js
           node tools/professional-test.js
           node tools/analysis-test.js
+          node tools/long-context-test.js
+          node tools/rich-results-test.js
       - name: Verify responsive layout and capture previews
         env:
           CHROME_BIN: /usr/bin/google-chrome

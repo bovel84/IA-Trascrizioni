@@ -49,11 +49,11 @@ final class AiHttp {
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
         control.bind(conn);
         conn.setInstanceFollowRedirects(false);
-        conn.setConnectTimeout(15000); conn.setReadTimeout(90000);
+        conn.setConnectTimeout(15000); conn.setReadTimeout("/chat/completions".equals(path)?360000:90000);
         // Identify our client and explicitly request JSON. Authorization is still required
         // for model inference; these headers do not bypass account permissions.
         conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("User-Agent", "VoiceScribePro/2.2 (Android)");
+        conn.setRequestProperty("User-Agent", "VoiceScribePro/2.5 (Android)");
         if (!publicCatalog) conn.setRequestProperty("Authorization", "Bearer " + key);
         try {
             if ("/chat/completions".equals(path)) {

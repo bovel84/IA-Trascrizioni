@@ -32,7 +32,7 @@ if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'funct
             cleanup();
             if (typeof window.AndroidRecorder.cancelAiRequest === 'function') window.AndroidRecorder.cancelAiRequest(id);
             const error = new Error('Timeout della richiesta AI'); error.name = 'AbortError'; reject(error);
-        }, 110000);
+        }, 370000);
         if (signal?.aborted) { abort(); return; }
         pending.set(id, { resolve, reject, timer, cleanup });
         signal?.addEventListener('abort', abort, { once: true });

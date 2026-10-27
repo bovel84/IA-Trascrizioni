@@ -1,5 +1,48 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Contesto dei modelli e risultati formattati (2.5.0)
+
+- **Connessioni e modelli** separa finestra di contesto e spazio della
+  risposta, con impostazioni per provider e ID modello. Il catalogo conserva
+  `context_length`/`context_window` e `max_completion_tokens` quando pubblicati.
+  I limiti noti prevalgono sui valori manuali. Se mancano, il limite prudenziale è
+  32.768 token: è possibile indicare fino a 2.000.000 token di contesto e 131.072 di
+  risposta. La configurazione non aumenta i limiti reali del provider.
+- Rimossi i tagli fissi ogni 6.500/10.000 caratteri e il tetto di 24 parti. Sintesi,
+  punti chiave, grafici e mappe ricevono tutto il documento quando rientra nella
+  finestra stimata. Correzione/riscrittura devono rientrare anche nell'output: se
+  necessario lavorano su parti complete con contesto ai margini e verifica finale.
+- La stima multiprovider usa byte UTF-8 / 3, senza affermare un conteggio esatto per
+  ogni tokenizer. Ingresso, output, istruzioni e margini condividono la finestra.
+  Un errore esplicito di contesto o dimensione riduce le parti conservando tutti i
+  caratteri. Una risposta troncata può ottenere più spazio, fino al limite scelto,
+  o una richiesta più compatta per analisi/JSON. Recuperi limitati (massimo otto
+  suddivisioni adattive per operazione), nessun retry per 401/403/429 o errori di rete.
+  Nessun risultato incompleto sostituisce quello valido precedente.
+- GPT-OSS usa `reasoning_effort: low` con fallback per parametri non supportati;
+  la prova del modello non è più limitata a 128 token. Timeout delle analisi fino a
+  sei minuti, con annullamento nativo/browser; l'audio conserva i suoi timeout.
+- Titoli, grassetto, liste, citazioni, codice e tabelle sono resi come documenti.
+  Su telefono le righe delle tabelle diventano schede con nomi delle colonne.
+  HTML del modello e URL non sicuri non vengono eseguiti. I risultati già salvati
+  usano la stessa vista, senza nuove chiamate LLM. Markdown originale conservato;
+  copia e TXT leggibili, PDF con sezioni e campi al posto di pipe/asterischi grezzi.
+- Colori distinti per i sei strumenti e i nodi della mappa, palette per le categorie
+  dei grafici, scelta locale barre/linee/torta/radar con controllo di compatibilità.
+  Tabelle consultabili per valori/citazioni del grafico e relazioni della mappa.
+  PNG e PDF mantengono uno sfondo opaco per il contrasto delle etichette; il PDF
+  include anche valori/riscontri del grafico e testo delle relazioni della mappa.
+
+Verifiche con risposte API simulate, incluso un documento di oltre 800.000 token
+stimati inviato in un'unica richiesta, estremi del documento conservati in tutte
+le analisi, riscritture complete, errori di contesto/output/quota e markup ostile.
+Non è una prova di inferenza reale su ciascun provider: servono chiave, accesso e
+limiti adeguati nell'account. Le altre limitazioni di accuratezza restano valide.
+
+Riferimenti: [metadati modelli OpenRouter](https://openrouter.ai/docs/api/api-reference/models/get-models),
+[compatibilità OpenAI Ollama](https://docs.ollama.com/api/openai-compatibility),
+[controlli reasoning Ollama](https://docs.ollama.com/capabilities/thinking).
+
 ## Parole brevi e confini dei blocchi audio (2.4.2)
 
 La ricomposizione gestisce anche piccoli scarti dei tempi fra WAV consecutivi: fino a

@@ -140,7 +140,7 @@ async function main() {
     run("notesText = 'Nota di prova';");
     await run('runAI("summary")');
     const aiBox = el('aiResult');
-    check('AI riassunto mostrato (con textContent)', aiBox.children.length === 2 && aiBox.children[1].textContent.length > 0);
+    check('AI riassunto mostrato con formattazione sicura', aiBox.children.length === 2 && aiBox.children[1].innerHTML.includes('<p>'));
     await run('runAI("chart")');
     check('grafico di partecipazione usa parole reali della trascrizione', ev('chartData.series[0].data.reduce((a,b)=>a+b,0)') === ev("transcriptEntries.map(e=>e.text).join(' ').split(/\\s+/).filter(Boolean).length"), JSON.stringify(ev('chartData')));
     await run('runAI("concept")');

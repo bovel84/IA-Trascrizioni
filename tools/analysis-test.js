@@ -81,7 +81,7 @@ async function main(){
  check('network failures do not repeat expensive model calls',failures===1&&!run('aiJob'));
  const chunks=run('splitAnalysisText("😀 testo ".repeat(4000),1000)');check('chunking preserves every source character including Unicode',chunks.join('')==='😀 testo '.repeat(4000)&&chunks.every(c=>c.length<=1001));
  const seen=[];ctx.nativeAiRequest=async(provider,endpoint,key,body)=>{seen.push({provider,key,body});return{ok:true,status:200,json:async()=>apiText(body.messages[1].content.split('DOCUMENTO:\n')[1])};};
- set({notesText:'Dato reale. '.repeat(1200)+'MARCATORE FINALE',aiResults:[]});await run("runAI('correct')");
+ set({notesText:'Dato reale. '.repeat(5000)+'MARCATORE FINALE',aiResults:[]});await run("runAI('correct')");
  check('long corrections cover every part rather than silently truncating the source',seen.length>1&&run('aiResults[0].content').endsWith('MARCATORE FINALE'));
  check('all chunks use captured connection and credential',seen.every(c=>c.provider==='groq'&&c.key==='gsk_test'));
  // Files exported by the ordinary report actions must include analysis too.

@@ -35,7 +35,7 @@ const idle=async()=>{while(run('liveProcessing'))await new Promise(r=>setTimeout
  ctx.nativeAiRequest=async()=>({ok:true,status:200,json:async()=>api('Budget 999 euro.')});await run("runAI('correct')");
  check('a rejected rewrite preserves the previous result and exposes the reason',run('aiResults[0].content')==='Risultato precedente'&&ctx.__elements.get('aiToolStatus').textContent.includes('cifra'));
  const messages=[];ctx.nativeAiRequest=async(p,e,k,body)=>{messages.push(body.messages.at(-1).content);return{ok:true,status:200,json:async()=>api(body.messages.at(-1).content.split('\n\nDOCUMENTO:\n').at(-1))};};
- run("notesText=('Un contenuto da conservare integralmente. ').repeat(600)+'MARCATORE FINALE';");await run("runAI('correct')");
+ run("notesText=('Un contenuto da conservare integralmente. ').repeat(1000)+'MARCATORE FINALE';");await run("runAI('correct')");
  check('long editorial jobs receive bounded context but preserve all source parts',messages.length>1&&messages.every(m=>m.includes('CONTESTO SOLO PER RACCORDO'))&&run("aiResults[0].content.endsWith('MARCATORE FINALE')"));
  check('editorial check results are recorded with the reusable output',run('aiResults[0].editorialChecks.sourceWords')>1000);
  check('splitting at paragraphs preserves every source character',run("splitAnalysisText('Prima frase. '.repeat(2000),6500).join('')")===('Prima frase. '.repeat(2000)));
