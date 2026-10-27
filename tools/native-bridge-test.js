@@ -59,6 +59,10 @@ async function main() {
     check('repeated refresh does not duplicate transcript entries', run('transcriptEntries.length') === 1);
     run("transcriptEntries[0].text = 'Testo corretto'; syncNativeRecorder();");
     check('native refresh preserves user edits', run('transcriptEntries[0].text') === 'Testo corretto');
+    Object.assign(state.entries[0],{transcriptQualityAvailable:true,transcriptReview:true,transcriptReviewReason:'Audio poco chiaro'});run('syncNativeRecorder()');
+    check('new native quality metadata updates a seen segment without overwriting edits',run('transcriptEntries[0].transcriptReview')&&run('transcriptEntries[0].text')==='Testo corretto');
+    run('confirmTranscriptEntry(0);syncNativeRecorder();');
+    check('native synchronization preserves a manual text confirmation',run('isTextVerified(transcriptEntries[0])'));
     run('togglePause()');
     check('Pause uses the native recorder', calls.some(c => c[0] === 'pause' && c[1] === true));
     run("document.visibilityState = 'hidden';");

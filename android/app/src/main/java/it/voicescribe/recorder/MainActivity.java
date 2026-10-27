@@ -22,6 +22,7 @@ import java.util.concurrent.*;
 public final class MainActivity extends Activity {
     private static final String PAGE = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
+    private volatile TranscriptPlayer transcriptPlayer;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService aiWorker = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
@@ -102,6 +103,7 @@ public final class MainActivity extends Activity {
     }
     private void requestStart(String apiKey, String selectedModel, String lang, String source) {
         if (RecordingService.active || starting || retrying || diarizing) return;
+        if(transcriptPlayer!=null)transcriptPlayer.close();
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare la registrazione"); return; }
         if (RecordingService.PLAYBACK.equals(source) && Build.VERSION.SDK_INT < 29) { startError("L'audio del dispositivo richiede Android 10 o successivo"); return; }
         if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
@@ -163,6 +165,7 @@ public final class MainActivity extends Activity {
             if (Transcriber.result(wav).exists()) {
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
                 if (text.trim().isEmpty()) continue;
+                JSONObject quality=VoiceData.readQuality(wav);
                 if(local) {
                     try {
                         JSONArray groups=VoiceData.completeGroups(wav,text),recognized=new JSONArray();
@@ -176,7 +179,7 @@ public final class MainActivity extends Activity {
                                 .put("speakerSource","local").put("speakerReview",speaker==0||group.optBoolean("review",true))
                                 .put("speakerSimilarity",group.optDouble("similarity",-1));
                             if(speaker>0)turn.put("nativeVoiceId",id+"/voice-"+speaker);
-                            recognized.put(turn);
+                            recognized.put(VoiceData.annotateQuality(turn,quality));
                         }
                         if(groups.length()>0){for(int i=0;i<recognized.length();i++)entries.put(recognized.getJSONObject(i));continue;}
                     }catch(Exception ignored){ /* Raw transcript remains available below. */ }
@@ -191,7 +194,7 @@ public final class MainActivity extends Activity {
                         entry.put("speaker", speaker.optInt("speaker", 0)).put("speakerName", speaker.optString("speakerName", "Non assegnato"));
                     } catch (Exception ignored) { /* Older/corrupt labels stay unassigned. */ }
                 }
-                entries.put(entry);
+                entries.put(VoiceData.annotateQuality(entry,quality));
             } else pending++;
         }
         File[] partials = dir.listFiles((d,n) -> n.endsWith(".part"));
@@ -289,6 +292,13 @@ public final class MainActivity extends Activity {
             }catch(Exception e){ui.post(()->toast("Nome vocale non salvato: riprova"));}});
         }
         @JavascriptInterface public boolean canCapturePlayback() { return Build.VERSION.SDK_INT >= 29; }
+        @JavascriptInterface public void setTranscriptionGlossary(String value){getSharedPreferences("native",0).edit().putString("glossary",SpeechContext.glossary(value)).apply();}
+        @JavascriptInterface public void listen(String segment,long start,long end){ui.post(()->{
+            if(!hasWindowFocus()||isFinishing()||isDestroyed())return;
+            if(RecordingService.active||starting){toast("Ferma prima la registrazione per riascoltare");return;}
+            try{if(transcriptPlayer==null)transcriptPlayer=new TranscriptPlayer(getFilesDir(),MainActivity.this::toast);transcriptPlayer.play(segment,start,end);}catch(Exception e){toast(e.getMessage());}
+        });}
+        @JavascriptInterface public void stopListening(){ui.post(()->{if(transcriptPlayer!=null)transcriptPlayer.close();});}
         @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.MICROPHONE)); }
         @JavascriptInterface public void startPlayback(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.PLAYBACK)); }
         @JavascriptInterface public void stop() { ui.post(() -> { if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP)); }); }
@@ -297,7 +307,7 @@ public final class MainActivity extends Activity {
             try {
                 String id = latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
-                    .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level)
+                    .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("listening",transcriptPlayer!=null&&transcriptPlayer.isPlaying())
                     .put("source", RecordingService.source).put("localVoices",RecordingService.active?RecordingService.localVoices:getSharedPreferences("native",0).getBoolean("localVoices",true)).put("voiceStatus",RecordingService.voiceStatus).put("status", RecordingService.status).toString();
             } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
         }
@@ -313,17 +323,20 @@ public final class MainActivity extends Activity {
                 worker.execute(() -> {
                     try {
                         File dir = session(id); repair(dir);
-                        NativeVoiceEngine engine=null;
+                        NativeVoiceEngine engine=null;int pending=0;boolean quotaLimited=false;String lastError="";
                         try {
                             for(File wav:Transcriber.segments(dir)){
+                                if(quotaLimited&&!Transcriber.result(wav).exists()&&!Transcriber.hasCachedResponse(wav)){pending++;continue;}
+                                try{
                                 if(VoiceData.enabled(dir)&&!VoiceData.timeline(wav).exists()){
                                     try{if(engine==null)engine=new NativeVoiceEngine(MainActivity.this,dir);engine.analyse(wav);}
                                     catch(Exception|LinkageError e){try{NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}catch(Exception ignored){ /* Transcribe the entire WAV even if voice metadata cannot be saved. */ }}
                                 }
                                 Transcriber.transcribe(wav,apiKey,selectedModel,lang);
+                                }catch(Exception e){pending++;lastError=e.getMessage();if(e instanceof Transcriber.QuotaLimited)quotaLimited=true;}
                             }
                         }finally{if(engine!=null)engine.close();}
-                        RecordingService.status = "Sessione recuperata e trascritta";
+                        RecordingService.status = pending==0?"Sessione recuperata e trascritta":"Audio conservato · "+pending+" segmenti in attesa · "+lastError;
                     } catch (Exception e) { RecordingService.status = "Audio conservato · " + e.getMessage(); }
                     finally { retrying = false; }
                 });
@@ -381,10 +394,12 @@ public final class MainActivity extends Activity {
     public void onBackPressed() { web.evaluateJavascript("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))", null); moveTaskToBack(true); }
     protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
     protected void onPause() {
+        if(transcriptPlayer!=null)transcriptPlayer.close();
         if (web != null) { web.evaluateJavascript("typeof autosaveNow === 'function' && autosaveNow()", null); web.onPause(); }
         super.onPause();
     }
     protected void onDestroy() {
+        if(transcriptPlayer!=null)transcriptPlayer.close();
         if (filePicker != null) filePicker.onReceiveValue(null);
         if (web != null) { web.removeJavascriptInterface("AndroidRecorder"); web.destroy(); web = null; }
         for (AiHttp.Control control : aiRequests.values()) aiCancellation.execute(control::cancel);

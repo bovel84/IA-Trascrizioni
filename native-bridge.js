@@ -77,6 +77,7 @@ window.initNativeRecorder = function () {
     catch (e) { seen = new Set(); }
     transcriptEntries.forEach(entry => { if (entry.nativeSegmentId) seen.add(entry.nativeSegmentId); });
     window.nativeAudioSession = window.nativeAudioSession || null;
+    window.nativeSessionPending=window.nativeSessionPending||{};
 
     function entryFromNative(entry, register=false) {
         let id=Number.isInteger(entry.speaker)&&entry.speaker>=1&&entry.speaker<=32?entry.speaker:0;
@@ -101,6 +102,7 @@ window.initNativeRecorder = function () {
         let changed = false;
         const hidden = JSON.parse(localStorage.getItem('voicescribe_native_hidden') || '[]');
         for (const state of states) {
+            if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
             if (!state.sessionId || hidden.includes(state.sessionId)) continue;
             let record = savedRecordings.find(r => r.nativeAuto && r.nativeAudioSession === state.sessionId);
             if (!record) {
@@ -121,6 +123,7 @@ window.initNativeRecorder = function () {
                 if (imported.has(entry.nativeSegmentId)) {
                     const existing=record.entries.find(e=>e.nativeSegmentId===entry.nativeSegmentId);
                     if(existing?.nativeVoiceId && existing.speakerSource==='local')existing.speakerName=entry.speakerName;
+                    if(existing&&typeof entry.transcriptReview==='boolean')Object.assign(existing,{transcriptReview:entry.transcriptReview,transcriptReviewReason:entry.transcriptReviewReason,transcriptQualityAvailable:entry.transcriptQualityAvailable});
                     continue;
                 }
                 record.entries.push(entryFromNative(entry));
@@ -140,7 +143,14 @@ window.initNativeRecorder = function () {
         if (window.nativeAudioSession !== state.sessionId || window.nativeDiarizedSession === state.sessionId) return;
         let changed = false;
         for (const entry of state.entries || []) {
-            if (seen.has(entry.nativeSegmentId)) continue;
+            if (seen.has(entry.nativeSegmentId)) {
+                const existing=transcriptEntries.find(e=>e.nativeSegmentId===entry.nativeSegmentId);
+                if(existing&&typeof entry.transcriptReview==='boolean'){
+                    const fields={transcriptReview:entry.transcriptReview,transcriptReviewReason:entry.transcriptReviewReason,transcriptQualityAvailable:entry.transcriptQualityAvailable};
+                    if(Object.keys(fields).some(k=>existing[k]!==fields[k])){Object.assign(existing,fields);changed=true;}
+                }
+                continue;
+            }
             const before = transcriptEntries.length;
             const participant = entryFromNative(entry,true);
             if (participant.speakerSource!=='local' && participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
@@ -149,6 +159,7 @@ window.initNativeRecorder = function () {
             seen.add(entry.nativeSegmentId); changed = true;
         }
         if (changed) {
+            refreshTranscript();
             try { localStorage.setItem('voicescribe_native_seen', JSON.stringify([...seen])); } catch (e) { }
             scheduleAutosave(true);
         }
@@ -157,6 +168,8 @@ window.initNativeRecorder = function () {
         startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
     };
     window.applyNativeRecorderState = state => {
+        if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
+        if(!transcriptAudio){const status=state.listening?'Riascolto dell’audio originale in corso.':'';if($('transcriptPlaybackStatus').textContent!==status)$('transcriptPlaybackStatus').textContent=status;}
         if (state.active) {
             startRequested = false;
             if (state.sessionId && window.nativeAudioSession !== state.sessionId) {
@@ -207,8 +220,10 @@ window.initNativeRecorder = function () {
     startRecording = async function () {
         if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
+        window.stopTranscriptAudio();
         audioBlob = null; startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
         try {
+            if(bridge.setTranscriptionGlossary)bridge.setTranscriptionGlossary(transcriptionGlossary);
             if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]);
             if (sourceSelect.value === 'playback') {
                 if (!playbackSupported || typeof bridge.startPlayback !== 'function') throw new Error('Aggiorna l’app Android per acquisire l’audio dei video');
@@ -230,6 +245,7 @@ window.initNativeRecorder = function () {
         await webLoad(id);
         // Stored edits/deletions are authoritative; don't reinsert deleted raw segments.
         const state = JSON.parse(bridge.sessions()).find(s => s.sessionId === window.nativeAudioSession);
+        if(state)window.nativeSessionPending[state.sessionId]=state.pending||0;
         if (state) (state.entries || []).forEach(entry => seen.add(entry.nativeSegmentId));
     };
     const webDelete = window.delRec;

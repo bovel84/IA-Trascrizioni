@@ -17,6 +17,7 @@ final class Transcriber {
         return files;
     }
     static File result(File wav) { return new File(wav.getPath() + ".txt"); }
+    static boolean hasCachedResponse(File wav){try{return VoiceData.read(VoiceData.response(wav)).opt("text") instanceof String;}catch(Exception invalid){return false;}}
     static String transcript(File session) throws IOException {
         StringBuilder text = new StringBuilder();
         for (File wav : segments(session)) {
@@ -55,8 +56,10 @@ final class Transcriber {
         // The WAV is already stored on disk: stream it with a known Content-Length, without buffering the audio.
         ByteArrayOutputStream prefix = new ByteArrayOutputStream();
         field(prefix, boundary, "model", model); field(prefix, boundary, "language", language);
+        String context=contextPrompt(wav);if(!context.isEmpty())field(prefix,boundary,"prompt",context);
         boolean nativeVoices=wantsVoices(wav);
-        field(prefix, boundary, "response_format", nativeVoices ? "verbose_json" : "json");
+        field(prefix, boundary, "response_format", "verbose_json");
+        field(prefix,boundary,"timestamp_granularities[]","segment");
         if(nativeVoices)field(prefix,boundary,"timestamp_granularities[]","word");
         field(prefix, boundary, "temperature", "0");
         bytes(prefix, "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
@@ -69,7 +72,8 @@ final class Transcriber {
                 out.write(suffix);
             }
             int code = conn.getResponseCode();
-            if (code == 429 || code >= 500) throw new Retryable("Groq HTTP " + code);
+            if(code==429)throw new QuotaLimited();
+            if (code >= 500) throw new Retryable("Groq HTTP " + code);
             if (code < 200 || code >= 300) {
                 String detail = errorDetail(conn);
                 throw new IOException("Groq HTTP " + code + (detail.isEmpty() ? ": controlla chiave, formato e modello" : ": " + detail));
@@ -86,6 +90,17 @@ final class Transcriber {
         } finally { conn.disconnect(); }
     }
     private static boolean wantsVoices(File wav){return VoiceData.enabled(wav.getParentFile())||VoiceData.timeline(wav).exists();}
+    static String contextPrompt(File wav){
+        String glossary="",previous="";
+        try{glossary=VoiceData.read(new File(wav.getParentFile(),"transcription-settings.json")).optString("glossary","");}catch(Exception ignored){}
+        File prior=null;for(File file:segments(wav.getParentFile())){if(file.getName().compareTo(wav.getName())>=0)break;prior=file;}
+        try{if(prior!=null&&result(prior).isFile()){
+            long start=Long.parseLong(wav.getName().replace(".wav","")),end=Long.parseLong(prior.getName().replace(".wav",""))+VoiceData.duration(prior);
+            boolean suspect=VoiceData.readQuality(prior).optBoolean("review",false);
+            if(!suspect&&Math.abs(start-end)<=500)previous=new String(Files.readAllBytes(result(prior).toPath()),StandardCharsets.UTF_8);
+        }}catch(Exception ignored){}
+        return SpeechContext.prompt(glossary,previous);
+    }
     static void saveResponse(File wav,JSONObject json)throws Exception{
         if(!(json.opt("text") instanceof String))throw new IOException("Risposta Groq senza testo");
         String text=json.getString("text").trim();
@@ -93,8 +108,9 @@ final class Transcriber {
         // bounded local step, so polling cannot import a raw chunk followed by duplicate turns.
         File tmp=new File(result(wav).getPath()+".tmp");
         try(FileOutputStream out=new FileOutputStream(tmp)){out.write(text.getBytes(StandardCharsets.UTF_8));out.getFD().sync();}
+        try{VoiceData.write(VoiceData.response(wav),json);}catch(Exception ignored){ /* Full TXT still publishes below. */ }
+        try{VoiceData.write(VoiceData.quality(wav),VoiceData.assess(json));}catch(Exception ignored){ /* Quality metadata is optional. */ }
         if(wantsVoices(wav)){
-            try{VoiceData.write(VoiceData.response(wav),json);}catch(Exception ignored){ /* Full TXT still publishes below. */ }
             try{VoiceData.align(wav,json);}catch(Exception ignored){ /* UI falls back to the entire TXT, unassigned. */ }
         }
         if(!tmp.renameTo(result(wav)))throw new IOException("Salvataggio trascrizione fallito");
@@ -118,5 +134,9 @@ final class Transcriber {
     private static final class Retryable extends IOException {
         private static final long serialVersionUID = 1L;
         Retryable(String message) { super(message); }
+    }
+    static final class QuotaLimited extends IOException {
+        private static final long serialVersionUID=1L;
+        QuotaLimited(){super("Limite di frequenza o quota Groq raggiunto: audio conservato, riprova più tardi");}
     }
 }

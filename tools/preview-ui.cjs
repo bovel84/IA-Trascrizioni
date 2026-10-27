@@ -17,6 +17,15 @@ fs.mkdirSync(output,{recursive:true});
  await page.goto('http://127.0.0.1:8088',{waitUntil:'networkidle'});
  await page.screenshot({path:path.join(output,'desktop.png'),fullPage:true});
  await page.evaluate(()=>{speakers=['Anna','Marco'];transcriptEntries=[{speaker:1,speakerName:'Anna',text:'Partiamo dagli obiettivi della riunione. Vorrei fare il punto sul progetto e definire insieme i prossimi passi.',time:'00:12',offsetMs:12000},{speaker:2,speakerName:'Marco',text:'La prima versione è pronta. Possiamo raccogliere i commenti del gruppo e programmare una nuova verifica per venerdì.',time:'00:28',offsetMs:28000}];refreshTranscript();updateSpeakerChips();});
+ await page.evaluate(()=>{Object.assign(transcriptEntries[1],{transcriptQualityAvailable:true,transcriptReview:true,transcriptReviewReason:'Audio poco chiaro'});refreshTranscript();});
+ await page.locator('#transcriptReviewBtn').click();
+ if(await page.locator('#transcriptArea > .transcript-entry').count()!==1)throw Error('Audio review filter failed');
+ await page.locator('[onclick="confirmTranscriptEntry(1)"]').click();
+ if(await page.evaluate(()=>needsTranscriptReview(transcriptEntries[1])))throw Error('Manual audio review not saved');
+ await page.evaluate(()=>{delete transcriptEntries[1].transcriptVerifiedText;refreshTranscript();});
+ await page.locator('.settings-trigger').click();await page.locator('#transcriptionGlossary').fill('SFIRS, RAS, Sardafactoring');
+ if(await page.evaluate(()=>localStorage.getItem('voicescribe_glossary'))!=='SFIRS, RAS, Sardafactoring')throw Error('Terminology not saved');
+ await page.locator('#connectionSettings>summary').click();
  const results=[], layoutErrors=[];
  for(const width of [320,390,768,1440]) {
   await page.setViewportSize({width,height:900});
@@ -58,6 +67,14 @@ fs.mkdirSync(output,{recursive:true});
  page.once('dialog',dialog=>dialog.accept('Continuazione modificata.'));
  await page.locator('.transcript-fragments [onclick="editEntry(1)"]').click();
  if(await page.evaluate(()=>transcriptEntries[1].text)!=='Continuazione modificata.' || !(await page.locator('#transcriptArea > .transcript-entry').first().innerText()).includes('Prima frase Continuazione modificata.'))throw Error('Grouped editing changed the wrong fragment');
+ // Real browser playback of an original PCM WAV, without any provider request.
+ await page.evaluate(()=>{
+  const data=new Uint8Array(44+32000*2),view=new DataView(data.buffer),put=(at,text)=>{for(let i=0;i<text.length;i++)data[at+i]=text.charCodeAt(i);};
+  put(0,'RIFF');view.setUint32(4,data.length-8,true);put(8,'WAVEfmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,16000,true);view.setUint32(28,32000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);put(36,'data');view.setUint32(40,data.length-44,true);
+  audioBlob=new Blob([data],{type:'audio/wav'});transcriptEntries=[{speaker:1,speakerName:'Anna',text:'Audio originale da riascoltare.',offsetMs:0,endMs:1500,time:'00:00'}];refreshTranscript();
+ });
+ await page.locator('[onclick="listenEntry(0)"]').click();await page.waitForFunction(()=>transcriptAudio&&!transcriptAudio.paused);
+ await page.locator('[onclick="stopTranscriptAudio()"]').click();if(await page.evaluate(()=>transcriptAudio!==null))throw Error('Playback stop failed');
  // The APK reveals controls hidden in the PWA: verify them at phone/tablet widths too.
  await page.addInitScript(()=>{
   window.AndroidRecorder={canCapturePlayback:()=>true,localVoicesAvailable:()=>true,setLocalVoices:()=>{},startPlayback:()=>{},start:()=>{},

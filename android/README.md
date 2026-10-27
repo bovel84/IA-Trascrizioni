@@ -1,5 +1,46 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Trascrizione ed elaborazione con revisione (2.4)
+
+- Le nuove installazioni selezionano `whisper-large-v3`; le scelte già salvate, incluso
+  Turbo, restano valide. La terminologia nelle impostazioni accetta un breve elenco
+  di nomi/sigle/grafie. Il contesto audio usa questa lista e le ultime parole del
+  segmento immediatamente precedente, solo se contiguo e non segnalato come incerto.
+  Nessun testo di segmenti futuri o di altre registrazioni. Impostazioni fotografate
+  nella sessione Android; prompt limitato conservativamente a 220 byte UTF-8.
+- Groq riceve WAV completi, lingua, `verbose_json` e metadati dei segmenti; per le voci
+  locali si aggiungono i tempi delle parole nella stessa richiesta. I metadati di
+  log-probabilità/ripetizione segnalano audio **da riascoltare**, senza scartare parole.
+  La mancanza di metadati compare come **Qualità audio non stimata**. Sono indicatori
+  euristici, non una percentuale di accuratezza e non una verifica del significato.
+- **Da verificare** mostra i passaggi con voce incerta/non assegnata o audio segnalato.
+  **▶** riascolta il WAV originale ai tempi del frammento, **Ferma ascolto** interrompe
+  la riproduzione. Nella vista continua aprire il dettaglio dei frammenti. Il riascolto
+  non è disponibile durante la registrazione e si ferma uscendo dall'app/cambiando
+  progetto. **✓** conferma il testo dopo la revisione; un'ulteriore modifica invalida
+  la conferma. Questa azione non conferma automaticamente l'identità di una voce.
+- Correggi/Migliora ricevono un contesto limitato ai margini delle parti lunghe.
+  I controlli automatici bloccano risultati troppo brevi, cifre aggiunte/mancanti o
+  alterate e attribuzioni eliminate. Correggi segnala anche riscritture lessicali
+  troppo estese sui singoli blocchi. Il confronto dei valori numerici non certifica
+  l'associazione cifra/fatto né l'accuratezza semantica: resta necessaria la revisione.
+  Originali e risultati precedenti vengono conservati se un controllo fallisce.
+- Sintesi/Punti chiave chiedono decisioni, proposte, dissensi, responsabili, scadenze
+  e riscontri nel testo; i dati assenti restano non indicati. Grafici e mappe mantengono
+  i controlli di schema/evidenze già presenti. PDF/TXT/Markdown riportano i passaggi da
+  verificare e, nell'app Android, segnalano eventuali segmenti ancora non trascritti.
+- Una risposta 429 sospende ulteriori upload automatici della coda: registrazione e
+  salvataggio dell'audio continuano. Il recupero Android riutilizza le risposte valide
+  in cache e prosegue sui file recuperabili anche dopo un errore su un altro segmento.
+  Altre richieste rimangono in attesa di **Riprova** dopo il ripristino della quota.
+
+Riferimenti: [Groq speech-to-text](https://console.groq.com/docs/speech-to-text),
+[soglie euristiche nel decoder Whisper](https://github.com/openai/whisper/blob/main/whisper/transcribe.py).
+Verifiche automatiche: contesto, termini Unicode, cifre, completezza, conferme manuali,
+quote, ripristino, tempi/percorsi degli estratti e playback reale Android/browser.
+Non è stata misurata la WER su registrazioni reali italiane dell'utente: questi test
+verificano il flusso e i controlli, non certificano equivalenza con servizi professionali.
+
 ## Testo continuo per partecipante (2.3.2)
 
 I segmenti consecutivi attribuiti alla stessa persona vengono mostrati come un unico

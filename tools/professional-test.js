@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
+const {createEnvironment}=require('./dom-stub'),html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+const ctx=createEnvironment({html}),run=s=>vm.runInContext(s,ctx);let passed=0;
+function check(label,value){assert.ok(value,label);passed++;console.log('ok  '+label);}
+const api=content=>({choices:[{finish_reason:'stop',message:{content}}]});
+const idle=async()=>{while(run('liveProcessing'))await new Promise(r=>setTimeout(r,1));};
+(async()=>{
+ for(const m of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))run(m[1]);await run('init()');
+ check('new installations favor the accuracy model',run('sttModel')==='whisper-large-v3');
+ run("$('transcriptionGlossary').value='SFIRS, RAS, Sardafactoring';$('transcriptionGlossary').oninput();");
+ check('terminology is stored and shared by new transcription requests',ctx.localStorage.getItem('voicescribe_glossary')==='SFIRS, RAS, Sardafactoring');
+ check('prompt length respects one conservative UTF8 budget',run("new TextEncoder().encode(speechPrompt('é🙂'.repeat(100),'parola '.repeat(200))).length")<=220);
+ check('Unicode terminology is not cut inside a surrogate pair',!run("limitSpeechBytes('é🙂'.repeat(100),160)").includes('\ufffd'));
+ check('missing metrics never claim measured confidence',!run('speechQuality({text:"testo"}).transcriptQualityAvailable'));
+ check('high silence probability alone does not erase speech',!run('speechQuality({segments:[{avg_logprob:-.1,no_speech_prob:.99}]}).transcriptReview'));
+ check('low probability and excessive repetition are review flags',run('speechQuality({segments:[{avg_logprob:-2,compression_ratio:3}]}).transcriptReview'));
+ const requests=[];
+ ctx.fetch=async(url,options)=>{requests.push(options.body);return{ok:true,status:200,json:async()=>({text:requests.length===1?'Il lavoro SFIRS prosegue.':'Testo incerto conservato.',segments:[{avg_logprob:requests.length===1?-.1:-2,compression_ratio:1.4}]})};};
+ run("transcriptEntries=[];notesText='';liveSpeechContext='';liveQuotaLimited=false;enqueueChunk(new Blob(['audio']),0,{speaker:1,speakerName:'Anna',speakerReview:false});");await idle();
+ run("enqueueChunk(new Blob(['audio']),30000,{speaker:2,speakerName:'Luca',speakerReview:false});");await idle();
+ check('contiguous browser chunks carry prior words and glossary',requests.length===2&&requests[1].get('prompt').includes('SFIRS')&&requests[1].get('prompt').includes('prosegue.'));
+ check('transcription requests include segment metadata without another API call',requests[0].get('response_format')==='verbose_json'&&requests[0].get('timestamp_granularities[]')==='segment');
+ check('suspect text is preserved exactly and marked for review',run('transcriptEntries[1].text')==='Testo incerto conservato.'&&run('transcriptEntries[1].transcriptReview'));
+ run('toggleTranscriptReview()');check('review mode shows only suspect turns',ctx.__elements.get('transcriptArea').children.length===1&&run('transcriptReviewOnly'));
+ run('confirmTranscriptEntry(1)');check('manual confirmation clears the queue without erasing source flags',!run('needsTranscriptReview(transcriptEntries[1])')&&run('transcriptEntries[1].transcriptReview')&&!run('transcriptReviewOnly'));
+ run("transcriptEntries[1].text+=' Modifica successiva.';");check('editing a confirmed text invalidates the previous confirmation',run('needsTranscriptReview(transcriptEntries[1])'));
+ assert.throws(()=>run("validateEditorialText('Importo 1250,50 euro.','Importo 1200 euro.','correct')"));check('editorial checks reject changed amounts',true);
+ assert.throws(()=>run("validateEditorialText('Importo 1250 euro.','Importo 1250 euro e bonus 100.','improve')"));check('editorial checks reject invented numeric facts',true);
+ assert.throws(()=>run("validateEditorialText('parola '.repeat(100),'Breve sintesi.','correct')"));check('a successful but summarized correction cannot silently replace full text',true);
+ check('legitimate corrections retain original numeric facts',run("validateEditorialText('Importo 1.250,50 euro.','Importo confermato: 1.250,50 euro.','correct').numericValuesChecked")===1);
+ assert.throws(()=>run("validateEditorialText('Una discussione concreta sul progetto. '.repeat(30),'Una storia inventata sul mare. '.repeat(30),'correct')"));check('correction rejects extensive rewriting even at the same length',true);
+ assert.throws(()=>run("validateEditorialText('Anna:\\nUn intervento.','Un intervento.','improve')"));check('editing cannot silently remove a participant attribution',true);
+ run("whisperKey=llamaKey='gsk_test';notesText='Budget 1250 euro.';$('aiSourceSelect').value='notes';aiResults=[{action:'correct',title:'Testo corretto',content:'Risultato precedente',createdAt:Date.now()}];");
+ ctx.nativeAiRequest=async()=>({ok:true,status:200,json:async()=>api('Budget 999 euro.')});await run("runAI('correct')");
+ check('a rejected rewrite preserves the previous result and exposes the reason',run('aiResults[0].content')==='Risultato precedente'&&ctx.__elements.get('aiToolStatus').textContent.includes('cifra'));
+ const messages=[];ctx.nativeAiRequest=async(p,e,k,body)=>{messages.push(body.messages.at(-1).content);return{ok:true,status:200,json:async()=>api(body.messages.at(-1).content.split('\n\nDOCUMENTO:\n').at(-1))};};
+ run("notesText=('Un contenuto da conservare integralmente. ').repeat(600)+'MARCATORE FINALE';");await run("runAI('correct')");
+ check('long editorial jobs receive bounded context but preserve all source parts',messages.length>1&&messages.every(m=>m.includes('CONTESTO SOLO PER RACCORDO'))&&run("aiResults[0].content.endsWith('MARCATORE FINALE')"));
+ check('editorial check results are recorded with the reusable output',run('aiResults[0].editorialChecks.sourceWords')>1000);
+ check('splitting at paragraphs preserves every source character',run("splitAnalysisText('Prima frase. '.repeat(2000),6500).join('')")===('Prima frase. '.repeat(2000)));
+ let uploads=0;ctx.fetch=async()=>{uploads++;return{ok:false,status:429,json:async()=>({error:{message:'quota'}})};};
+ run("liveQuotaLimited=false;failedChunks=[];enqueueChunk(new Blob(['uno']),60000);enqueueChunk(new Blob(['due']),90000);");await idle();await run('processPendingChunks()');
+ check('quota exhaustion pauses later uploads and automatic final retries',uploads===1&&run('liveQuotaLimited'));
+ check('partial transcription remains marked in the draft and AI source',run('sessionSnapshot().transcriptIncomplete')&&run('analysisSource("transcript").label').includes('parziale'));
+ check('exports disclose incomplete audio and unresolved review flags',run('transcriptReviewNotes().join(" ")').includes('TRASCRIZIONE PARZIALE'));
+ const calls=[];ctx.AndroidRecorder={listen:(...args)=>calls.push(args),stopListening:()=>calls.push('stop')};
+ run("isRecording=isProcessing=false;transcriptEntries=[{text:'Estratto',speaker:1,nativeSegmentId:'session-1793091234567/000000030000.wav#0',offsetMs:30100,endMs:30500}];");await run('listenEntry(0)');
+ check('native review plays the original excerpt with its actual timestamps',calls.some(c=>Array.isArray(c)&&c[1]===30100&&c[2]===30500));
+ const before=calls.length;run('isRecording=true');await run('listenEntry(0)');check('review playback cannot feed the microphone during recording',calls.length===before);
+ run('isRecording=false;resetAnalysisScope();');check('changing project stops the current excerpt',calls.at(-1)==='stop');
+ // A saved fast-model preference must survive the new default.
+ const other=createEnvironment({html});other.localStorage.setItem('groq_stt_model','whisper-large-v3-turbo');
+ for(const m of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))vm.runInContext(m[1],other);
+ check('an existing fast-model preference is preserved',vm.runInContext('sttModel',other)==='whisper-large-v3-turbo');
+ console.log(`${passed} professional workflow checks passed.`);
+})().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)});

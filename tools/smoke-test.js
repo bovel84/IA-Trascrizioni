@@ -59,7 +59,7 @@ async function main() {
         check('init() senza errori', false, e.stack.split('\n').slice(0, 4).join(' | '));
     }
 
-    check('modello STT di default configurato', ev('sttModel') === 'whisper-large-v3-turbo', ev('sttModel'));
+    check('modello STT di default configurato', ev('sttModel') === 'whisper-large-v3', ev('sttModel'));
     check('modello LLM non piu deprecato', ev('llmModel') === 'openai/gpt-oss-120b', ev('llmModel'));
 
     // ============ FASE 2: registrazione + trascrizione incrementale ============

@@ -76,4 +76,36 @@ public class TranscriptionIntegrityTest {
         Transcriber.saveResponse(wav,response());JSONArray groups=VoiceData.completeGroups(wav,FULL);
         assertEquals(FULL,saved());assertEquals(FULL,groups.getJSONObject(0).getString("text"));assertEquals(2,groups.getJSONObject(0).getInt("speaker"));
     }
+    @Test public void poorAudioMetadataFlagsReviewWithoutDroppingAnyText()throws Exception{
+        JSONObject json=response().put("segments",new JSONArray().put(new JSONObject().put("avg_logprob",-1.4).put("compression_ratio",3.2).put("no_speech_prob",.9)));
+        Transcriber.saveResponse(wav,json);JSONObject quality=VoiceData.readQuality(wav);
+        assertEquals(FULL,saved());assertTrue(quality.getBoolean("available"));assertTrue(quality.getBoolean("review"));assertEquals(1,quality.getInt("flaggedSegments"));assertTrue(quality.getString("reason").contains("ripetizioni"));
+    }
+    @Test public void missingMetadataNeverClaimsMeasuredAudioQuality()throws Exception{assertFalse(VoiceData.assess(response()).getBoolean("available"));assertFalse(VoiceData.assess(response()).getBoolean("review"));}
+    @Test public void goodMetadataDoesNotInventAnAccuracyPercentage()throws Exception{
+        JSONObject quality=VoiceData.assess(response().put("segments",new JSONArray().put(new JSONObject().put("avg_logprob",-.2).put("compression_ratio",1.3).put("no_speech_prob",.1))));
+        assertTrue(quality.getBoolean("available"));assertFalse(quality.getBoolean("review"));assertFalse(quality.has("accuracy"));
+    }
+    @Test public void silenceProbabilityAloneNeverDiscardsConfidentSpeech()throws Exception{
+        JSONObject quality=VoiceData.assess(response().put("segments",new JSONArray().put(new JSONObject().put("avg_logprob",-.1).put("no_speech_prob",.99))));assertFalse(quality.getBoolean("review"));
+    }
+    @Test public void oldCachedResultsGainReviewMetadataWithoutNetwork()throws Exception{
+        VoiceData.write(VoiceData.response(wav),response().put("segments",new JSONArray().put(new JSONObject().put("avg_logprob",-2))));
+        assertTrue(VoiceData.readQuality(wav).getBoolean("review"));assertTrue(VoiceData.quality(wav).isFile());
+    }
+    private File next(String offset)throws Exception{File file=new File(session,offset+".wav");Files.copy(wav.toPath(),file.toPath());return file;}
+    @Test public void contiguousAudioReceivesTerminologyAndPreviousText()throws Exception{
+        VoiceData.write(new File(session,"transcription-settings.json"),new JSONObject().put("glossary","SFIRS RAS"));Files.write(Transcriber.result(wav).toPath(),"La discussione prosegue nel prossimo segmento.".getBytes(StandardCharsets.UTF_8));
+        String prompt=Transcriber.contextPrompt(next("000000004000"));assertTrue(prompt.startsWith("SFIRS RAS\n"));assertTrue(prompt.endsWith("segmento."));assertTrue(prompt.getBytes(StandardCharsets.UTF_8).length<=220);
+    }
+    @Test public void missingPrecedingTranscriptCannotUseFutureOrOlderChunks()throws Exception{
+        Files.write(Transcriber.result(wav).toPath(),"Contesto vecchio".getBytes(StandardCharsets.UTF_8));File middle=next("000000004000"),last=next("000000008000");
+        assertEquals("",Transcriber.contextPrompt(last));Files.write(Transcriber.result(last).toPath(),"Contesto futuro".getBytes(StandardCharsets.UTF_8));assertFalse(Transcriber.contextPrompt(middle).contains("futuro"));
+    }
+    @Test public void flaggedPreviousSpeechIsNotPropagatedAsContext()throws Exception{
+        Files.write(Transcriber.result(wav).toPath(),"Testo da riascoltare".getBytes(StandardCharsets.UTF_8));VoiceData.write(VoiceData.quality(wav),new JSONObject().put("review",true));assertEquals("",Transcriber.contextPrompt(next("000000004000")));
+    }
+    @Test public void corruptedCacheCannotBypassAnUploadQuotaPause()throws Exception{
+        Files.write(VoiceData.response(wav).toPath(),"{broken".getBytes(StandardCharsets.UTF_8));assertFalse(Transcriber.hasCachedResponse(wav));VoiceData.write(VoiceData.response(wav),response());assertTrue(Transcriber.hasCachedResponse(wav));
+    }
 }

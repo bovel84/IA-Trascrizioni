@@ -22,6 +22,7 @@ public final class RecordingService extends Service {
     private NativeVoiceEngine voiceEngine;
     private static final long SEGMENT_SECONDS = 30L; // First transcript appears sooner than after a 2-minute segment.
     private volatile boolean stopping;
+    private boolean quotaLimited;
     private volatile String captureIssue;
     private volatile AudioRecord audio;
     private MediaProjection projection;
@@ -93,9 +94,10 @@ public final class RecordingService extends Service {
             if (!session.mkdir()) throw new IOException("Impossibile creare la sessione");
             localVoices=getSharedPreferences("native",0).getBoolean("localVoices",true);
             VoiceData.write(new File(session,"native-voices.json"),new org.json.JSONObject().put("enabled",localVoices).put("model",VoiceData.MODEL));
+            VoiceData.write(new File(session,"transcription-settings.json"),new org.json.JSONObject().put("glossary",SpeechContext.glossary(getSharedPreferences("native",0).getString("glossary",""))).put("model",model).put("language",language));
             voiceStatus=localVoices ? "Riconoscimento sul dispositivo · attendo il primo segmento" : "Attribuzione manuale dei partecipanti";
             getSharedPreferences("native", 0).edit().putString("latest", session.getName()).apply();
-            active = recording = true; paused = false; stopping = false;
+            active = recording = true; paused = false; stopping = false;quotaLimited=false;
             // AudioRecord delivers PCM to application code: that thread must keep writing
             // and closing segments while the CPU would otherwise sleep. No screen lock.
             cpu = ((PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VoiceScribe:Capture");
@@ -202,7 +204,7 @@ public final class RecordingService extends Service {
                 for (File file : Transcriber.segments(session)) if (!Transcriber.result(file).exists()) pending++;
                 if (captureFailure != null) status = captureFailure;
                 else if (pending == 0 && stopping) status = "Sessione salvata e trascritta";
-                else if (pending > 0) status = "Audio salvato · " + pending + " segmenti da ritrascrivere";
+                else if (pending > 0) status = "Audio salvato · " +(quotaLimited?"limite Groq raggiunto · ":"")+ pending + " segmenti da ritrascrivere";
                 if(voiceEngine!=null){voiceEngine.close();voiceEngine=null;}
                 releaseCpu();
                 new Handler(getMainLooper()).post(() -> { active = false; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); });
@@ -218,6 +220,7 @@ public final class RecordingService extends Service {
     private void submit(File file) {
         uploads.execute(() -> {
             try {
+                if(quotaLimited&&!Transcriber.hasCachedResponse(file))return;
                 if(localVoices && !VoiceData.timeline(file).exists()){
                     voiceStatus="Analisi voci sul dispositivo in corso…";
                     try{
@@ -231,7 +234,7 @@ public final class RecordingService extends Service {
                 }
                 Transcriber.transcribe(file, key, model, language);
             }
-            catch (Exception e) { status = "Audio salvato · " + e.getMessage() + " · usa Riprova"; }
+            catch (Exception e) {if(e instanceof Transcriber.QuotaLimited)quotaLimited=true;status = "Audio salvato · " + e.getMessage() + " · usa Riprova"; }
         });
     }
     private synchronized void releaseCpu() {

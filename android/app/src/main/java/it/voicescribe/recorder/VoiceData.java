@@ -11,6 +11,25 @@ final class VoiceData {
     static File timeline(File wav){return new File(wav.getPath()+".voices.json");}
     static File utterances(File wav){return new File(wav.getPath()+".utterances.json");}
     static File response(File wav){return new File(wav.getPath()+".stt.json");}
+    static File quality(File wav){return new File(wav.getPath()+".quality.json");}
+    static JSONObject readQuality(File wav){
+        try{return read(quality(wav));}catch(Exception ignored){}
+        try{JSONObject data=assess(read(response(wav)));try{write(quality(wav),data);}catch(Exception ignored){}return data;}catch(Exception ignored){return new JSONObject();}
+    }
+    static JSONObject assess(JSONObject response)throws JSONException{
+        JSONArray segments=response.optJSONArray("segments");Set<String> reasons=new LinkedHashSet<>();int measured=0,flagged=0;
+        if(segments!=null)for(int i=0;i<segments.length();i++){
+            JSONObject s=segments.optJSONObject(i);if(s==null)continue;
+            double log=s.optDouble("avg_logprob",Double.NaN),ratio=s.optDouble("compression_ratio",Double.NaN),silence=s.optDouble("no_speech_prob",Double.NaN);
+            if(Double.isFinite(log)||Double.isFinite(ratio)||Double.isFinite(silence))measured++;
+            boolean weak=Double.isFinite(log)&&log< -1,repeat=Double.isFinite(ratio)&&ratio>2.4;
+            if(weak||repeat){flagged++;if(weak)reasons.add(Double.isFinite(silence)&&silence>.6?"Parlato incerto o silenzio":"Audio poco chiaro");if(repeat)reasons.add("Possibili ripetizioni");}
+        }
+        return new JSONObject().put("available",measured>0).put("review",flagged>0).put("flaggedSegments",flagged).put("reason",String.join("; ",reasons));
+    }
+    static JSONObject annotateQuality(JSONObject entry,JSONObject quality)throws JSONException{
+        return entry.put("transcriptQualityAvailable",quality.optBoolean("available",false)).put("transcriptReview",quality.optBoolean("review",false)).put("transcriptReviewReason",quality.optString("reason",""));
+    }
     static JSONObject read(File file)throws Exception{return new JSONObject(new String(Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8));}
     static void write(File file,JSONObject data)throws IOException{
         File temp=new File(file.getPath()+".tmp");

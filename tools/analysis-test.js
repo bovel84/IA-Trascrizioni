@@ -3,7 +3,7 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=req
 const {createEnvironment}=require('./dom-stub');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const ctx=createEnvironment({html}),run=code=>vm.runInContext(code,ctx),el=id=>ctx.__elements.get(id);
-const requests=[];let respond=()=>({choices:[{finish_reason:'stop',message:{content:'SINTESI\nBudget confermato.\nDECISIONI CONFERMATE\nNon indicate.\nPROSSIMI PASSI\nResponsabile: Non indicato.'}}]});
+const requests=[];let respond=body=>/^(Correggi esclusivamente|Rielabora)/.test(body.messages.at(-1).content)?apiText(body.messages.at(-1).content.split('\n\nDOCUMENTO:\n').at(-1)):({choices:[{finish_reason:'stop',message:{content:'SINTESI\nBudget confermato.\nDECISIONI CONFERMATE\nNon indicate.\nPROSSIMI PASSI\nResponsabile: Non indicato.'}}]});
 ctx.nativeAiRequest=async(provider,endpoint,key,body,signal)=>{requests.push({provider,endpoint,key,body,signal});return{ok:true,status:200,json:async()=>respond(body,signal)};};
 let passed=0;
 function check(label,condition){assert.ok(condition,label);passed++;console.log('ok  '+label);}
