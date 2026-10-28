@@ -1,0 +1,31 @@
+{
+  "topic": "Progetto, fondo e pianificazione",
+  "root": "mini",
+  "nodes": [
+    {"id":"risk","label":"Rischio di incoerenza tra dati e rendicontazione","kind":"rischio","detail":"Rischio da approfondire; non è presentato come una decisione."},
+    {"id":"fund","label":"Fondo Innovazione / [Non assegnato: veicolo] Progetto (proposta)","kind":"proposta","detail":"Conservare il dubbio sull'attribuzione del passaggio [Non assegnato: veicolo]."},
+    {"id":"mini","label":"Progetto, fondo e pianificazione","kind":"tema"},
+    {"id":"quad","label":"Verifiche manuali tra documenti (dubbio)","kind":"dubbio"},
+    {"id":"product","label":"Servizio previsto dal progetto","kind":"tema"},
+    {"id":"budget","label":"Budget e pianificazione","kind":"tema"},
+    {"id":"reporting","label":"Rendicontazione del progetto","kind":"tema"},
+    {"id":"vehicle","label":"Strumento di progetto","kind":"tema"},
+    {"id":"checks","label":"Verifiche dei documenti","kind":"azione"},
+    {"id":"flows","label":"Flussi del servizio","kind":"tema"},
+    {"id":"coverage","label":"Coperture del budget","kind":"tema"},
+    {"id":"planning","label":"Pianificazione delle verifiche","kind":"azione"}
+  ],
+  "links": [
+    {"from":"mini","to":"risk","label":"richiede di valutare"},
+    {"from":"mini","to":"fund","label":"include una proposta"},
+    {"from":"mini","to":"quad","label":"presenta un dubbio"},
+    {"from":"mini","to":"product","label":"riguarda il prodotto"},
+    {"from":"mini","to":"budget","label":"richiede pianificazione"},
+    {"from":"risk","to":"reporting","label":"riguarda"},
+    {"from":"fund","to":"vehicle","label":"fa riferimento a"},
+    {"from":"quad","to":"checks","label":"richiede verifica"},
+    {"from":"product","to":"flows","label":"comprende"},
+    {"from":"budget","to":"coverage","label":"richiede"},
+    {"from":"budget","to":"planning","label":"orienta"}
+  ]
+}

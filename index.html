@@ -547,6 +547,22 @@
         .chart-wrapper { height: 320px; }
         .concept-viewport { max-height: 560px; overflow: auto; border-radius: 10px; background: #111b18; }
         .concept-map { width: 100%; min-width: 0; height: auto; display: block; border: 0; background: none; }
+        #mapCard { grid-column:1/-1; min-width:0; }
+        .map-card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }.map-card-heading h4 { margin:0; }
+        .map-controls { display:grid; grid-template-columns:minmax(130px,.65fr) minmax(0,1.35fr); gap:12px; margin:14px 0 10px; }
+        .map-controls label { color:var(--text-secondary); font-size:12px; }.map-controls select { width:100%; min-width:0; display:block; margin-top:5px; }
+        .map-navigation { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }.map-navigation>span { min-width:42px; text-align:center; font-size:12px; color:#c2d7e5; font-variant-numeric:tabular-nums; }
+        .map-navigation .analysis-button { padding:8px 12px; }.map-hint { color:var(--text-secondary); font-size:12px; line-height:1.6; margin:10px 0 12px; }
+        .concept-viewport { height:480px; max-height:none; min-height:280px; overflow:hidden; border:1px solid #3c5360; touch-action:none; user-select:none; }
+        .concept-map { width:100%; height:100%; cursor:grab; }.concept-map:active { cursor:grabbing; }.map-node { cursor:pointer; }
+        .map-node:focus { outline:none; }.map-node:focus>rect { stroke:#ffdb8e; stroke-width:4; }
+        .map-concept-detail { padding:16px; margin-top:14px; border:1px solid #3b515d; border-left:3px solid var(--node-color,#a7e9bb); border-radius:12px; background:#12202a; }
+        .map-concept-detail h5 { font-size:16px; line-height:1.5; margin:0 0 9px; overflow-wrap:anywhere; }.map-concept-detail p { font-size:14px; line-height:1.7; margin:8px 0; white-space:pre-wrap; }
+        .map-concept-detail blockquote { margin:12px 0; color:#b3c9d7; font-size:13px; line-height:1.7; border-left:2px solid #719bb5; padding-left:12px; }
+        .map-detail-badge { color:#efce8a; font-size:12px!important; }.map-neighbors { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }.map-neighbor { text-align:left; max-width:100%; overflow-wrap:anywhere; }
+        #mapCard.map-expanded { position:fixed; z-index:500; inset:10px; max-height:none; display:flex; flex-direction:column; overflow:auto; background:#142027; box-shadow:0 0 0 30px #080e13ee; padding:18px; }
+        .map-expanded .concept-viewport { flex:1; min-height:240px; height:auto; }.map-expanded .map-concept-detail { max-height:24vh; overflow:auto; flex-shrink:0; }
+        .map-expanded>.chart-data-details,.map-expanded>.analysis-toolbar { flex-shrink:0; }.map-expanded>.chart-data-details[open] { max-height:20vh; overflow:auto; }
         .insight-grid { grid-template-columns: repeat(auto-fit,minmax(min(100%,360px),1fr)); }
         .model-capacity { margin:16px 0 8px; }.model-capacity input { display:block; width:100%; margin-top:6px; }
         .ai-btn[data-ai-action="correct"],.ai-result[data-tool="correct"] { --tool-color:#a7e9bb; }
@@ -590,8 +606,13 @@
             .rich-document td { display:block; padding:10px 0; border-bottom:1px solid #2d3c44; font-size:14px; }
             .rich-document td::before { content:attr(data-label); display:block; color:#9bcaff; font-size:11px; font-weight:650; letter-spacing:.3px; margin-bottom:4px; }
             .rich-document tbody tr:last-child td { border-bottom:1px solid #2d3c44; }.rich-document tbody tr td:last-child { border-bottom:0; }
+            .map-controls { grid-template-columns:1fr; gap:8px; }.concept-viewport { height:440px; }.map-card-heading { align-items:flex-start; }
+            .map-card-heading .analysis-button { padding:8px; font-size:11px; }.map-navigation .analysis-button { font-size:11px; }
+            #mapCard.map-expanded { inset:0; border-radius:0; padding:14px; }.map-expanded .map-controls { grid-template-columns:minmax(95px,.65fr) minmax(0,1.35fr); }
+            .map-expanded .map-hint { margin:6px 0; font-size:11px; }.map-expanded .concept-viewport { min-height:180px; }
         }
     </style>
+    <script src="concept-map.js"></script>
     <script src="native-bridge.js"></script>
 </head>
 <body>
@@ -882,9 +903,16 @@
                         <div class="analysis-toolbar"><button type="button" class="analysis-button" onclick="exportChart()">Scarica PNG</button><button type="button" class="analysis-button" onclick="exportChartData()">Scarica dati CSV</button></div>
                     </section>
                     <section class="insight-card" id="mapCard" hidden>
-                        <h4>Mappa concettuale</h4>
+                        <div class="map-card-heading"><h4>Mappa concettuale</h4><button type="button" id="mapExpandBtn" class="analysis-button" onclick="toggleMapExpanded()" aria-expanded="false">Schermo intero</button></div>
                         <div class="insight-meta" id="mapStatus">Nessuna mappa</div>
-                        <div class="concept-viewport"><svg id="conceptMap" class="concept-map" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mappa dei concetti analizzati"></svg></div>
+                        <div class="map-controls">
+                            <label for="mapLayoutSelect">Disposizione<select id="mapLayoutSelect" class="control-select" onchange="changeMapLayout()"><option value="branches">A rami</option><option value="levels">A livelli</option></select></label>
+                            <label for="mapNodeSelect">Esplora un concetto<select id="mapNodeSelect" class="control-select" onchange="selectMapNode(this.value)"><option value="">Panoramica</option></select></label>
+                        </div>
+                        <div class="map-navigation" aria-label="Navigazione della mappa"><button class="analysis-button" type="button" onclick="zoomMap(.8)" aria-label="Riduci lo zoom">−</button><span id="mapZoomStatus" aria-label="Livello di zoom">100%</span><button class="analysis-button" type="button" onclick="zoomMap(1.25)" aria-label="Aumenta lo zoom">+</button><button class="analysis-button" type="button" onclick="fitMap()">Tutta la mappa</button><button class="analysis-button" type="button" onclick="readableMap()">100%</button></div>
+                        <p class="map-hint">Trascina per esplorare. Tocca un concetto per leggere i dettagli e seguire i collegamenti.</p>
+                        <div class="concept-viewport" id="mapViewport"><svg id="conceptMap" class="concept-map" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Mappa dei concetti analizzati"></svg></div>
+                        <div id="mapConceptDetail" class="map-concept-detail" hidden aria-live="polite"></div>
                         <details class="chart-data-details"><summary>Leggi tutti i collegamenti</summary><div id="mapRelations" class="rich-document"></div></details>
                         <div class="analysis-toolbar"><button type="button" class="analysis-button" onclick="exportConceptSvg()">Scarica SVG</button><button type="button" class="analysis-button" onclick="exportConceptPng()">Scarica PNG</button></div>
                     </section>
@@ -1428,6 +1456,7 @@
         let currentSessionId = null, chunkCount = 0, chunkTimer = null, currentStream = null;
         const $ = id => document.getElementById(id);
         let chartInstance = null, chartData = null, conceptMapData = null;
+        let conceptViewer=null,conceptSignature='',mapExpanded=false,mapPreviousOverflow='';
         let aiResults = [], activeAIResult = '', aiJob = null, analysisGeneration = 0;
         const AI_TITLES = { correct: 'Testo corretto', summary: 'Sintesi della riunione', keypoints: 'Punti chiave e azioni', improve: 'Testo rielaborato', chart: 'Grafico', concept: 'Mappa concettuale' };
 
@@ -1573,6 +1602,7 @@
             if (llamaKey) { $('llamaKeyBox').style.display = 'none'; $('llamaKeySaved').style.display = 'flex'; }
             if (whisperKey && llamaKey) $('saveKeysBtn').style.display = 'none';
             initModelSelects();
+            $('mapLayoutSelect').value=localStorage.getItem('voicescribe_map_layout')==='levels'?'levels':'branches';
             updateSpeakerChips(); renderSavedRecordings(); setupVisualizer(); setupEvents();
             initCanvas();
             registerServiceWorker();
@@ -2587,67 +2617,71 @@
         window.changeChartType=type=>{if(!chartData)return;const previous=chartData.type;try{renderChart({...chartData,type});scheduleAutosave(true);}catch(error){$('chartTypeSelect').value=previous;showToast(error.message);}};
 
         function normalizeConceptMap(map) {
-            if (!map || !Array.isArray(map.nodes) || !map.nodes.length || map.nodes.length > 16 || !Array.isArray(map.links) || map.links.length > 32) throw new Error('Mappa non valida: servono fino a 16 concetti e 32 collegamenti.');
-            const ids = new Set();
+            if (!map || !Array.isArray(map.nodes) || !map.nodes.length || map.nodes.length > 24 || !Array.isArray(map.links) || map.links.length > 48) throw new Error('Mappa non valida: servono fino a 24 concetti e 48 collegamenti.');
+            const ids = new Set(), kinds=new Set(['tema','fatto','decisione','proposta','rischio','azione','dubbio']);
             const nodes = map.nodes.map(node => {
-                if (!node || typeof node.id !== 'string' || !node.id.trim() || node.id.length > 80 || ids.has(node.id) || typeof node.label !== 'string' || !node.label.trim() || node.label.length > 120) throw new Error('Mappa non valida: ogni concetto deve avere un ID unico e un nome leggibile.');
-                ids.add(node.id); return { id: node.id, label: node.label.trim() };
+                if (!node || typeof node.id !== 'string' || !node.id.trim() || node.id.length > 80 || ids.has(node.id) || typeof node.label !== 'string' || !node.label.trim() || node.label.length > 160) throw new Error('Mappa non valida: ogni concetto deve avere un ID unico e un nome leggibile.');
+                if(node.detail!==undefined&&(typeof node.detail!=='string'||node.detail.length>1600)||node.evidence!==undefined&&(typeof node.evidence!=='string'||node.evidence.length>600))throw new Error('Mappa non valida: dettagli o riscontri troppo lunghi.');
+                ids.add(node.id);return {id:node.id,label:node.label.trim(),...(kinds.has(node.kind)?{kind:node.kind}:{}),...(node.detail?{detail:node.detail.trim()}:{}),...(node.evidence?{evidence:node.evidence.trim()}:{}),...(/\[Non assegnato:/i.test(node.label+' '+(node.detail||''))||node.uncertain===true?{uncertain:true}:{})};
             });
             const links = map.links.map(link => {
-                if (!link || !ids.has(link.from) || !ids.has(link.to) || link.from === link.to) throw new Error('Mappa non valida: un collegamento punta a un concetto inesistente.');
-                return { from: link.from, to: link.to, label: String(link.label || '').slice(0, 60) };
+                if (!link || !ids.has(link.from) || !ids.has(link.to) || link.from === link.to || typeof link.label!=='undefined'&&typeof link.label!=='string'||String(link.label||'').length>160) throw new Error('Mappa non valida: un collegamento punta a un concetto inesistente o ha una descrizione non valida.');
+                return { from: link.from, to: link.to, label: String(link.label || '').trim() };
             });
             if (nodes.length > 1 && !links.length) throw new Error('La mappa non contiene relazioni tra i concetti.');
-            return { topic: String(map.topic || 'Mappa concettuale').slice(0, 180), nodes, links };
+            if(map.root!==undefined&&!ids.has(map.root))throw new Error('Mappa non valida: il concetto centrale non esiste.');
+            return {topic:String(map.topic||'Mappa concettuale').slice(0,180),...(map.root?{root:map.root}:{}),nodes,links};
         }
-
+        function validateConceptEvidence(map,source){
+            const clean=text=>String(text).normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase(),text=clean(source);
+            if(map.nodes.some(node=>node.evidence&&!text.includes(clean(node.evidence))))throw new Error('Mappa non verificabile: un riscontro non compare nel documento originale. La mappa precedente è conservata.');
+            return map;
+        }
+        function renderMapDetail(node,incoming=[],outgoing=[]){
+            const box=$('mapConceptDetail');box.innerHTML='';box.hidden=!node;$('mapNodeSelect').value=node?.id||'';if(!node)return;
+            box.style.setProperty?.('--node-color',node.color?.[1]||'#a7e9bb');
+            const heading=document.createElement('h5');heading.textContent=node.label;box.appendChild(heading);
+            if(node.kind||node.uncertain){const badge=document.createElement('p');badge.className='map-detail-badge';badge.textContent=[node.kind,node.uncertain?'Attribuzione vocale da verificare':''].filter(Boolean).join(' · ');box.appendChild(badge);}
+            if(node.detail){const detail=document.createElement('p');detail.textContent=node.detail;box.appendChild(detail);}
+            if(node.evidence){const quote=document.createElement('blockquote');quote.textContent=node.evidence;box.appendChild(quote);}
+            const names=new Map(conceptMapData.nodes.map(n=>[n.id,n.label])),list=document.createElement('div');list.className='map-neighbors';
+            const add=(link,target,direction)=>{const button=document.createElement('button');button.type='button';button.className='analysis-button map-neighbor';button.textContent=direction+' '+(link.label||'collegamento')+' · '+names.get(target);button.addEventListener('click',()=>selectMapNode(target));list.appendChild(button);};
+            incoming.forEach(link=>add(link,link.from,'←'));outgoing.forEach(link=>add(link,link.to,'→'));if(list.children.length)box.appendChild(list);
+        }
+        function disposeConceptViewer(){conceptViewer?.destroy();conceptViewer=null;conceptSignature='';renderMapDetail(null);setMapExpanded(false);}
         function renderConceptMap(input) {
-            const map = normalizeConceptMap(input), svg = $('conceptMap'), ns = 'http://www.w3.org/2000/svg';
-            const palette=[['#233e35','#91ceb2'],['#24384d','#96bfe9'],['#3e344a','#c3a7e0'],['#413b2a','#d7c18b'],['#40303c','#d8a9c9']];
-            $('mapCard').hidden = false;
-            const width = Math.min(680, Math.max(280,svg.parentElement?.clientWidth || 680));
-            const columns = width < 560 ? 1 : 2, nodeWidth = (width-56-(columns-1)*58)/columns;
-            const height = Math.max(230, Math.ceil(map.nodes.length / columns) * 118 + 56);
-            function element(tag, attrs, text) {
-                const el = document.createElementNS(ns, tag);
-                for (const [key,value] of Object.entries(attrs || {})) el.setAttribute(key, value);
-                if (text !== undefined) el.textContent = text;
-                return el;
-            }
-            svg.innerHTML = '';
-            svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('width', width); svg.setAttribute('height', height);
-            svg.setAttribute('aria-label', map.topic);
-            svg.appendChild(element('title', {}, map.topic));
-            svg.appendChild(element('rect', { width, height, fill: '#111b18' }));
-            const defs = element('defs'), marker = element('marker', { id: 'conceptArrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' });
-            marker.appendChild(element('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: '#8ebfa1' })); defs.appendChild(marker); svg.appendChild(defs);
-            const positions = new Map(map.nodes.map((node,i) => [node.id,{ x: 28 + (i % columns) * (nodeWidth+58), y: 28 + Math.floor(i / columns) * 118 }]));
-            for (const link of map.links) {
-                const a = positions.get(link.from), b = positions.get(link.to);
-                const sameRow = a.y === b.y;
-                const x1 = sameRow ? a.x + (a.x < b.x ? nodeWidth : 0) : a.x + nodeWidth/2, y1 = sameRow ? a.y + 40 : a.y + (a.y < b.y ? 80 : 0);
-                const x2 = sameRow ? b.x + (a.x < b.x ? 0 : nodeWidth) : b.x + nodeWidth/2, y2 = sameRow ? b.y + 40 : b.y + (a.y < b.y ? 0 : 80);
-                const midY = (y1+y2)/2;
-                const d = a.x === b.x ? `M${a.x+nodeWidth},${a.y+40} C${a.x+nodeWidth+24},${a.y+40} ${b.x+nodeWidth+24},${b.y+40} ${b.x+nodeWidth},${b.y+40}` : `M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`;
-                const edge=element('path', { d, fill: 'none', stroke: '#8ebfa1', 'stroke-width': 1.8, 'marker-end': 'url(#conceptArrow)' });
-                edge.appendChild(element('title',{},link.label)); svg.appendChild(edge);
-            }
-            for (const [index,node] of map.nodes.entries()) {
-                const pos = positions.get(node.id), group = element('g');
-                const colors=palette[index%palette.length];
-                group.appendChild(element('rect', { x: pos.x, y: pos.y, width: nodeWidth, height: 80, rx: 12, fill: colors[0], stroke: colors[1] }));
-                group.appendChild(element('title', {}, node.label));
-                const wrap = Math.max(16,Math.floor(nodeWidth/8));
-                const lines = node.label.match(new RegExp(`.{1,${wrap}}(?:\\s|$)|.{1,${wrap}}`,'g')) || [node.label];
-                if (lines.length>4) lines[3]=lines[3].trim().slice(0,-1)+'…';
-                lines.slice(0,4).forEach((line,i) => group.appendChild(element('text', { x: pos.x+nodeWidth/2, y: pos.y+18+i*17, fill: '#e1eee5', 'font-family': 'sans-serif', 'font-size': 15, 'text-anchor': 'middle' }, line.trim())));
-                svg.appendChild(group);
-            }
-            conceptMapData = map; $('mapCard').hidden = false;
+            const map=normalizeConceptMap(input),mode=['branches','levels'].includes($('mapLayoutSelect').value)?$('mapLayoutSelect').value:'branches',signature=JSON.stringify(map)+'/'+mode;
+            if(conceptViewer&&conceptSignature===signature){conceptViewer.refresh();return;}
+            const selected=conceptViewer?.selected;conceptViewer?.destroy();conceptMapData=map;conceptSignature=signature;$('mapCard').hidden=false;
+            $('mapLayoutSelect').value=mode;
+            $('mapNodeSelect').innerHTML='<option value="">Panoramica</option>'+map.nodes.map(node=>'<option value="'+escapeHtml(node.id)+'">'+escapeHtml(node.label)+'</option>').join('');
+            conceptViewer=VoiceConceptMap.create($('conceptMap'),$('mapViewport'),map,{mode,onSelect:renderMapDetail,onZoom:scale=>{$('mapZoomStatus').textContent=Math.round(scale*100)+'%';}});
+            if(selected&&map.nodes.some(node=>node.id===selected))conceptViewer.select(selected);
+            else if(window.innerWidth<=620||conceptViewer.scale<.65)conceptViewer.select(conceptViewer.graph.roots[0]);
             const names=new Map(map.nodes.map(node=>[node.id,node.label]));
-            $('mapRelations').innerHTML=richTableHtml(['Da','Relazione','A'],map.links.map(link=>[names.get(link.from),link.label||'collegato a',names.get(link.to)]));
-            $('mapStatus').textContent = `${map.topic} · ${map.nodes.length} concetti · ${map.links.length} relazioni`;
+            $('mapRelations').innerHTML=richTableHtml(['Da','Relazione','A'],map.links.map(link=>[names.get(link.from),link.label||'Relazione non specificata',names.get(link.to)]));
+            $('mapStatus').textContent=`${map.topic} · ${map.nodes.length} concetti · ${map.links.length} relazioni`;
         }
+        window.selectMapNode=id=>{if(id)conceptViewer?.select(id);else conceptViewer?.fit();};
+        window.zoomMap=factor=>conceptViewer?.zoomBy(factor);
+        window.fitMap=()=>conceptViewer?.fit();
+        window.readableMap=()=>conceptViewer?.readable();
+        window.changeMapLayout=()=>{if(conceptMapData){localStorage.setItem('voicescribe_map_layout',$('mapLayoutSelect').value);renderConceptMap(conceptMapData);}};
+        function setMapExpanded(expanded){
+            if(mapExpanded===expanded)return;mapExpanded=expanded;$('mapCard').classList.toggle('map-expanded',expanded);
+            $('mapExpandBtn').textContent=expanded?'Riduci':'Schermo intero';$('mapExpandBtn').setAttribute('aria-expanded',String(expanded));
+            if(expanded){mapPreviousOverflow=document.body.style.overflow||'';document.body.style.overflow='hidden';}else document.body.style.overflow=mapPreviousOverflow;
+            requestAnimationFrame(()=>{if(conceptViewer){const selected=conceptViewer.selected;conceptViewer.fit();if(selected)conceptViewer.select(selected);}});
+        }
+        window.toggleMapExpanded=()=>{setMapExpanded(!mapExpanded);$('mapExpandBtn').focus();};
+        window.addEventListener('keydown',event=>{
+            if(!mapExpanded)return;if(event.key==='Escape'){event.preventDefault();setMapExpanded(false);$('mapExpandBtn').focus();}
+            if(event.key==='Tab'){
+                const items=[...$('mapCard').querySelectorAll('button,select,[tabindex="0"]')].filter(el=>!el.disabled&&el.getBoundingClientRect().width),first=items[0],last=items.at(-1);
+                if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+            }
+        });
+        function conceptExportBox(){return conceptViewer?[0,0,conceptViewer.graph.width,conceptViewer.graph.height]:[0,0,680,400];}
 
         function hasCurrentContent() { return !!(transcriptEntries.length || notesText.trim() || drawingHistory.length || aiResults.length || chartData || conceptMapData || audioBlob || window.nativeAudioSession); }
         function restoreAnalysisState(saved) {
@@ -2657,7 +2691,7 @@
             });
             aiResults = [...restored.values()]; activeAIResult = saved.activeAIResult || '';
             if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-            chartData = null; conceptMapData = null; $('chartCard').hidden = true; $('mapCard').hidden = true; $('conceptMap').innerHTML = '';
+            disposeConceptViewer();chartData = null; conceptMapData = null; $('chartCard').hidden = true; $('mapCard').hidden = true; $('conceptMap').innerHTML = '';
             try { if (saved.chart) renderChart(saved.chart); } catch(e) { $('chartStatus').textContent=e.message; }
             try { if (saved.concept) renderConceptMap(saved.concept); } catch(e) { $('mapStatus').textContent=e.message; }
             renderAIResults();
@@ -2871,7 +2905,7 @@
             improve: 'Rielabora il testo con chiarezza e registro professionale. Mantieni tutti i fatti e le incertezze, nomi, cifre, ordine e attribuzioni. Ricomponi i frammenti tecnici della stessa persona in un testo continuo, con paragrafi leggibili e il nome una sola volta per intervento. Non inserire timestamp né titoli di chunk/parte. Non attribuire i passaggi non assegnati a una persona per deduzione. Non aggiungere informazioni o trasformare proposte in decisioni. Restituisci il testo rielaborato completo.',
             summary: 'Scrivi una sintesi strutturata nelle sezioni SINTESI, DECISIONI CONFERMATE, QUESTIONI APERTE e PROSSIMI PASSI. Per ogni decisione o azione conserva responsabile e scadenza se espliciti. Se assenti scrivi Non indicato. Separa decisioni, proposte e dissensi, includi cifre e vincoli rilevanti. Riporta un breve riscontro letterale per le decisioni e le azioni. Elimina ripetizioni senza perdere elementi sostanziali.',
             keypoints: 'Estrai PUNTI CHIAVE, AZIONI DA SVOLGERE (azione, responsabile, scadenza, stato confermato/proposto) e QUESTIONI DA CHIARIRE. Mantieni riferimenti agli interventi e separa fatti, proposte e decisioni. Non inventare responsabili o scadenze. Ogni azione deve avere un riscontro breve e letterale nel documento, con il partecipante se noto; usa Non indicato per dati assenti. Non trasformare un proposito in un impegno confermato.',
-            concept: 'Crea una mappa concettuale fedele al documento. Restituisci SOLO JSON: {"topic":string,"nodes":[{"id":string,"label":string}],"links":[{"from":string,"to":string,"label":string}]}. Massimo 12 concetti con nomi brevi, ID unici, collegamenti solo tra ID esistenti. Le relazioni devono essere presenti nel testo.',
+            concept: 'Crea una mappa concettuale gerarchica e fedele al documento, non un elenco piatto. Individua un concetto centrale e 2-5 rami tematici, poi collega gli approfondimenti al ramo pertinente. Preferisci 2-4 livelli e fino a 20 concetti; evita nodi ridondanti, categorie generiche e collegamenti artificiosi. Ogni freccia deve descrivere una relazione presente nel documento con 2-5 parole, per esempio finanzia, richiede, espone al rischio. Distingui fatti, decisioni, proposte, rischi, dubbi e azioni senza trasformarli tra loro. Etichette brevi; conserva spiegazioni, cifre e incertezze nel dettaglio, inclusi i marcatori [Non assegnato: ...] quando rilevanti. Un riscontro evidence, se presente, deve essere una citazione letterale breve del documento originale. Restituisci SOLO JSON: {"topic":string,"root":string,"nodes":[{"id":string,"label":string,"kind":"tema|fatto|decisione|proposta|rischio|azione|dubbio","detail":string,"evidence":string}],"links":[{"from":string,"to":string,"label":string}]}. root deve essere un ID esistente. detail ed evidence facoltativi, nomi leggibili, ID unici, fino a 24 nodi e 48 relazioni. Non inventare nessi per forzare la gerarchia.',
             chart: 'Estrai un solo insieme di dati numerici omogenei citati esplicitamente. Restituisci SOLO JSON: {"title":string,"type":"bar|line","unit":string,"labels":string[],"series":[{"name":string,"data":number[],"evidence":string[]}]}. Massimo 8 categorie. Ogni evidence deve essere una citazione letterale del documento contenente etichetta e valore. Non stimare percentuali, frequenze, importanza o quantità; non cambiare unità o scala. Se non esistono dati confrontabili restituisci {"insufficient":true}.'
         };
         async function requestAnalysis(job, instruction, text, jsonMode=false, maxTokens=2400) {
@@ -2977,7 +3011,7 @@
                     if(next.length>=combined.length||round===7)throw new Error('Il modello non riesce a consolidare il documento entro i limiti configurati. Aumenta il contesto o scegli un altro modello.');combined=next;
                 }
             }
-            return job.action==='concept'?{concept:normalizeConceptMap(extractJSON(combined))}:{content:combined};
+            return job.action==='concept'?{concept:validateConceptEvidence(normalizeConceptMap(extractJSON(combined)),text)}:{content:combined};
         }
         function chartText(chart) {
             const sources = chart.series.flatMap(series=>chart.labels.map((label,i)=>series.evidence?.[i] ? '• '+label+': '+series.evidence[i] : '')).filter(Boolean);
@@ -2985,7 +3019,7 @@
         }
         function conceptText(map) {
             const names=new Map(map.nodes.map(node=>[node.id,node.label]));
-            return map.topic+'\n\n'+map.nodes.map(n=>'• '+n.label).join('\n')+'\n\nRELAZIONI\n'+map.links.map(l=>`${names.get(l.from)} → ${names.get(l.to)}${l.label?' · '+l.label:''}`).join('\n');
+            return map.topic+'\n\n'+map.nodes.map(n=>'• '+n.label+(n.kind?' · '+n.kind:'')+(n.detail?'\n'+n.detail:'')+(n.evidence?'\nRiscontro: '+n.evidence:'')).join('\n\n')+'\n\nRELAZIONI\n'+map.links.map(l=>`${names.get(l.from)} → ${names.get(l.to)}${l.label?' · '+l.label:''}`).join('\n');
         }
         window.runAI = async action => {
             if (!Object.hasOwn(AI_TITLES,action) || aiJob) return;
@@ -3376,7 +3410,7 @@
         function getConceptMapImage() {
             const svg = $('conceptMap'); if (!svg || !conceptMapData?.nodes?.length) return null;
             const serializer = new XMLSerializer();
-            const svgStr = serializer.serializeToString(svg);
+            const svgStr = serializer.serializeToString(conceptViewer?conceptViewer.exportSvg():svg);
             return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
         }
 
@@ -3387,8 +3421,8 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const viewBox = $('conceptMap').getAttribute('viewBox')?.split(/\s+/).map(Number) || [0,0,680,400];
-                    canvas.width = 1200; canvas.height = Math.max(1,Math.round(1200 * viewBox[3]/viewBox[2]));
+                    const viewBox=conceptExportBox(),scale=Math.min(2,4096/viewBox[2],4096/viewBox[3],Math.sqrt(6000000/(viewBox[2]*viewBox[3])));
+                    canvas.width=Math.max(1,Math.round(viewBox[2]*scale));canvas.height=Math.max(1,Math.round(viewBox[3]*scale));
                     const ctx = canvas.getContext('2d');
                     ctx.fillStyle = '#0a0a0f';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3455,7 +3489,7 @@
             if (mapImg) {
                 if (y > 180) { doc.addPage(); y = 20; }
                 doc.setFontSize(12); doc.setTextColor(0,150,120); doc.text('MAPPA CONCETTUALE', 20, y); y += 6;
-                const box = $('conceptMap').getAttribute('viewBox').split(/\s+/).map(Number);
+                const box = conceptExportBox();
                 const height = Math.min(215,170*box[3]/box[2]), width = height*box[2]/box[3];
                 if (y+height>280) { doc.addPage(); y=20; }
                 doc.addImage(mapImg, 'PNG', 20+(170-width)/2, y, width, height); y += height+10;
@@ -3755,7 +3789,7 @@
             $('transcriptSearch').value = '';transcriptReviewOnly=false;
             drawingHistory = []; drawingRedo = [];
             redrawFromHistory();
-            chartData = null; conceptMapData = null;
+            disposeConceptViewer();chartData = null; conceptMapData = null;
             if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
             const chartCtx = $('aiChart')?.getContext('2d'); if (chartCtx) chartCtx.clearRect(0, 0, chartCtx.canvas.width, chartCtx.canvas.height);
             $('conceptMap').innerHTML = '';

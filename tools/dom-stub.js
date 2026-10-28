@@ -2,7 +2,8 @@
  * Ambiente minimo (DOM / IndexedDB / API browser) per eseguire VoiceScribe in Node.
  * Serve solo per i test automatici: vedi tools/smoke-test.js
  */
-const { createContext } = require('vm');
+const { createContext, runInContext } = require('vm');
+const fs = require('fs'), path = require('path');
 
 const CREATED = [];
 const ELEMENTS = new Map();
@@ -61,6 +62,7 @@ class El {
     appendChild(child) { this.children.push(child); child.parentNode = this; return child; }
     removeChild(child) { this.children = this.children.filter(c => c !== child); }
     remove() { if (this.parentNode) this.parentNode.removeChild(this); }
+    cloneNode(deep=false) { const copy=new El(this.tagName,this.id);for(const [name,value] of Object.entries(this._attrs||{}))copy.setAttribute(name,value);copy.textContent=this.textContent;copy.dataset={...this.dataset};if(deep)this.children.forEach(child=>copy.appendChild(child.cloneNode(true)));return copy; }
     addEventListener(type, fn) { (this._events[type] = this._events[type] || []).push(fn); }
     removeEventListener(type, fn) { this._events[type] = (this._events[type] || []).filter(f => f !== fn); }
     dispatch(type, event = {}) { (this._events[type] || []).forEach(fn => fn(event)); }
@@ -265,6 +267,7 @@ function createEnvironment({ html, onFetch } = {}) {
     ctx.__store = localStore;
     ctx.__elements = ELEMENTS;
     ctx.__db = db;
+    runInContext(fs.readFileSync(path.join(__dirname,'..','concept-map.js'),'utf8'),ctx);
     return ctx;
 }
 

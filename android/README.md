@@ -1,5 +1,33 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Mappe concettuali navigabili (2.6.0)
+
+- Disposizione basata sulle relazioni, con tema centrale, rami bilanciati sui due
+  lati e colori ereditati dai concetti dello stesso ramo. La vista alternativa a
+  livelli conserva gli stessi nodi e collegamenti. Nodi indipendenti, cicli e
+  relazioni trasversali restano presenti, senza inventare nessi per ottenere un albero.
+- Etichette visibili sulle frecce, testo dei nodi a capo senza ellissi, dettagli
+  selezionabili e pulsanti per passare ai concetti collegati. Le attribuzioni vocali
+  incerte hanno un segnale esplicito e mantengono il marcatore nel testo completo.
+- Pan trascinando, pinch a due dita, zoom +/−/100%, panoramica, selettore dei concetti,
+  schermo intero nell'app ed Escape. Su telefono, o quando la panoramica renderebbe
+  il testo troppo piccolo, la vista iniziale mette a fuoco il tema centrale;
+  **Tutta la mappa** mostra l'insieme. I controlli funzionano anche da tastiera.
+- Zoom e selezione non riscrivono i dati e non richiedono altre chiamate LLM. SVG e
+  PNG esportano sempre la mappa intera con tutte le relazioni, anche dopo pan/zoom.
+  PNG limitati a 4096 pixel per lato e sei megapixel; proporzioni del PDF calcolate
+  sulla mappa completa. Il testo e le relazioni rimangono nel report.
+- Prompt con tema centrale, 2–5 rami e approfondimenti pertinenti, fino a 24 concetti
+  e 48 relazioni. Fatti, decisioni, proposte, rischi, azioni e dubbi restano distinti.
+  Dettaglio e riscontro letterale facoltativi: una citazione inventata blocca il
+  risultato, conservando quello precedente. Le mappe dei vecchi progetti vengono
+  ridisegnate senza rigenerarle; per ottenere nuovi raggruppamenti semantici si può
+  premere nuovamente **Mappa** sul documento originale.
+
+Motore locale `concept-map.js` incluso nell'APK e nella cache PWA, senza dipendenze
+esterne per il disegno. Prove su layout e dati, ripristino progetti, quattro
+larghezze, gesti reali del browser e completezza dei download SVG/PNG.
+
 ## Contesto dei modelli e risultati formattati (2.5.0)
 
 - **Connessioni e modelli** separa finestra di contesto e spazio della
