@@ -15,15 +15,23 @@ import static org.junit.Assert.*;
 /** Runs the actual packaged HTML through MainActivity's asset router, CSP and Android WebView. */
 @RunWith(AndroidJUnit4.class)
 public class PackagedWorkspaceTest {
-    private MainActivity activity;private WebView web;private Instrumentation instrument;
-    private String js(String code)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();instrument.runOnMainSync(()->web.evaluateJavascript(code,value->{result.set(value);done.countDown();}));assertTrue(done.await(10,TimeUnit.SECONDS));return result.get();}
+    private MainActivity activity;private WebView web;private Instrumentation instrument;private boolean ready;
+    private String js(String code)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();instrument.runOnMainSync(()->web.evaluateJavascript(code,value->{result.set(value);done.countDown();}));assertTrue("WebView JavaScript callback timed out",done.await(10,TimeUnit.SECONDS));return result.get();}
     @Before public void start()throws Exception{
         instrument=InstrumentationRegistry.getInstrumentation();activity=(MainActivity)instrument.startActivitySync(new Intent(instrument.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         instrument.runOnMainSync(()->web=(WebView)((ViewGroup)activity.findViewById(android.R.id.content)).getChildAt(0));
         long limit=System.currentTimeMillis()+30000;while(!"true".equals(js("!!(window.nativeRecorderReady&&window.VoiceConceptMap&&window.VoiceAudioImport&&window.initAppearance)"))&&System.currentTimeMillis()<limit)Thread.sleep(100);
         assertEquals("Offline JavaScript blocked by native routing/CSP","true",js("!!(window.nativeRecorderReady&&window.VoiceConceptMap&&window.VoiceAudioImport&&window.initAppearance)"));
+        ready=true;
     }
-    @After public void close(){if(activity!=null)instrument.runOnMainSync(activity::finish);}
+    @After public void close()throws Exception{
+        if(activity==null)return;
+        try{
+            // onPause autosaves the synthetic map. Remove only that test fixture before
+            // closing, so the next independent test is not blocked by the recovery dialog.
+            if(ready)js("clearAutosave();window.autosaveNow=()=>{};true");
+        }finally{instrument.runOnMainSync(activity::finish);}
+    }
     @Test public void conceptMapReallyRendersInsideThePackagedApp()throws Exception{
         assertEquals("true",js("(()=>{showPanel('ai');renderConceptMap({topic:'Progetto di prova',root:'root',nodes:[{id:'root',label:'Progetto di prova'},{id:'a',label:'Attività da pianificare'},{id:'b',label:'Risultati attesi'}],links:[{from:'root',to:'a',label:'comprende'},{from:'root',to:'b',label:'produce'}]});return $('conceptMap').querySelectorAll('[data-node]').length===3&&!$('mapViewport').hidden&&!!$('conceptMap').getAttribute('viewBox');})()"));
         assertEquals("true",js("(()=>{const view=$('mapViewport').getBoundingClientRect();return view.width>0&&typeof VoiceConceptMap.create==='function'&&conceptViewer.graph.nodes.length===3;})()"));

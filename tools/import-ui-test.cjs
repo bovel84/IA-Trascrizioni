@@ -17,6 +17,11 @@ const root=path.resolve(__dirname,'..'),output=process.env.PREVIEW_OUTPUT||path.
   assert.equal(await page.locator('#conceptMap [data-map-background]').getAttribute('fill'),theme==='light'?'#f6f9f7':'#101b21');
   for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'overflow '+theme+' '+width);}
   await page.setViewportSize({width:390,height:900});await page.locator('#mapCard').screenshot({path:path.join(output,'map-'+theme+'-mobile.png')});
+  if(theme==='light'){
+   await page.locator('#mapCard .chart-data-details').evaluate(element=>element.open=true);
+   assert.equal(await page.locator('#mapRelations td').first().evaluate(element=>getComputedStyle(element,'::before').color),'rgb(36, 91, 145)','mobile table labels need strong contrast in light mode');
+   await page.locator('#mapCard .chart-data-details').evaluate(element=>element.open=false);
+  }
  }
  await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('data-theme'),'light','appearance must survive restart');
  await page.evaluate(()=>{whisperKey='gsk_test';notesText='Progetto precedente da conservare';$('notesTextarea').value=notesText;showPanel('saved');});
