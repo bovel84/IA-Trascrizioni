@@ -28,6 +28,8 @@ ctx.AndroidRecorder = {
     renameVoice: (...args) => calls.push(['renameVoice',...args]),
     startPlayback: (...args) => calls.push(['startPlayback', ...args]),
     stop: () => calls.push(['stop']),
+    importAudio: (...args)=>calls.push(['importAudio',...args]),
+    cancelImport: ()=>calls.push(['cancelImport']),
     pause: value => calls.push(['pause', value]),
     exportAudio: id => calls.push(['exportAudio', id]),
     retry: (...args) => calls.push(['retry', ...args]),
@@ -173,6 +175,19 @@ async function main() {
     check('live native import renders a short boundary word inline before the continuation arrives',run('transcriptTurns().length')===1&&run('transcriptTurns()[0].text').endsWith('[Non assegnato: è]'));
     state.entries.push({...state.entries[0],nativeSegmentId:'session-1790767999000/000000035000.wav#1',text:'molto convincente.',offsetMs:35300,endMs:38000});run('syncNativeRecorder()');
     check('the next native WAV completes one sentence without duplication or reassignment',run('transcriptTurns().length')===1&&run('transcriptTurns()[0].displayText')==="anche l'audio è molto convincente."&&run('transcriptEntries.length')===3&&run('transcriptEntries[1].speaker')===0&&run('subtitleBlocks().length')===3);
+    run("isRecording=false;isProcessing=false;notesText='Contenuto precedente';window.loadAudioFile();");
+    check('native file import uses the streaming Android picker',calls.some(call=>call[0]==='importAudio'&&call[1]==='gsk_test'));
+    const previousImportCount=run('transcriptEntries.length');
+    state={active:false,recording:false,importActive:true,importReady:false,importPhase:'decode',importStatus:'Preparazione audio · 20%',importPercent:4,sessionId:'session-1790768999000',entries:[],pending:4,chunkCount:4,status:'Pronto'};
+    run('syncNativeRecorder()');
+    check('native preparation preserves the previous transcript and notes',run('transcriptEntries.length')===previousImportCount&&run('notesText')==='Contenuto precedente');
+    check('native import displays global progress and disables recording',!ctx.__elements.get('workIndicator').hidden&&run('isProcessing'));
+    ctx.__elements.get('workCancel').onclick();check('native import cancellation reaches its service',calls.some(call=>call[0]==='cancelImport'));
+    state.importReady=true;state.importPhase='transcribe';state.entries=[{nativeSegmentId:state.sessionId+'/000000000000.wav',offsetMs:0,endMs:35000,text:'Nuovo file completo.',speaker:0}];run('syncNativeRecorder()');
+    check('the first native text commits the new import once',run('transcriptEntries.length')===1&&run('transcriptEntries[0].text')==='Nuovo file completo.'&&ctx.nativeAudioSession===state.sessionId);
+    run('syncNativeRecorder()');check('native import polling cannot duplicate completed parts',run('transcriptEntries.length')===1);
+    state.importActive=false;state.pending=0;state.importStatus='Audio importato e trascritto';run('syncNativeRecorder()');
+    check('native completion clears progress and releases the recorder',ctx.__elements.get('workIndicator').hidden&&!run('isProcessing'));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

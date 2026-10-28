@@ -1,5 +1,15 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Mappe Android, importazione e aspetto (2.7.0)
+
+- Corretto il router degli asset Android: il modulo delle mappe veniva incluso nell’APK ma restituito con HTTP 404 dalla WebView. La vista ora mostra il tema a dimensione leggibile; un elenco completo sostituisce il riquadro vuoto in caso di errore del modulo.
+- Tema chiaro/scuro e preferenza del dispositivo, salvati fra gli avvii. Palette della mappa e barre Android seguono la scelta. Il canvas del disegno rimane bianco.
+- Indicatore globale con rotella, fase, tempo trascorso e avanzamento quando misurabile; resta visibile passando fra le schede. Analisi AI e importazioni sono interrompibili.
+- Import Android senza il vecchio blocco a 25 MB: copia privata del file originale, decodifica nativa in streaming, conversione mono 16 kHz e segmenti WAV completi di circa 30–35 s, con confini preferiti nei silenzi. Nessun byte del contenitore compresso viene tagliato arbitrariamente.
+- Servizio in primo piano con notifica durante l’importazione. Quota Groq: stop degli invii successivi e ripresa delle sole parti mancanti. Interruzioni prima della conversione completa ripartono dalla sorgente conservata. Un file copiato solo in parte richiede di riselezionare l’originale.
+- Il progetto corrente resta disponibile finché non arriva il primo testo nativo. Il browser conserva il progetto fino al completamento e archivia originale e risultati intermedi per la ripresa; i WAV PCM grandi vengono letti a blocchi, i compressi sono limitati dalle risorse del browser (128 MB / 30 minuti). Per file compressi più grandi usare l’app Android.
+- Verifiche aggiunte: WebView reale con router e CSP dell’APK, WAV da 27 MB, decodifica M4A/AAC reale, resampling fra buffer, quota/ripresa del browser, temi e indicatore tra schede. Le risposte di rete dei test sono simulate; non viene misurata l’accuratezza di trascrizione reale.
+
 ## Mappe concettuali navigabili (2.6.0)
 
 - Disposizione basata sulle relazioni, con tema centrale, rami bilanciati sui due
@@ -246,7 +256,7 @@ senza salvare un risultato incompleto. I limiti di contesto effettivi dipendono 
 - Errori di rete o di formato conservano i risultati precedenti. Non vengono effettuati
   reinvii automatici per errori di rete della generazione AI. Rimangono solo i fallback
   per parametri esplicitamente rifiutati dal provider.
-- Import audio: file fino a 25 MB; una trascrizione fallita conserva la sessione precedente.
+- Import audio: suddivisione automatica oltre 25 MB, sorgente conservata e parti completate recuperabili; vedere i limiti del browser sopra.
   Un'importazione riuscita diventa una nuova sessione e viene conservata in IndexedDB.
 - Le bozze con soli appunti/disegni sono recuperabili; disegni con annulla/ripristina e
   coordinate adattate al ridimensionamento. La copia dei risultati usa la clipboard nativa

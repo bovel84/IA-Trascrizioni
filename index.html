@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>VoiceScribe Pro</title>
     <meta name="theme-color" content="#101519">
+    <script src="appearance.js"></script>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -611,8 +612,30 @@
             #mapCard.map-expanded { inset:0; border-radius:0; padding:14px; }.map-expanded .map-controls { grid-template-columns:minmax(95px,.65fr) minmax(0,1.35fr); }
             .map-expanded .map-hint { margin:6px 0; font-size:11px; }.map-expanded .concept-viewport { min-height:180px; }
         }
+        /* Persistent appearance and progress are shared across every workspace panel. */
+        .theme-toggle { width:40px; height:40px; flex:0 0 40px; display:grid; place-items:center; color:var(--text-primary); border:1px solid var(--border); border-radius:50%; background:var(--bg-secondary); font-size:21px; line-height:1; }
+        .appearance-setting { display:flex; gap:14px; align-items:center; justify-content:space-between; padding-bottom:18px; margin-bottom:16px; border-bottom:1px solid var(--border); font-size:13px; }.appearance-setting select { flex:0 1 230px; }
+        .work-indicator { position:fixed; z-index:550; bottom:22px; right:22px; width:min(520px,calc(100% - 32px)); display:flex; align-items:center; gap:12px; padding:15px 18px; border:1px solid var(--accent); border-radius:14px; background:var(--bg-secondary); color:var(--text-primary); box-shadow:0 6px 32px #0004; pointer-events:auto; }
+        .work-indicator>div { flex:1; min-width:0; }.work-indicator strong { display:block; font-size:14px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }.work-indicator #workDetail { display:block; font-size:12px; color:var(--text-secondary); overflow-wrap:anywhere; }.work-indicator progress { display:block; width:100%; height:6px; margin-top:9px; accent-color:var(--accent); }.work-indicator #workElapsed { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+        .work-spinner { display:inline-block; width:23px; height:23px; flex:0 0 23px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:work-spin .85s linear infinite; }
+        .analysis-progress { align-items:center; }.analysis-progress #aiProgressText { flex:1; }.status-badge.processing .status-dot { width:13px; height:13px; background:transparent; border:2px solid currentColor; border-right-color:transparent; animation:work-spin .85s linear infinite; }
+        @keyframes work-spin { to { transform:rotate(360deg); } }
+        #mapFallback { padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--bg-primary); }#mapFallback li { margin:12px 0; }
+        :root[data-theme="light"] { color-scheme:light; --bg-primary:#f4f7f6; --bg-secondary:#ffffff; --bg-card:#eef3f0; --accent:#216b45; --accent-glow:#216b4515; --accent-secondary:#63519b; --text-primary:#172c25; --text-secondary:#425f53; --text-muted:#576d64; --border:#c5d4cc; --danger:#a62d36; --warning:#806016; --success:#216b45; }
+        [data-theme="light"] .header { background:#f4f7f6f5; }[data-theme="light"] .tabs { background:transparent; }[data-theme="light"] .tab.active,[data-theme="light"] .status-badge.idle { background:#e0efe5; border-color:#b8d4c3; }
+        [data-theme="light"] .recording-section { background:radial-gradient(ellipse at 50% 30%,#d6eddf 0,transparent 70%),#eaf4ee; border-color:#adc9b8; }[data-theme="light"] .recorder-caption,[data-theme="light"] .record-hint { color:#355d46; }
+        [data-theme="light"] .record-button svg { fill:#fff; }[data-theme="light"] .ai-btn-icon { background:#e4eee8; }[data-theme="light"] .secondary-action:hover,[data-theme="light"] .model-refresh:hover,[data-theme="light"] .export-card:hover { background:#e8f1ec; }
+        [data-theme="light"] .api-save-btn,[data-theme="light"] .modal-btn.confirm { color:#fff; }[data-theme="light"] .analysis-button { background:var(--bg-secondary); color:var(--text-primary); }[data-theme="light"] .analysis-button:hover { background:#e7f0ea; }
+        [data-theme="light"] .concept-viewport,[data-theme="light"] #mapCard.map-expanded { background:#f6f9f7; border-color:#a7beb2; }[data-theme="light"] .map-concept-detail { background:#f0f5f2; border-color:#acc3b6; }[data-theme="light"] .map-concept-detail blockquote,[data-theme="light"] .map-navigation>span { color:var(--text-secondary); }[data-theme="light"] .map-detail-badge { color:#78510e; }
+        [data-theme="light"] .ai-btn[data-ai-action="correct"],[data-theme="light"] .ai-result[data-tool="correct"] { --tool-color:#216b45; }[data-theme="light"] .ai-btn[data-ai-action="summary"],[data-theme="light"] .ai-result[data-tool="summary"] { --tool-color:#245b91; }[data-theme="light"] .ai-btn[data-ai-action="keypoints"],[data-theme="light"] .ai-result[data-tool="keypoints"] { --tool-color:#7c5715; }[data-theme="light"] .ai-btn[data-ai-action="improve"],[data-theme="light"] .ai-result[data-tool="improve"] { --tool-color:#73508e; }[data-theme="light"] .ai-btn[data-ai-action="chart"],[data-theme="light"] .ai-result[data-tool="chart"] { --tool-color:#176b62; }[data-theme="light"] .ai-btn[data-ai-action="concept"],[data-theme="light"] .ai-result[data-tool="concept"] { --tool-color:#97466c; }
+        [data-theme="light"] .rich-document a,[data-theme="light"] .chart-data-details summary { color:#245b91; }[data-theme="light"] .rich-document blockquote,[data-theme="light"] .rich-document pre,[data-theme="light"] .rich-document code { background:#eef3f0; color:#294437; border-color:#b7cec0; }[data-theme="light"] .result-table-wrap,[data-theme="light"] .rich-document th,[data-theme="light"] .rich-document td { border-color:#c5d4cc; }[data-theme="light"] .rich-document th { background:#e1ece5; color:#294437; }[data-theme="light"] .rich-document tbody tr,[data-theme="light"] .rich-document tbody tr:nth-child(even) { background:#f8faf9; border-color:#c5d4cc; }[data-theme="light"] .retranscribe-btn { background:#e2efe5; border-color:#adc9b8; }
+        [data-theme="light"] .speaker-1,[data-theme="light"] .label-speaker-1 { color:#137259!important; border-color:#137259!important; }[data-theme="light"] .speaker-2,[data-theme="light"] .label-speaker-2 { color:#6b4699!important; border-color:#6b4699!important; }[data-theme="light"] .speaker-3,[data-theme="light"] .label-speaker-3 { color:#87600e!important; border-color:#87600e!important; }[data-theme="light"] .speaker-4,[data-theme="light"] .label-speaker-4 { color:#ab3547!important; border-color:#ab3547!important; }[data-theme="light"] .speaker-5,[data-theme="light"] .label-speaker-5 { color:#255c98!important; border-color:#255c98!important; }
+        @media(max-width:620px) { .header-badges { gap:7px; }.header-content { gap:8px; }.theme-toggle { width:36px; height:36px; flex-basis:36px; }.status-badge { padding:6px 8px; }.work-indicator { right:12px; width:calc(100% - 24px); bottom:calc(90px + env(safe-area-inset-bottom)); padding:12px; gap:9px; }.work-indicator .analysis-button { padding:8px; font-size:12px; }[data-theme="light"] .tabs { background:#f4f7f6; } }
+        @media(max-width:359px) { .logo-icon { width:34px; height:34px; flex-basis:34px; }.logo { gap:7px; }.logo-text { font-size:16px; }.brand-caption { font-size:9px; }.header { padding-left:12px; padding-right:12px; } }
+        @media(prefers-reduced-motion:reduce) { .work-spinner,.status-badge.processing .status-dot { animation:none!important; border-style:dashed; } }
     </style>
     <script src="concept-map.js"></script>
+    <script src="audio-import.js"></script>
     <script src="native-bridge.js"></script>
 </head>
 <body>
@@ -624,7 +647,7 @@
                     <div class="logo-icon"><img src="icon.svg" alt="" aria-hidden="true"></div>
                     <span class="brand-copy"><span class="logo-text">VoiceScribe<span class="pro-tag">PRO</span></span><span class="brand-caption">Il tuo spazio di ascolto</span></span>
                 </div>
-                <div class="header-badges"><button class="settings-trigger" onclick="openConnectionSettings()" aria-label="Apri connessioni e modelli"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Impostazioni</span></button>
+                <div class="header-badges"><button type="button" id="themeToggle" class="theme-toggle" aria-label="Attiva tema chiaro">☀</button><button class="settings-trigger" onclick="openConnectionSettings()" aria-label="Apri connessioni e modelli"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Impostazioni</span></button>
                     <div class="status-badge background" id="bgBadge" style="display: none;"><span>🔒</span></div>
                     <div class="status-badge idle" id="statusBadge">
                         <span class="status-dot"></span>
@@ -638,7 +661,7 @@
             <div class="workspace-heading"><div><p class="eyebrow" id="workspaceEyebrow">IL TUO WORKSPACE</p><h1 id="workspaceTitle">La tua riunione.</h1><p id="workspaceDescription">Registra la conversazione. Ritrova ogni intervento.</p></div><button class="secondary-action" onclick="saveSession()"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg><span>Salva progetto</span></button></div>
             <!-- API Keys -->
             <details class="api-section" id="connectionSettings">
-                <summary><span class="connection-icon"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></span><span class="connection-copy"><strong>Connessioni e modelli</strong><span>Chiavi API, trascrizione e assistente AI</span></span><span class="settings-chevron" aria-hidden="true">⌄</span></summary><div class="connection-body">
+                <summary><span class="connection-icon"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></span><span class="connection-copy"><strong>Connessioni e modelli</strong><span>Chiavi API, trascrizione e assistente AI</span></span><span class="settings-chevron" aria-hidden="true">⌄</span></summary><div class="connection-body"><label class="appearance-setting" for="themeSelect">Aspetto<select id="themeSelect" class="control-select"><option value="dark">Scuro</option><option value="light">Chiaro</option><option value="system">Come il dispositivo</option></select></label>
                 <div class="api-grid" id="apiGrid">
                     <div class="api-box">
                         <div class="api-box-header">
@@ -880,7 +903,7 @@
                     <button type="button" class="ai-btn" data-ai-action="chart" onclick="runAI('chart')"><svg class="ai-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3v17h17M8 16v-5M13 16V6M18 16V9"/></svg><span>Grafico</span><span class="ai-btn-label">Dati verificabili</span></button>
                     <button type="button" class="ai-btn" data-ai-action="concept" onclick="runAI('concept')"><svg class="ai-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="5" rx="1"/><rect x="2" y="17" width="8" height="5" rx="1"/><rect x="14" y="17" width="8" height="5" rx="1"/><path d="M12 7v5M6 17v-5h12v5"/></svg><span>Mappa</span><span class="ai-btn-label">Concetti e relazioni</span></button>
                 </div>
-                <div class="analysis-progress" id="aiProgress" hidden role="status"><span id="aiProgressText">Analisi in corso…</span><button type="button" class="analysis-button" onclick="cancelAI()">Annulla</button></div>
+                <div class="analysis-progress" id="aiProgress" hidden role="status"><span class="work-spinner" aria-hidden="true"></span><span id="aiProgressText">Analisi in corso…</span><button type="button" class="analysis-button" onclick="cancelAI()">Annulla</button></div>
                 <div class="analysis-result-bar">
                     <label for="aiResultSelect">Risultati del progetto</label>
                     <select id="aiResultSelect" class="control-select" onchange="selectAIResult(this.value)" disabled><option value="">Nessun risultato</option></select>
@@ -912,6 +935,7 @@
                         <div class="map-navigation" aria-label="Navigazione della mappa"><button class="analysis-button" type="button" onclick="zoomMap(.8)" aria-label="Riduci lo zoom">−</button><span id="mapZoomStatus" aria-label="Livello di zoom">100%</span><button class="analysis-button" type="button" onclick="zoomMap(1.25)" aria-label="Aumenta lo zoom">+</button><button class="analysis-button" type="button" onclick="fitMap()">Tutta la mappa</button><button class="analysis-button" type="button" onclick="readableMap()">100%</button></div>
                         <p class="map-hint">Trascina per esplorare. Tocca un concetto per leggere i dettagli e seguire i collegamenti.</p>
                         <div class="concept-viewport" id="mapViewport"><svg id="conceptMap" class="concept-map" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Mappa dei concetti analizzati"></svg></div>
+                        <div id="mapFallback" class="rich-document" hidden></div>
                         <div id="mapConceptDetail" class="map-concept-detail" hidden aria-live="polite"></div>
                         <details class="chart-data-details"><summary>Leggi tutti i collegamenti</summary><div id="mapRelations" class="rich-document"></div></details>
                         <div class="analysis-toolbar"><button type="button" class="analysis-button" onclick="exportConceptSvg()">Scarica SVG</button><button type="button" class="analysis-button" onclick="exportConceptPng()">Scarica PNG</button></div>
@@ -936,7 +960,7 @@
             <div class="tab-content" id="savedTab">
                 <div class="retranscribe-section">
                     <button class="retranscribe-btn" onclick="loadAudioFile()"><span>📁</span><span>Carica Audio da Trascrivere</span></button>
-                    <p class="retranscribe-info">Supporta: .webm, .mp3, .wav, .m4a, .ogg</p>
+                    <p class="retranscribe-info">Audio anche oltre 25 MB · suddivisione automatica. WAV, MP3, M4A, OGG, FLAC e WebM secondo i codec del dispositivo.</p>
                 </div>
                 <div class="section-title" style="margin-top: 1rem;">📂 Progetti Salvati</div>
                 <div class="recordings-list" id="recordingsList"></div>
@@ -980,7 +1004,8 @@
     </div>
     <div class="toast" id="toast"></div>
     <input type="file" id="diarizationFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg" hidden>
-    <input type="file" id="audioFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg">
+    <aside id="workIndicator" class="work-indicator" hidden role="status" aria-live="polite"><span class="work-spinner" aria-hidden="true"></span><div><strong id="workTitle">Elaborazione in corso…</strong><span id="workDetail"></span><progress id="workProgress" max="100" hidden aria-label="Avanzamento"></progress></div><span id="workElapsed" aria-hidden="true"></span><button id="workCancel" type="button" class="analysis-button" hidden>Interrompi</button></aside>
+    <input type="file" id="audioFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac,.aac">
 
     <script>
         // ============ IndexedDB ============
@@ -1014,7 +1039,8 @@
                 const tx = db.transaction('audioChunks', 'readwrite');
                 const store = tx.objectStore('audioChunks');
                 const request = store.add({ ...metadata, sessionId, chunk, timestamp: Date.now() });
-                request.onsuccess = () => resolve(request.result);
+                let key;request.onsuccess=()=>{key=request.result;};
+                tx.oncomplete=()=>resolve(key);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Salvataggio audio non completato'));
                 request.onerror = () => reject(request.error);
             });
         }
@@ -1077,7 +1103,7 @@
                 const tx = db.transaction('savedAudio', 'readwrite');
                 const store = tx.objectStore('savedAudio');
                 const request = store.put({ sessionId, audio: audioBlob, timestamp: Date.now() });
-                request.onsuccess = () => resolve();
+                tx.oncomplete=()=>resolve();tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Salvataggio sorgente non completato'));
                 request.onerror = () => reject(request.error);
             });
         }
@@ -1457,6 +1483,21 @@
         const $ = id => document.getElementById(id);
         let chartInstance = null, chartData = null, conceptMapData = null;
         let conceptViewer=null,conceptSignature='',mapExpanded=false,mapPreviousOverflow='';
+        const workTasks=new Map();let workClock=null,workStarted=0;
+        function setWorkTask(key,title,detail='',percent=null,cancel=null){workTasks.set(key,{title,detail,percent,cancel});updateWorkIndicator();}
+        function clearWorkTask(key){workTasks.delete(key);updateWorkIndicator();}
+        function updateWorkIndicator(){
+            const task=['import','ai','audio','processing','live'].map(key=>workTasks.get(key)).find(Boolean),box=$('workIndicator');box.hidden=!task;
+            if(!task){if(workClock!==null)clearInterval(workClock);workClock=null;workStarted=0;return;}
+            if(!workStarted)workStarted=Date.now();
+            if(workClock===null)workClock=setInterval(updateWorkIndicator,1000);
+            const title=workTasks.get('ai')===task?($('aiProgressText').textContent||task.title):task.title;
+            if($('workTitle').textContent!==title)$('workTitle').textContent=title;
+            if($('workDetail').textContent!==task.detail)$('workDetail').textContent=task.detail;
+            $('workElapsed').textContent=Math.floor((Date.now()-workStarted)/1000)+' s';
+            $('workProgress').hidden=!Number.isFinite(task.percent);if(Number.isFinite(task.percent))$('workProgress').value=Math.max(0,Math.min(100,task.percent));
+            $('workCancel').hidden=!task.cancel;$('workCancel').onclick=task.cancel||null;
+        }
         let aiResults = [], activeAIResult = '', aiJob = null, analysisGeneration = 0;
         const AI_TITLES = { correct: 'Testo corretto', summary: 'Sintesi della riunione', keypoints: 'Punti chiave e azioni', improve: 'Testo rielaborato', chart: 'Grafico', concept: 'Mappa concettuale' };
 
@@ -1592,6 +1633,7 @@
 
         async function init() {
             await initDB();
+            window.initAppearance?.();
             $('transcriptionGlossary').value=transcriptionGlossary;
             $('transcriptionGlossary').oninput=()=>{
                 transcriptionGlossary=limitSpeechBytes($('transcriptionGlossary').value,160);$('transcriptionGlossary').value=transcriptionGlossary;
@@ -2275,6 +2317,7 @@
             el.textContent = text;
             el.classList.toggle('active', isRecording || pending > 0 || liveProcessing);
             el.classList.toggle('busy', liveProcessing);
+            if(liveProcessing)setWorkTask('live','Trascrizione audio in corso…','La registrazione continua mentre elaboro i segmenti.');else clearWorkTask('live');
         }
 
         async function rotateChunk(force = false) {
@@ -2431,7 +2474,7 @@
             showProgress(true, customTitle || `Trascrivo ${done}/${chunkCount} chunk...`, pct);
         }
 
-        async function transcribeBlob(blob, attempt = 0, prompt=speechPrompt(transcriptionGlossary), quality=null) {
+        async function transcribeBlob(blob, attempt = 0, prompt=speechPrompt(transcriptionGlossary), quality=null, signal=null) {
             const form = new FormData();
             // Imported WAV/MP3/M4A files must keep their real format; never label them WebM.
             const filename = typeof blob?.name === 'string' && blob.name ? blob.name : `audio.${extFromMime(blob?.type || '')}`;
@@ -2444,18 +2487,19 @@
             let res, data;
             try {
                 res = await fetchWithTimeout('https://api.groq.com/openai/v1/audio/transcriptions', {
-                    method: 'POST', headers: { 'Authorization': `Bearer ${whisperKey}` }, body: form
+                    method: 'POST', headers: { 'Authorization': `Bearer ${whisperKey}` }, body: form, signal
                 }, 90000);
                 data = await res.json().catch(() => ({}));
             } catch (e) {
-                if (attempt < 2) { await sleep(1500 * (attempt + 1)); return transcribeBlob(blob, attempt + 1,prompt,quality); }
+                if(signal?.aborted)throw new Error('Importazione interrotta');
+                if (attempt < 2) { await sleep(1500 * (attempt + 1)); return transcribeBlob(blob, attempt + 1,prompt,quality,signal); }
                 throw new Error(e.name === 'AbortError' ? 'timeout' : e.message);
             }
             // Quota/rate limits require waiting, not repeated uploads of the same audio.
             if(res.status===429){const error=new Error('Limite di frequenza o quota Groq raggiunto. Audio conservato: riprova più tardi.');error.quota=true;throw error;}
             if (res.status >= 500 && attempt < 2) {
                 await sleep(1500 * (attempt + 1));
-                return transcribeBlob(blob, attempt + 1,prompt,quality);
+                return transcribeBlob(blob, attempt + 1,prompt,quality,signal);
             }
             if (!res.ok) throw new Error(data.error?.message || `Errore ${res.status}`);
             if(quality)Object.assign(quality,speechQuality(data));
@@ -2464,35 +2508,64 @@
 
         function showProgress(show, title = '', percent = 0) {
             const section = $('progressSection');
-            if (show) { section.classList.add('active'); $('progressTitle').textContent = title; $('progressFill').style.width = `${percent}%`; $('progressText').textContent = `${Math.round(percent)}%`; }
-            else section.classList.remove('active');
+            if (show) { section.classList.add('active'); $('progressTitle').textContent = title; $('progressFill').style.width = `${Number.isFinite(percent)?percent:0}%`; $('progressText').textContent = Number.isFinite(percent)?`${Math.round(percent)}%`:'In corso…';setWorkTask('audio',title,'L’audio e le parti completate restano conservati.',percent); }
+            else {section.classList.remove('active');clearWorkTask('audio');}
         }
 
-        // Load audio file
+        // Persist the original before conversion. Successful parts are cached and never resent on resume.
+        async function cacheImportedPart(part,text,quality){
+            return new Promise((resolve,reject)=>{const tx=db.transaction('audioChunks','readwrite'),request=tx.objectStore('audioChunks').put({...part,importText:text,importQuality:quality});tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Salvataggio parte non completato'));request.onerror=()=>reject(request.error);});
+        }
         window.loadAudioFile = () => $('audioFileInput').click();
-        $('audioFileInput').onchange = async (e) => {
-            if (isRecording || isProcessing || diarizationBusy) return showToast('Ferma prima la registrazione');
-            const file = e.target.files[0]; if (!file) return;
-            if (!whisperKey) { openConnectionSettings(); showToast('Inserisci la chiave Whisper'); e.target.value=''; return; }
-            if (!file.size || file.size > 25*1024*1024) { showToast('Seleziona un file audio valido fino a 25 MB. Dividi i file più grandi prima di importarli.'); e.target.value=''; return; }
-            if (hasCurrentContent() && !confirm('Importare l’audio come nuova sessione? Salva prima il progetto corrente se vuoi conservarlo. Il contenuto sarà sostituito solo dopo una trascrizione riuscita.')) { e.target.value=''; return; }
-            isProcessing = true; updateUI(); showProgress(true, `Trascrivo ${file.name}…`, 30);
-            try {
-                const quality={};const text = await transcribeBlob(file,0,speechPrompt(transcriptionGlossary),quality);
-                if (!text) throw new Error('Nessun testo riconosciuto. Il progetto corrente è stato conservato.');
-                const importedSession = 'import-'+Date.now();
-                await saveChunkToDB(file,importedSession,{offsetMs:0,participant:{speaker:0,speakerName:'Non assegnato'}});
-                resetAnalysisScope();
-                await clearCurrentAudio();
-                await moveChunksSession(importedSession,AUDIO_SESSION);
-                transcriptEntries=[]; notesText=''; drawingHistory=[]; drawingRedo=[];
-                $('notesTextarea').value=''; $('notesCharCount').textContent='0'; $('transcriptSearch').value=''; $('timer').textContent='00:00';
-                window.nativeAudioSession=null; window.nativeDiarizedSession=null; audioBlob=file;
-                redrawFromHistory(); restoreAnalysisState({});
-                addEntry(text,0,{ speaker:0,speakerName:'Non assegnato',speakerSource:'unknown',...quality });
-                scheduleAutosave(true); showToast('Audio importato e trascritto');
-            } catch (err) { showToast(err.message || 'Importazione non riuscita: contenuto precedente conservato'); }
-            finally { showProgress(false); isProcessing=false; updateUI(); e.target.value=''; }
+        window.retryBrowserImport=async id=>{const record=savedRecordings.find(r=>r.id===id);if(!record)return;const file=await getSessionAudio(id);if(!file)return showToast('Sorgente audio non disponibile');await importAudioFile(file,record);};
+        window.importAudioFile=async(file,resume=null)=>{
+            if(isRecording||isProcessing||diarizationBusy)return showToast('Attendi il completamento');
+            if(!file?.size)return showToast('Il file audio è vuoto');
+            if(!whisperKey){openConnectionSettings();return showToast('Inserisci la chiave Whisper');}
+            const controller=new AbortController(),id=resume?.id||Date.now(),importedSession=resume?.audioImportSession||'import-'+id;
+            let record=resume,prepared=!!resume?.audioImportPrepared,previous='',completed=[];
+            isProcessing=true;updateUI();
+            const report=(title,percent=null)=>setWorkTask('import',title,'Originale conservato. Le parti riuscite non vengono reinviate.',percent,()=>controller.abort());
+            report('Salvataggio del file originale…');
+            try{
+                if(!record){
+                    await saveSessionAudio(id,file);
+                    record={id,name:'Importazione · '+(file.name||'Audio'),date:new Date().toISOString(),duration:'',entries:[],speakers:[...speakers],notes:'',hasAudio:true,transcriptIncomplete:true,importPending:true,audioImportSession:importedSession,audioImportPrepared:false};
+                    savedRecordings.push(record);localStorage.setItem('voicescribe_recordings',JSON.stringify(savedRecordings));renderSavedRecordings();
+                }
+                if(!prepared){
+                    await clearChunksFromDB(importedSession);let lastPercent=-1;
+                    await VoiceAudioImport.split(file,(blob,metadata)=>saveChunkToDB(blob,importedSession,{...metadata,participant:{speaker:0,speakerName:'Non assegnato'}}),{signal:controller.signal,onProgress:fraction=>{const percent=Math.floor(fraction*20);if(percent!==lastPercent){lastPercent=percent;report('Preparazione audio · '+Math.round(fraction*100)+'%',percent);}}});
+                    prepared=true;record.audioImportPrepared=true;localStorage.setItem('voicescribe_recordings',JSON.stringify(savedRecordings));
+                }
+                const parts=await getChunksFromDB(importedSession);
+                for(let i=0;i<parts.length;i++){
+                    if(controller.signal.aborted)throw new Error('Importazione interrotta');
+                    report('Trascrizione · parte '+(i+1)+' di '+parts.length,20+i*80/parts.length);
+                    const quality={...(parts[i].importQuality||{})};let text=parts[i].importText;
+                    if(typeof text!=='string'){text=await transcribeBlob(parts[i].chunk,0,speechPrompt(transcriptionGlossary,previous),quality,controller.signal);await cacheImportedPart(parts[i],text,quality);}
+                    previous=quality.transcriptReview?'':text;
+                    if(text)completed.push({text,offsetMs:parts[i].offsetMs||0,...(Number.isFinite(parts[i].endMs)?{endMs:parts[i].endMs}:{}),speaker:0,speakerName:'Non assegnato',speakerSource:'unknown',...quality});
+                    record.entries=completed.map(entry=>({...entry}));localStorage.setItem('voicescribe_recordings',JSON.stringify(savedRecordings));
+                }
+                if(!completed.length)throw new Error('Nessun testo riconosciuto. Il progetto corrente è stato conservato.');
+                resetAnalysisScope();await clearCurrentAudio();await moveChunksSession(importedSession,AUDIO_SESSION);
+                transcriptEntries=[];notesText='';drawingHistory=[];drawingRedo=[];
+                $('notesTextarea').value='';$('notesCharCount').textContent='0';$('transcriptSearch').value='';
+                window.nativeAudioSession=null;window.nativeDiarizedSession=null;audioBlob=file;
+                redrawFromHistory();restoreAnalysisState({});completed.forEach(entry=>addEntry(entry.text,entry.offsetMs,entry));
+                const duration=completed.at(-1).endMs||0;$('timer').textContent=formatDuration(duration);
+                record.entries=transcriptEntries.map(entry=>({...entry}));record.transcriptIncomplete=false;record.importPending=false;record.duration=$('timer').textContent;
+                localStorage.setItem('voicescribe_recordings',JSON.stringify(savedRecordings));renderSavedRecordings();scheduleAutosave(true);showToast('Audio importato e trascritto');
+            }catch(error){
+                if(record){record.entries=completed.length?completed:record.entries;record.transcriptIncomplete=true;record.importPending=true;try{localStorage.setItem('voicescribe_recordings',JSON.stringify(savedRecordings));}catch(e){}renderSavedRecordings();}
+                showToast((error.message||'Importazione interrotta')+(record?' · riprendi dal progetto Importazione.':''));
+            }finally{clearWorkTask('import');showProgress(false);isProcessing=false;updateUI();}
+        };
+        $('audioFileInput').onchange=async event=>{
+            const file=event.target.files[0];event.target.value='';if(!file)return;
+            if(hasCurrentContent()&&!confirm('Importare come nuova sessione? Salva prima il progetto corrente. Verrà sostituito dopo una trascrizione riuscita.'))return;
+            await importAudioFile(file);
         };
 
         // AI Analysis
@@ -2650,14 +2723,18 @@
         }
         function disposeConceptViewer(){conceptViewer?.destroy();conceptViewer=null;conceptSignature='';renderMapDetail(null);setMapExpanded(false);}
         function renderConceptMap(input) {
-            const map=normalizeConceptMap(input),mode=['branches','levels'].includes($('mapLayoutSelect').value)?$('mapLayoutSelect').value:'branches',signature=JSON.stringify(map)+'/'+mode;
+            const map=normalizeConceptMap(input),mode=['branches','levels'].includes($('mapLayoutSelect').value)?$('mapLayoutSelect').value:'branches',theme=document.documentElement?.dataset?.theme||'dark',signature=JSON.stringify(map)+'/'+mode+'/'+theme;
             if(conceptViewer&&conceptSignature===signature){conceptViewer.refresh();return;}
             const selected=conceptViewer?.selected;conceptViewer?.destroy();conceptMapData=map;conceptSignature=signature;$('mapCard').hidden=false;
             $('mapLayoutSelect').value=mode;
             $('mapNodeSelect').innerHTML='<option value="">Panoramica</option>'+map.nodes.map(node=>'<option value="'+escapeHtml(node.id)+'">'+escapeHtml(node.label)+'</option>').join('');
-            conceptViewer=VoiceConceptMap.create($('conceptMap'),$('mapViewport'),map,{mode,onSelect:renderMapDetail,onZoom:scale=>{$('mapZoomStatus').textContent=Math.round(scale*100)+'%';}});
-            if(selected&&map.nodes.some(node=>node.id===selected))conceptViewer.select(selected);
-            else if(window.innerWidth<=620||conceptViewer.scale<.65)conceptViewer.select(conceptViewer.graph.roots[0]);
+            conceptViewer=null;$('mapFallback').hidden=true;$('mapViewport').hidden=false;
+            try{
+                if(typeof VoiceConceptMap==='undefined')throw new Error('Modulo grafico non disponibile');
+                conceptViewer=VoiceConceptMap.create($('conceptMap'),$('mapViewport'),map,{mode,theme,onSelect:renderMapDetail,onZoom:scale=>{$('mapZoomStatus').textContent=Math.round(scale*100)+'%';}});
+                if(selected&&map.nodes.some(node=>node.id===selected))conceptViewer.select(selected);
+                else if(window.innerWidth<=620||conceptViewer.scale<.65)conceptViewer.select(conceptViewer.graph.roots[0]);
+            }catch(error){$('mapViewport').hidden=true;$('mapFallback').hidden=false;$('mapFallback').innerHTML='<p>Vista testuale della mappa. Aggiorna l’app per la vista interattiva.</p><ul>'+map.nodes.map(node=>'<li><strong>'+escapeHtml(node.label)+'</strong>'+(node.detail?'<p>'+escapeHtml(node.detail)+'</p>':'')+'</li>').join('')+'</ul>';}
             const names=new Map(map.nodes.map(node=>[node.id,node.label]));
             $('mapRelations').innerHTML=richTableHtml(['Da','Relazione','A'],map.links.map(link=>[names.get(link.from),link.label||'Relazione non specificata',names.get(link.to)]));
             $('mapStatus').textContent=`${map.topic} · ${map.nodes.length} concetti · ${map.links.length} relazioni`;
@@ -2667,6 +2744,7 @@
         window.fitMap=()=>conceptViewer?.fit();
         window.readableMap=()=>conceptViewer?.readable();
         window.changeMapLayout=()=>{if(conceptMapData){localStorage.setItem('voicescribe_map_layout',$('mapLayoutSelect').value);renderConceptMap(conceptMapData);}};
+        window.addEventListener('voicescribe:themechange',()=>{if(conceptMapData)renderConceptMap(conceptMapData);});
         function setMapExpanded(expanded){
             if(mapExpanded===expanded)return;mapExpanded=expanded;$('mapCard').classList.toggle('map-expanded',expanded);
             $('mapExpandBtn').textContent=expanded?'Riduci':'Schermo intero';$('mapExpandBtn').setAttribute('aria-expanded',String(expanded));
@@ -2713,6 +2791,7 @@
             $('aiSourceSelect').disabled = busy; $('chartModeSelect').disabled = busy;
             $('aiContextTokens').disabled=busy;$('aiOutputTokens').disabled=busy;
             $('aiProgress').hidden = !busy; $('aiResult').setAttribute('aria-busy', String(busy));
+            if(busy){setWorkTask('ai',AI_TITLES[aiJob.action]+'…','Elaborazione con il modello selezionato.',null,()=>cancelAI());setStatus('processing','Analisi');}else{clearWorkTask('ai');if(!isRecording&&!isProcessing)setStatus('idle','Pronto');}
             const result = aiResults.find(r => r.action === activeAIResult);
             ['copyAIResultBtn','appendAIResultBtn','exportAIResultBtn'].forEach(id => { $(id).disabled = !result || busy; });
             const limits=analysisLimits();
@@ -3099,6 +3178,7 @@
 
         // Recorder UI
         function updateUI() {
+            if(isProcessing)setWorkTask('processing','Elaborazione audio in corso…','Attendi il completamento.');else clearWorkTask('processing');
             $('transcriptionGlossary').disabled=isRecording||isProcessing;
             const btn = $('recordBtn'), cont = $('recordBtnContainer'), icon = $('recordIcon');
             const pauseBtn = $('pauseBtn'), pauseIcon = $('pauseIcon'), timer = $('timer');
@@ -3147,7 +3227,7 @@
             }
         }
 
-        function setStatus(type, text) { $('statusBadge').className = `status-badge ${type}`; $('statusText').textContent = text; }
+        function setStatus(type, text) { if(type==='idle'&&aiJob){type='processing';text='Analisi';}$('statusBadge').className = `status-badge ${type}`; $('statusText').textContent = text; }
 
         function startTimer() {
             timerInterval = setInterval(() => {
@@ -3674,6 +3754,7 @@
                         </div>
                     </div>
                     <div class="recording-item-actions">
+                        ${r.importPending?`<button class="action-btn" onclick="retryBrowserImport(${Number(r.id)})" title="Riprendi importazione" aria-label="Riprendi importazione">↻</button>`:''}
                         <button class="action-btn" onclick="loadRec(${Number(r.id)})" title="Apri">📂</button>
                         <button class="action-btn delete" onclick="delRec(${Number(r.id)})" title="Elimina">🗑️</button>
                     </div>

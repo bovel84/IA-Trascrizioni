@@ -97,14 +97,14 @@ class FakeObjectStore {
     add(value) {
         return makeRequest(() => {
             const key = value.id !== undefined ? value.id : this.autoKey++;
-            this.rows.set(key, value);
+            this.rows.set(key, this.name==='audioChunks'?{...value,id:key}:value);
             return key;
         });
     }
     put(value) {
         return makeRequest(() => {
-            const key = value.sessionId !== undefined ? value.sessionId : this.autoKey++;
-            this.rows.set(key, value);
+            const key = this.name==='audioChunks'?(value.id??this.autoKey++):(value.sessionId??this.autoKey++);
+            this.rows.set(key, this.name==='audioChunks'?{...value,id:key}:value);
             return key;
         });
     }
@@ -132,7 +132,7 @@ class FakeObjectStore {
 }
 
 class FakeTransaction {
-    constructor(db) { this.db = db; }
+    constructor(db) { this.db = db; setTimeout(()=>this.oncomplete?.(),0); }
     objectStore(name) { return this.db.stores.get(name); }
 }
 
@@ -268,6 +268,7 @@ function createEnvironment({ html, onFetch } = {}) {
     ctx.__elements = ELEMENTS;
     ctx.__db = db;
     runInContext(fs.readFileSync(path.join(__dirname,'..','concept-map.js'),'utf8'),ctx);
+    runInContext(fs.readFileSync(path.join(__dirname,'..','audio-import.js'),'utf8'),ctx);
     return ctx;
 }
 

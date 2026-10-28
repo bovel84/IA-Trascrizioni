@@ -13,6 +13,7 @@
     ["#452f3d", "#e9b1ca"],
     ["#244247", "#91d7db"],
   ];
+  const lightPalette = [["#e1f2e8","#276d4b"],["#e2edf8","#386995"],["#efe6f7","#77548f"],["#f7eed5","#836722"],["#f7e3ec","#964f70"],["#e0f1f0","#2b7074"]];
   function wrap(text, width, measure) {
     measure =
       measure ||
@@ -301,7 +302,7 @@
     svg,
     viewport,
     map,
-    { mode = "branches", onSelect = () => {}, onZoom = () => {} } = {},
+    { mode = "branches", theme = "dark", onSelect = () => {}, onZoom = () => {} } = {},
   ) {
     const doc = svg.ownerDocument || document,
       ns = "http://www.w3.org/2000/svg",
@@ -314,6 +315,8 @@
         ? (text) => ctx.measureText(text).width
         : undefined,
     });
+    const light=theme==="light",colors=light?lightPalette:palette;
+    if(light){graph.nodes.forEach(node=>{node.color=colors[Math.max(0,palette.findIndex(value=>value[1]===node.color[1]))];});graph.edges.forEach(edge=>{edge.color=colors[Math.max(0,palette.findIndex(value=>value[1]===edge.color))][1];});}
     const nodeElements = new Map(),
       edgeElements = [],
       listeners = [],
@@ -354,7 +357,7 @@
       ),
     );
     const defs = el("defs");
-    palette.forEach((colors, index) => {
+    colors.forEach((colors, index) => {
       const marker = el("marker", {
         id: "mapArrow" + index,
         viewBox: "0 0 10 10",
@@ -376,7 +379,7 @@
         y: 0,
         width: graph.width,
         height: graph.height,
-        fill: "#101b21",
+        fill: light?"#f6f9f7":"#101b21",
         "data-map-background": "true",
       }),
     );
@@ -388,7 +391,7 @@
         }),
         colorIndex = Math.max(
           0,
-          palette.findIndex((colors) => colors[1] === edge.color),
+          colors.findIndex((colors) => colors[1] === edge.color),
         );
       group.appendChild(
         el("path", {
@@ -412,7 +415,7 @@
             width: edge.labelW,
             height: edge.labelH,
             rx: 7,
-            fill: "#14242e",
+            fill: light?"#ffffff":"#14242e",
             stroke: edge.color,
             "stroke-opacity": 0.5,
           }),
@@ -425,7 +428,7 @@
                 x: edge.lx,
                 y: edge.ly - (edge.lines.length - 1) * 8.5 + i * 17 + 4,
                 "text-anchor": "middle",
-                fill: "#cfdee7",
+                fill: light?"#294437":"#cfdee7",
                 "font-family": "sans-serif",
                 "font-size": 12,
                 "font-weight": 500,
@@ -482,7 +485,7 @@
               {
                 x: node.x + 16,
                 y: firstY + i * 19,
-                fill: "#e1eee5",
+                fill: light?"#172c25":"#e1eee5",
                 "font-family": "sans-serif",
                 "font-size": 15,
                 "font-weight": 500,
@@ -498,7 +501,7 @@
               {
                 x: node.x + 16,
                 y: node.y + node.h - 13,
-                fill: node.uncertain ? "#f2ce85" : node.color[1],
+                fill: node.uncertain ? (light?"#78510e":"#f2ce85") : node.color[1],
                 "font-family": "sans-serif",
                 "font-size": 11,
               },
@@ -595,7 +598,7 @@
           edge.from === id || edge.to === id ? 1 : 0.12,
         ),
       );
-      scale = Math.max(scale, 0.85);
+      scale = Math.max(scale, 1);
       cx = record.node.x + record.node.w / 2;
       cy = record.node.y + record.node.h / 2;
       update();

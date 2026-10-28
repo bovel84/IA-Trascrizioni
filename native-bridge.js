@@ -71,7 +71,7 @@ window.initNativeRecorder = function () {
     voiceSelect.value='local';
     window.nativeVoicesEnabled=()=>voiceAvailable && voiceSelect.value==='local';
     voiceSelect.onchange=()=>{if(!voiceSelect.disabled && bridge.setLocalVoices)bridge.setLocalVoices(voiceSelect.value==='local');};
-    let startRequested = false, wasActive = false, wasRetrying = false, lastArchive = '';
+    let startRequested = false, wasActive = false, wasRetrying = false, wasImporting=false, lastArchive = '';
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
     catch (e) { seen = new Set(); }
@@ -107,7 +107,7 @@ window.initNativeRecorder = function () {
             let record = savedRecordings.find(r => r.nativeAuto && r.nativeAudioSession === state.sessionId);
             if (!record) {
                 const id = Number(state.sessionId.replace('session-', ''));
-                record = { id, name: `Registrazione ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
+                record = { id, name: `${state.importedAudio?'Importazione':'Registrazione'} ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
                     nativeAuto: true, nativeAudioSession: state.sessionId, speakers: state.sessionLocalVoices?[]:[...speakers], notes: '',
                     hasAudio: true, hasNotes: false, hasDrawing: false, hasChart: false, hasMap: false };
                 savedRecordings.push(record);
@@ -169,6 +169,18 @@ window.initNativeRecorder = function () {
         startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
     };
     window.applyNativeRecorderState = state => {
+        if(state.importActive){
+            setWorkTask('import',state.importStatus||'Importazione audio in corso…',state.importPhase==='copy'?'Salvataggio del file originale.':'Suddivisione automatica e trascrizione ordinata.',state.importPhase==='copy'?null:state.importPercent,()=>{bridge.cancelImport?.();$('workCancel').disabled=true;});
+        }else{clearWorkTask('import');$('workCancel').disabled=false;}
+        if(wasImporting&&!state.importActive&&state.importStatus)showToast(state.importStatus);
+        wasImporting=!!state.importActive;
+        if(state.active&&state.recording&&state.pending)setWorkTask('live','Trascrizione e riconoscimento voci…',state.pending+' parti audio in coda');else clearWorkTask('live');
+        if(state.importReady&&(state.entries||[]).length&&state.sessionId!==window.nativeAudioSession&&(window.nativeImportRequested||state.importActive)){
+            resetAnalysisScope();transcriptEntries=[];notesText='';drawingHistory=[];drawingRedo=[];audioBlob=null;
+            $('notesTextarea').value='';$('notesCharCount').textContent='0';$('transcriptSearch').value='';
+            window.nativeDiarizedSession=null;window.nativeAudioSession=state.sessionId;window.nativeImportRequested=false;
+            redrawFromHistory();restoreAnalysisState({});
+        }
         if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
         if(!transcriptAudio){const status=state.listening?'Riascolto dell’audio originale in corso.':'';if($('transcriptPlaybackStatus').textContent!==status)$('transcriptPlaybackStatus').textContent=status;}
         if (state.active) {
@@ -179,7 +191,7 @@ window.initNativeRecorder = function () {
         } else if (/^Avvio fallito/.test(state.status || '')) startRequested = false;
         isRecording = !!state.recording;
         isPaused = !!state.paused;
-        isProcessing = diarizationBusy || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
+        isProcessing = diarizationBusy || !!state.importActive || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
         sourceSelect.disabled = !!state.active || isProcessing;
         if (state.active && (state.source === 'playback' || state.source === 'microphone')) sourceSelect.value = state.source;
         updateSourceHint();
@@ -205,7 +217,7 @@ window.initNativeRecorder = function () {
         if (!state.active && state.status && state.status !== 'Pronto') $('recordHint').textContent = state.status;
         const bars = $('visualizer').querySelectorAll('.visualizer-bar');
         bars.forEach((bar, i) => { bar.style.height = `${Math.max(8, (state.level || 0) * (32 + (i % 4) * 4))}px`; });
-        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${!!state.active}`;
+        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${state.pending}:${state.importPhase||''}:${!!state.active}`;
         if (state.sessionId && stamp !== lastArchive) { saveArchives([state]); lastArchive = stamp; }
         if (wasActive && !state.active) { audioBlob = null; scheduleAutosave(true); }
         if (wasRetrying && !state.retrying) {
@@ -213,6 +225,13 @@ window.initNativeRecorder = function () {
             states.forEach(importEntries);
         }
         wasActive = !!state.active; wasRetrying = !!state.retrying;
+    };
+    if(typeof bridge.importAudio==='function')window.loadAudioFile=()=>{
+        if(isRecording||isProcessing||diarizationBusy)return showToast('Attendi il completamento dell’audio in corso');
+        if(!whisperKey){openConnectionSettings();return showToast('Inserisci la chiave Whisper');}
+        if(hasCurrentContent()&&!confirm('Importare come nuova sessione? Salva prima il progetto corrente. Il contenuto viene sostituito dopo il primo testo riconosciuto.'))return;
+        window.stopTranscriptAudio();window.nativeImportRequested=true;
+        bridge.setTranscriptionGlossary?.(transcriptionGlossary);bridge.importAudio(whisperKey,sttModel,$('languageSelect').value);
     };
     window.syncNativeRecorder = () => {
         try { window.applyNativeRecorderState(JSON.parse(bridge.state())); }
