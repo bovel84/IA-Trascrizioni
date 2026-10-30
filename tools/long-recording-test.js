@@ -104,6 +104,10 @@ async function main() {
     disk.ctx.__db.stores.get('audioChunks').put = () => { throw Error('Spazio esaurito'); };
     await disk.run('(async () => { await processRecoveredChunks(await listChunkMetadata(REC_SESSION)); })()');
     check('failed checkpoint commits preserve pending audio and release the UI', !(await disk.run('listChunkMetadata(AUDIO_SESSION)'))[0].transcriptionDone && !disk.run('isProcessing'));
+    let emptyDownloads=0;
+    disk.ctx.URL={createObjectURL:()=>{emptyDownloads++;return 'blob:empty';},revokeObjectURL(){}};
+    disk.run('audioBlob=new Blob([],{type:"audio/wav"})');await disk.run('exportAudio()');
+    check('web export rejects an empty audio blob before creating a download',emptyDownloads===0&&/vuoto/.test(disk.ctx.__elements.get('toast').textContent));
     console.log(`${checks}/${checks} long-recording checks passed.`);
 }
 main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });

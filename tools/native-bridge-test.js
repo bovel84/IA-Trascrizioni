@@ -34,7 +34,9 @@ ctx.AndroidRecorder = {
     exportAudio: id => calls.push(['exportAudio', id]),
     retry: (...args) => calls.push(['retry', ...args]),
     batterySettings: () => calls.push(['battery']),
-    download: (...args) => calls.push(['download', ...args])
+    download: (...args) => calls.push(['download', ...args]),
+    retryExport: () => calls.push(['retryExport']),
+    cancelExport: () => calls.push(['cancelExport'])
 };
 const run = code => vm.runInContext(code, ctx);
 let passed = 0;
@@ -204,6 +206,14 @@ async function main() {
     run('syncNativeRecorder(); syncNativeRecorder();');
     check('full two-hour native recovery imports every result once', run('transcriptEntries.length') === priorCount + 240);
     check('native recovery finishes at 240/240 and releases processing controls', /240\/240/.test(ctx.__elements.get('transcriptionStatus').textContent) && !run('isProcessing') && !ctx.__elements.get('progressSection').classList.contains('active'));
+    state.exportBusy=true;state.exportStatus='Salvataggio del file in corso…';run('syncNativeRecorder()');
+    check('native file copy displays global progress without waiting for transcription',!ctx.__elements.get('workIndicator').hidden&&!run('isProcessing'));
+    state.exportBusy=false;state.exportFailed=true;state.exportStatus='Salvataggio non riuscito · originale conservato';run('syncNativeRecorder()');
+    const retryExport=run("document.querySelector('.retranscribe-section').children.find(e=>e.textContent==='Riprova salvataggio')");
+    check('a failed copy exposes an explicit retry action',retryExport.style.display==='block');retryExport.click();
+    check('file-save retry reaches the native export queue',calls.some(c=>c[0]==='retryExport'));
+    const cancelExport=run("document.querySelector('.retranscribe-section').children.find(e=>e.textContent==='Annulla salvataggio')");cancelExport.click();
+    check('failed export can be dismissed separately from the recording',calls.some(c=>c[0]==='cancelExport'));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });
