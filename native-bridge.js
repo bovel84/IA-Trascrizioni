@@ -4,7 +4,7 @@ if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'funct
     const pending = new Map(); let requestId = 0;
     window.nativeAiReply = (id, status, text, error) => {
         const request = pending.get(id); if (!request) return;
-        pending.delete(id); clearTimeout(request.timer);
+        pending.delete(id); clearTimeout(request.timer); request.cleanup?.();
         if (error) request.reject(new Error(error));
         else request.resolve({ ok: status >= 200 && status < 300, status, json: async () => {
             try { return JSON.parse(text); }
@@ -20,41 +20,95 @@ if (window.AndroidRecorder && typeof window.AndroidRecorder.aiRequest === 'funct
         try { window.AndroidRecorder.diarize(id, sessionId, key, language); }
         catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
     });
-    window.nativeAiRequest = (provider, path, key, body) => new Promise((resolve, reject) => {
+    window.nativeAiRequest = (provider, path, key, body, signal) => new Promise((resolve, reject) => {
         const id = String(++requestId);
+        const cleanup = () => { clearTimeout(timer); pending.delete(id); signal?.removeEventListener('abort', abort); };
+        const abort = () => {
+            cleanup();
+            if (typeof window.AndroidRecorder.cancelAiRequest === 'function') window.AndroidRecorder.cancelAiRequest(id);
+            const error = new Error('Analisi annullata'); error.name = 'AbortError'; reject(error);
+        };
         const timer = setTimeout(() => {
-            pending.delete(id); const error = new Error('Timeout della richiesta AI'); error.name = 'AbortError'; reject(error);
-        }, 110000);
-        pending.set(id, { resolve, reject, timer });
+            cleanup();
+            if (typeof window.AndroidRecorder.cancelAiRequest === 'function') window.AndroidRecorder.cancelAiRequest(id);
+            const error = new Error('Timeout della richiesta AI'); error.name = 'AbortError'; reject(error);
+        }, 370000);
+        if (signal?.aborted) { abort(); return; }
+        pending.set(id, { resolve, reject, timer, cleanup });
+        signal?.addEventListener('abort', abort, { once: true });
         try { window.AndroidRecorder.aiRequest(id, provider, path, key, body == null ? '' : JSON.stringify(body)); }
-        catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
+        catch (e) { cleanup(); reject(e); }
     });
 }
 window.initNativeRecorder = function () {
     if (!window.AndroidRecorder || window.nativeRecorderReady) return;
     window.nativeRecorderReady = true;
     const bridge = window.AndroidRecorder;
-    let startRequested = false, wasActive = false, wasRetrying = false, lastArchive = '';
+    const sourceSelect = $('captureSourceSelect');
+    const playbackSupported = typeof bridge.canCapturePlayback === 'function' && bridge.canCapturePlayback();
+    $('nativeAudioSource').hidden = false;
+    $('playbackSourceOption').disabled = !playbackSupported;
+    sourceSelect.value = playbackSupported && localStorage.getItem('voicescribe_capture_source') === 'playback' ? 'playback' : 'microphone';
+    function updateSourceHint() {
+        $('captureSourceHint').textContent = sourceSelect.value === 'playback'
+            ? 'Premi Registra, autorizza la condivisione Android, poi apri il video nell’altra app. Viene acquisito solo l’audio; alcune app ne impediscono la cattura.'
+            : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'L’audio dei video richiede l’app Android aggiornata e Android 10 o successivo.';
+        const setting = document.querySelector('.setting-info');
+        if (setting) setting.innerHTML = sourceSelect.value === 'playback'
+            ? '<h4>▶️ Audio in background</h4><p>Puoi cambiare app. Il blocco schermo può interrompere la cattura.</p>'
+            : '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
+        $('backgroundToggle').setAttribute('aria-label', 'Registrazione Android in background');
+    }
+    sourceSelect.onchange = () => {
+        if (sourceSelect.disabled) return;
+        try { localStorage.setItem('voicescribe_capture_source', sourceSelect.value); } catch (e) { }
+        updateSourceHint();
+    };
+    updateSourceHint();
+    const voiceSelect=$('nativeVoiceModeSelect');
+    const voiceAvailable=typeof bridge.localVoicesAvailable==='function' && bridge.localVoicesAvailable();
+    $('nativeVoiceControls').hidden=!voiceAvailable;
+    voiceSelect.value='local';
+    window.nativeVoicesEnabled=()=>voiceAvailable && voiceSelect.value==='local';
+    voiceSelect.onchange=()=>{if(!voiceSelect.disabled && bridge.setLocalVoices)bridge.setLocalVoices(voiceSelect.value==='local');};
+    let startRequested = false, wasActive = false, wasRetrying = false, wasImporting=false, lastArchive = '';
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
     catch (e) { seen = new Set(); }
     transcriptEntries.forEach(entry => { if (entry.nativeSegmentId) seen.add(entry.nativeSegmentId); });
     window.nativeAudioSession = window.nativeAudioSession || null;
+    window.nativeSessionPending=window.nativeSessionPending||{};
 
-    function entryFromNative(entry) {
-        const id = Number.isInteger(entry.speaker) && entry.speaker >= 1 && entry.speaker <= 32 ? entry.speaker : 0;
-        return { ...entry, speaker: id, speakerName: id ? (entry.speakerName || `Persona ${id}`) : 'Non assegnato', speakerSource: id ? 'manual' : 'unknown', time: formatDuration(entry.offsetMs), timestamp: Date.now() };
+    function entryFromNative(entry, register=false) {
+        let id=Number.isInteger(entry.speaker)&&entry.speaker>=1&&entry.speaker<=32?entry.speaker:0;
+        const source=['local','audio','manual'].includes(entry.speakerSource)?entry.speakerSource:(id?'manual':'unknown');
+        let name=id?(entry.speakerName||`Persona ${id}`):'Non assegnato';
+        if(register && source==='local' && id && entry.nativeVoiceId){
+            const known=transcriptEntries.find(e=>e.nativeVoiceId===entry.nativeVoiceId);
+            if(known)id=known.speaker;
+            else {
+                const used=new Set(transcriptEntries.map(e=>e.speaker));
+                const free=speakers.findIndex((value,index)=>!used.has(index+1)&&/^Persona \d+$/.test(value));
+                if(free>=0){id=free+1;speakers[free]=name;}
+                else if(speakers.length<32){speakers.push(name);id=speakers.length;}
+                else{id=0;name='Non assegnato';}
+            }
+            if(id)name=speakers[id-1]||name;
+            saveSpeakers();
+        }
+        return {...entry,speaker:id,speakerName:name,speakerSource:source,speakerReview:!!entry.speakerReview||!id,time:formatDuration(entry.offsetMs),timestamp:Date.now()};
     }
     function saveArchives(states) {
         let changed = false;
         const hidden = JSON.parse(localStorage.getItem('voicescribe_native_hidden') || '[]');
         for (const state of states) {
+            if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
             if (!state.sessionId || hidden.includes(state.sessionId)) continue;
             let record = savedRecordings.find(r => r.nativeAuto && r.nativeAudioSession === state.sessionId);
             if (!record) {
                 const id = Number(state.sessionId.replace('session-', ''));
-                record = { id, name: `Registrazione ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
-                    nativeAuto: true, nativeAudioSession: state.sessionId, speakers: [...speakers], notes: '',
+                record = { id, name: `${state.importedAudio?'Importazione':'Registrazione'} ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
+                    nativeAuto: true, nativeAudioSession: state.sessionId, speakers: state.sessionLocalVoices?[]:[...speakers], notes: '',
                     hasAudio: true, hasNotes: false, hasDrawing: false, hasChart: false, hasMap: false };
                 savedRecordings.push(record);
             }
@@ -64,12 +118,21 @@ window.initNativeRecorder = function () {
             const imported = new Set(Array.isArray(record.nativeImportedSegmentIds)
                 ? record.nativeImportedSegmentIds : record.entries.map(e => e.nativeSegmentId).filter(Boolean));
             for (const entry of state.entries || []) {
-                if (!entry.nativeSegmentId || imported.has(entry.nativeSegmentId)) continue;
+                if (!entry.nativeSegmentId) continue;
+                if(state.sessionLocalVoices && entry.speaker>0)record.speakers[entry.speaker-1]=entry.speakerName;
+                if (imported.has(entry.nativeSegmentId)) {
+                    const existing=record.entries.find(e=>e.nativeSegmentId===entry.nativeSegmentId);
+                    if(existing?.nativeVoiceId && existing.speakerSource==='local')existing.speakerName=entry.speakerName;
+                    if(existing&&typeof entry.transcriptReview==='boolean')Object.assign(existing,{transcriptReview:entry.transcriptReview,transcriptReviewReason:entry.transcriptReviewReason,transcriptQualityAvailable:entry.transcriptQualityAvailable});
+                    continue;
+                }
                 record.entries.push(entryFromNative(entry));
                 imported.add(entry.nativeSegmentId);
             }
             record.nativeImportedSegmentIds = [...imported];
             record.duration = formatDuration(state.elapsedMs || 0);
+            record.pendingTranscription = state.pending || 0;
+            record.transcriptionError = state.lastError || '';
             changed = true;
         }
         if (changed) {
@@ -81,24 +144,47 @@ window.initNativeRecorder = function () {
     function importEntries(state) {
         if (window.nativeAudioSession !== state.sessionId || window.nativeDiarizedSession === state.sessionId) return;
         let changed = false;
+        const byId=new Map(transcriptEntries.filter(e=>e.nativeSegmentId).map(e=>[e.nativeSegmentId,e]));
         for (const entry of state.entries || []) {
-            if (seen.has(entry.nativeSegmentId)) continue;
+            if (seen.has(entry.nativeSegmentId)) {
+                const existing=byId.get(entry.nativeSegmentId);
+                if(existing&&typeof entry.transcriptReview==='boolean'){
+                    const fields={transcriptReview:entry.transcriptReview,transcriptReviewReason:entry.transcriptReviewReason,transcriptQualityAvailable:entry.transcriptQualityAvailable};
+                    if(Object.keys(fields).some(k=>existing[k]!==fields[k])){Object.assign(existing,fields);changed=true;}
+                }
+                continue;
+            }
             const before = transcriptEntries.length;
-            const participant = entryFromNative(entry);
-            if (participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
-            addEntry(entry.text, entry.offsetMs, participant);
-            if (transcriptEntries.length > before) transcriptEntries[transcriptEntries.length - 1].nativeSegmentId = entry.nativeSegmentId;
+            const participant = entryFromNative(entry,true);
+            if (participant.speakerSource!=='local' && participant.speaker && speakers[participant.speaker-1]) participant.speakerName = speakers[participant.speaker-1];
+            addEntry(entry.text, entry.offsetMs, participant,false);
+            if (transcriptEntries.length > before) {const added=transcriptEntries[transcriptEntries.length-1];added.nativeSegmentId=entry.nativeSegmentId;byId.set(entry.nativeSegmentId,added);}
             seen.add(entry.nativeSegmentId); changed = true;
         }
         if (changed) {
+            refreshTranscript();
             try { localStorage.setItem('voicescribe_native_seen', JSON.stringify([...seen])); } catch (e) { }
             scheduleAutosave(true);
         }
     }
     window.nativeRecorderError = message => {
-        startRequested = false; isProcessing = false; updateUI(); showToast(message);
+        startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
     };
     window.applyNativeRecorderState = state => {
+        if(state.importActive){
+            setWorkTask('import',state.importStatus||'Importazione audio in corso…',state.importPhase==='copy'?'Salvataggio del file originale.':'Suddivisione automatica e trascrizione ordinata.',state.importPhase==='copy'?null:state.importPercent,()=>{bridge.cancelImport?.();$('workCancel').disabled=true;});
+        }else{clearWorkTask('import');$('workCancel').disabled=false;}
+        if(wasImporting&&!state.importActive&&state.importStatus)showToast(state.importStatus);
+        wasImporting=!!state.importActive;
+        if(state.active&&state.recording&&state.pending)setWorkTask('live','Trascrizione e riconoscimento voci…',state.pending+' parti audio in coda');else clearWorkTask('live');
+        if(state.importReady&&(state.entries||[]).length&&state.sessionId!==window.nativeAudioSession&&(window.nativeImportRequested||state.importActive)){
+            resetAnalysisScope();transcriptEntries=[];notesText='';drawingHistory=[];drawingRedo=[];audioBlob=null;
+            $('notesTextarea').value='';$('notesCharCount').textContent='0';$('transcriptSearch').value='';
+            window.nativeDiarizedSession=null;window.nativeAudioSession=state.sessionId;window.nativeImportRequested=false;
+            redrawFromHistory();restoreAnalysisState({});
+        }
+        if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
+        if(!transcriptAudio){const status=state.listening?'Riascolto dell’audio originale in corso.':'';if($('transcriptPlaybackStatus').textContent!==status)$('transcriptPlaybackStatus').textContent=status;}
         if (state.active) {
             startRequested = false;
             if (state.sessionId && window.nativeAudioSession !== state.sessionId) {
@@ -107,7 +193,15 @@ window.initNativeRecorder = function () {
         } else if (/^Avvio fallito/.test(state.status || '')) startRequested = false;
         isRecording = !!state.recording;
         isPaused = !!state.paused;
-        isProcessing = diarizationBusy || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
+        isProcessing = diarizationBusy || !!state.importActive || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
+        sourceSelect.disabled = !!state.active || isProcessing;
+        if (state.active && (state.source === 'playback' || state.source === 'microphone')) sourceSelect.value = state.source;
+        updateSourceHint();
+        voiceSelect.disabled=!!state.active||isProcessing;
+        if(voiceAvailable && typeof state.localVoices==='boolean')voiceSelect.value=state.localVoices?'local':'manual';
+        $('nativeVoiceStatus').textContent=window.nativeVoicesEnabled()
+            ? ((state.active||window.nativeAudioSession===state.sessionId)?(state.voiceStatus||'Riconoscimento voci sul dispositivo'):'Riconoscimento locale pronto')
+            : 'Seleziona chi parla con i pulsanti dei partecipanti.';
         if (window.nativeAudioSession === state.sessionId) {
             importEntries(state);
             $('timer').textContent = formatDuration(state.elapsedMs || 0);
@@ -116,13 +210,26 @@ window.initNativeRecorder = function () {
         updateUI(); updateSpeakerChips();
         $('bgBadge').style.display = state.recording ? 'flex' : 'none';
         $('bgWarning').classList.toggle('active', !!state.recording);
+        $('bgWarning').textContent = state.source === 'playback'
+            ? 'AUDIO DEL DISPOSITIVO · PUOI PASSARE ALL’APP DEL VIDEO'
+            : 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
         $('chunkIndicator').textContent = `Chunk: ${state.chunkCount || 0}${state.pending ? ` · in coda: ${state.pending}` : ''}`;
         $('chunkIndicator').classList.toggle('active', !!state.active || !!state.pending);
+        $('chunkIndicator').classList.toggle('busy', !!state.retrying || (!!state.active && !state.recording));
+        const completed = state.transcribedCount ?? (state.entries || []).length;
+        const total = (state.chunkCount || 0) + (state.partialCount || 0);
+        const progress = total ? `Audio salvato · trascritti ${completed}/${total} segmenti` : '';
+        setTranscriptionStatus(progress + (state.pending ? ` · ${state.pending} in attesa` : '')
+            + (state.lastError ? ` · ${state.lastError}. Usa Riprova audio non trascritto.` : '')
+            + (total && completed === total && state.emptyCount === completed ? ' · nessun parlato riconosciuto' : ''));
+        if (state.retrying || (!!state.active && !state.recording)) {
+            showProgress(true, state.status || 'Trascrizione in corso…', total ? completed / total * 100 : 0);
+        } else if (wasRetrying || wasActive) showProgress(false);
         $('recordHint').textContent = state.active || state.retrying ? (state.status || 'Registrazione in corso') : 'Tocca per registrare';
         if (!state.active && state.status && state.status !== 'Pronto') $('recordHint').textContent = state.status;
         const bars = $('visualizer').querySelectorAll('.visualizer-bar');
         bars.forEach((bar, i) => { bar.style.height = `${Math.max(8, (state.level || 0) * (32 + (i % 4) * 4))}px`; });
-        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${!!state.active}`;
+        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${state.pending}:${state.importPhase||''}:${state.lastError}:${!!state.active}`;
         if (state.sessionId && stamp !== lastArchive) { saveArchives([state]); lastArchive = stamp; }
         if (wasActive && !state.active) { audioBlob = null; scheduleAutosave(true); }
         if (wasRetrying && !state.retrying) {
@@ -131,6 +238,13 @@ window.initNativeRecorder = function () {
         }
         wasActive = !!state.active; wasRetrying = !!state.retrying;
     };
+    if(typeof bridge.importAudio==='function')window.loadAudioFile=()=>{
+        if(isRecording||isProcessing||diarizationBusy)return showToast('Attendi il completamento dell’audio in corso');
+        if(!whisperKey){openConnectionSettings();return showToast('Inserisci la chiave Whisper');}
+        if(hasCurrentContent()&&!confirm('Importare come nuova sessione? Salva prima il progetto corrente. Il contenuto viene sostituito dopo il primo testo riconosciuto.'))return;
+        window.stopTranscriptAudio();window.nativeImportRequested=true;
+        bridge.setTranscriptionGlossary?.(transcriptionGlossary);bridge.importAudio(whisperKey,sttModel,$('languageSelect').value);
+    };
     window.syncNativeRecorder = () => {
         try { window.applyNativeRecorderState(JSON.parse(bridge.state())); }
         catch (e) { showToast('Impossibile leggere lo stato Android'); }
@@ -138,8 +252,16 @@ window.initNativeRecorder = function () {
     startRecording = async function () {
         if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
-        audioBlob = null; startRequested = true; isProcessing = true; updateUI();
-        try { if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]); bridge.start(whisperKey, sttModel, $('languageSelect').value); }
+        window.stopTranscriptAudio();
+        audioBlob = null; startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
+        try {
+            if(bridge.setTranscriptionGlossary)bridge.setTranscriptionGlossary(transcriptionGlossary);
+            if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]);
+            if (sourceSelect.value === 'playback') {
+                if (!playbackSupported || typeof bridge.startPlayback !== 'function') throw new Error('Aggiorna l’app Android per acquisire l’audio dei video');
+                bridge.startPlayback(whisperKey, sttModel, $('languageSelect').value);
+            } else bridge.start(whisperKey, sttModel, $('languageSelect').value);
+        }
         catch (error) { window.nativeRecorderError('Impossibile avviare il servizio Android: ' + (error.message || 'errore sconosciuto')); }
     };
     stopRecording = async function () { bridge.stop(); };
@@ -155,6 +277,7 @@ window.initNativeRecorder = function () {
         await webLoad(id);
         // Stored edits/deletions are authoritative; don't reinsert deleted raw segments.
         const state = JSON.parse(bridge.sessions()).find(s => s.sessionId === window.nativeAudioSession);
+        if(state)window.nativeSessionPending[state.sessionId]=state.pending||0;
         if (state) (state.entries || []).forEach(entry => seen.add(entry.nativeSegmentId));
     };
     const webDelete = window.delRec;
@@ -167,19 +290,15 @@ window.initNativeRecorder = function () {
         }
     };
     $('backgroundToggle').checked = true; $('backgroundToggle').disabled = true;
-    const setting = document.querySelector('.setting-info');
-    if (setting) setting.innerHTML = '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
     $('bgWarning').textContent = 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
     const section = document.querySelector('.retranscribe-section');
     if (section) {
-        const retry = document.createElement('button'); retry.className = 'retranscribe-btn'; retry.textContent = '🔄 Riprova audio non trascritto';
-        retry.onclick = () => {
+        window.retryPendingTranscription = () => {
             if (!window.nativeAudioSession) return showToast('Apri prima una registrazione salvata');
             if (!whisperKey) return showToast('Inserisci chiave Whisper');
             if (isRecording || isProcessing) return showToast('Attendi il completamento della registrazione');
             bridge.retry(window.nativeAudioSession, whisperKey, sttModel, $('languageSelect').value);
         };
-        section.appendChild(retry);
         const battery = document.createElement('button'); battery.className = 'model-refresh'; battery.textContent = '🔋 Impostazioni batteria'; battery.onclick = () => bridge.batterySettings(); section.appendChild(battery);
     }
     // Blob/data downloads from the existing PDF/TXT/SRT/VTT/PNG buttons use Android's save dialog.

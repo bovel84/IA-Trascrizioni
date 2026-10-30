@@ -25,19 +25,35 @@ final class AiHttp {
         final int status; final String body;
         Result(int status, String body) { this.status = status; this.body = body; }
     }
+    static final class Control {
+        private volatile boolean cancelled;
+        private HttpURLConnection connection;
+        boolean isCancelled() { return cancelled; }
+        synchronized void bind(HttpURLConnection value) throws IOException {
+            if (cancelled) { value.disconnect(); throw new InterruptedIOException("Richiesta annullata"); }
+            connection = value;
+        }
+        synchronized void cancel() { cancelled = true; if (connection != null) connection.disconnect(); }
+        synchronized void clear() { connection = null; }
+    }
     static Result request(String provider, String path, String key, String body) throws IOException {
+        return request(provider, path, key, body, new Control());
+    }
+    static Result request(String provider, String path, String key, String body, Control control) throws IOException {
         String endpoint = endpoint(provider, path);
         // Ollama's model catalog is public; never send the user's API key there.
         boolean publicCatalog = isPublicCatalog(provider, path);
         if (key == null || (!publicCatalog && key.isEmpty()) || key.length() > 4096 || key.contains("\r") || key.contains("\n") || body.length() > 8 * 1024 * 1024)
             throw new IOException("Chiave o richiesta AI non valida");
+        if (control.isCancelled()) throw new InterruptedIOException("Richiesta annullata");
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
+        control.bind(conn);
         conn.setInstanceFollowRedirects(false);
-        conn.setConnectTimeout(15000); conn.setReadTimeout(90000);
+        conn.setConnectTimeout(15000); conn.setReadTimeout("/chat/completions".equals(path)?360000:90000);
         // Identify our client and explicitly request JSON. Authorization is still required
         // for model inference; these headers do not bypass account permissions.
         conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("User-Agent", "VoiceScribePro/1.8 (Android)");
+        conn.setRequestProperty("User-Agent", "VoiceScribePro/2.5 (Android)");
         if (!publicCatalog) conn.setRequestProperty("Authorization", "Bearer " + key);
         try {
             if ("/chat/completions".equals(path)) {
@@ -58,6 +74,6 @@ final class AiHttp {
                 }
             }
             return new Result(status, new String(output.toByteArray(), StandardCharsets.UTF_8));
-        } finally { conn.disconnect(); }
+        } finally { control.clear(); conn.disconnect(); }
     }
 }

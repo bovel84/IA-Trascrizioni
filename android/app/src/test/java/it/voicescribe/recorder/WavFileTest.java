@@ -37,4 +37,26 @@ public class WavFileTest {
         try { assertThrows(IOException.class, () -> WavFile.repair(file)); }
         finally { file.delete(); }
     }
+    @Test public void silenceIgnoresRiffHeaderAndRetainsTimeline() throws Exception {
+        File file = File.createTempFile("voicescribe-silence", ".wav");
+        try {
+            try (WavFile wav = new WavFile(file)) { wav.write(new byte[32000], 32000); }
+            assertFalse(WavFile.hasSignal(file));
+            assertEquals(32044, file.length());
+            // With no signal this must complete locally, without a valid key or HTTP request.
+            Transcriber.transcribe(file, "", "", "it");
+            assertTrue(Transcriber.result(file).exists());
+            assertEquals(0, Transcriber.result(file).length());
+        } finally { Transcriber.result(file).delete(); file.delete(); }
+    }
+    @Test public void detectsQuietSignalBeyondFirstBuffer() throws Exception {
+        File file = File.createTempFile("voicescribe-signal", ".wav");
+        try {
+            try (WavFile wav = new WavFile(file)) {
+                wav.write(new byte[16384], 16384);
+                wav.write(new byte[] { 1, 0 }, 2);
+            }
+            assertTrue(WavFile.hasSignal(file));
+        } finally { file.delete(); }
+    }
 }

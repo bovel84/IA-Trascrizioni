@@ -5,6 +5,15 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 
 public class AiHttpTest {
+    @Test public void cancellationBeforeStartPreventsAnyHttpRequest() throws Exception {
+        AiHttp.Control control = new AiHttp.Control(); control.cancel();
+        assertTrue(control.isCancelled());
+        assertThrows(java.io.InterruptedIOException.class, () -> AiHttp.request("groq", "/models", "test", "", control));
+    }
+    @Test public void cancellationIsIdempotent() {
+        AiHttp.Control control = new AiHttp.Control(); control.cancel(); control.cancel(); control.clear();
+        assertTrue(control.isCancelled());
+    }
     @Test public void providerDestinationsAreFixed() throws Exception {
         assertEquals("https://api.groq.com/openai/v1/models", AiHttp.endpoint("groq", "/models"));
         assertEquals("https://ollama.com/v1/chat/completions", AiHttp.endpoint("ollama", "/chat/completions"));

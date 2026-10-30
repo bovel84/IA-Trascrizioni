@@ -1,0 +1,26 @@
+VoiceScribe native voice engine
+
+Runtime: sherpa-onnx 2.0.1, Apache License 2.0.
+Copyright 2022-2026 Xiaomi Corporation and contributors.
+https://github.com/k2-fsa/sherpa-onnx
+https://www.apache.org/licenses/LICENSE-2.0
+The runtime also includes ONNX Runtime, Copyright Microsoft Corporation, MIT License.
+https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+
+Speaker segmentation: pyannote/segmentation-3.0 (int8 ONNX conversion by sherpa-onnx).
+Copyright (c) 2023 CNRS. MIT License; full notice in segmentation-LICENSE.txt.
+Authors: Alexis Plaquet and Herve Bredin.
+https://huggingface.co/pyannote/segmentation-3.0
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-segmentation-models
+
+Speaker embeddings: WeSpeaker VoxCeleb ResNet34 LM, converted to ONNX by sherpa-onnx.
+Pretrained weights follow the VoxCeleb dataset license, CC BY 4.0.
+Attribution: WeSpeaker / wenet-e2e contributors, VoxCeleb authors Arsha Nagrani,
+Joon Son Chung, Weidi Xie, Andrew Zisserman, and the University of Oxford VGG group.
+Model format conversion: k2-fsa/sherpa-onnx; weights are not fine-tuned by VoiceScribe.
+https://github.com/wenet-e2e/wespeaker/blob/master/docs/pretrained.md
+https://www.robots.ox.ac.uk/~vgg/data/voxceleb/
+https://creativecommons.org/licenses/by/4.0/
+
+These projects and model authors do not endorse VoiceScribe. Automatic voice labels
+are estimates within the current recording, not verification of a person's identity.

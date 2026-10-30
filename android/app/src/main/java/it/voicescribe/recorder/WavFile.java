@@ -13,6 +13,16 @@ final class WavFile implements Closeable {
         out.write(new byte[44]);
     }
     void write(byte[] data, int count) throws IOException { out.write(data, 0, count); }
+    /** Playback capture returns digital silence when the playing app blocks capture. */
+    static boolean hasSignal(File file) throws IOException {
+        try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
+            input.seek(44);
+            byte[] buffer = new byte[8192]; int n;
+            while ((n = input.read(buffer)) > 0)
+                for (int i = 0; i < n; i++) if (buffer[i] != 0) return true;
+            return false;
+        }
+    }
     public void close() throws IOException {
         try { header(out); out.getFD().sync(); } finally { out.close(); }
     }

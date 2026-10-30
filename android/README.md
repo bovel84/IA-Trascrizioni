@@ -1,4 +1,306 @@
-# VoiceScribe Pro Android — grafica originale e schermo spento
+# VoiceScribe Pro Android — microfono e audio dei video
+
+## Mappe Android, importazione e aspetto (2.7.0)
+
+- Corretto il router degli asset Android: il modulo delle mappe veniva incluso nell’APK ma restituito con HTTP 404 dalla WebView. La vista ora mostra il tema a dimensione leggibile; un elenco completo sostituisce il riquadro vuoto in caso di errore del modulo.
+- Tema chiaro/scuro e preferenza del dispositivo, salvati fra gli avvii. Palette della mappa e barre Android seguono la scelta. Il canvas del disegno rimane bianco.
+- Indicatore globale con rotella, fase, tempo trascorso e avanzamento quando misurabile; resta visibile passando fra le schede. Analisi AI e importazioni sono interrompibili.
+- Import Android senza il vecchio blocco a 25 MB: copia privata del file originale, decodifica nativa in streaming, conversione mono 16 kHz e segmenti WAV completi di circa 30–35 s, con confini preferiti nei silenzi. Nessun byte del contenitore compresso viene tagliato arbitrariamente.
+- Servizio in primo piano con notifica durante l’importazione. Quota Groq: stop degli invii successivi e ripresa delle sole parti mancanti. Interruzioni prima della conversione completa ripartono dalla sorgente conservata. Un file copiato solo in parte richiede di riselezionare l’originale.
+- Il progetto corrente resta disponibile finché non arriva il primo testo nativo. Il browser conserva il progetto fino al completamento e archivia originale e risultati intermedi per la ripresa; i WAV PCM grandi vengono letti a blocchi, i compressi sono limitati dalle risorse del browser (128 MB / 30 minuti). Per file compressi più grandi usare l’app Android.
+- Verifiche aggiunte: WebView reale con router e CSP dell’APK, WAV da 27 MB, decodifica M4A/AAC reale, resampling fra buffer, quota/ripresa del browser, temi e indicatore tra schede. Le risposte di rete dei test sono simulate; non viene misurata l’accuratezza di trascrizione reale.
+
+## Mappe concettuali navigabili (2.6.0)
+
+- Disposizione basata sulle relazioni, con tema centrale, rami bilanciati sui due
+  lati e colori ereditati dai concetti dello stesso ramo. La vista alternativa a
+  livelli conserva gli stessi nodi e collegamenti. Nodi indipendenti, cicli e
+  relazioni trasversali restano presenti, senza inventare nessi per ottenere un albero.
+- Etichette visibili sulle frecce, testo dei nodi a capo senza ellissi, dettagli
+  selezionabili e pulsanti per passare ai concetti collegati. Le attribuzioni vocali
+  incerte hanno un segnale esplicito e mantengono il marcatore nel testo completo.
+- Pan trascinando, pinch a due dita, zoom +/−/100%, panoramica, selettore dei concetti,
+  schermo intero nell'app ed Escape. Su telefono, o quando la panoramica renderebbe
+  il testo troppo piccolo, la vista iniziale mette a fuoco il tema centrale;
+  **Tutta la mappa** mostra l'insieme. I controlli funzionano anche da tastiera.
+- Zoom e selezione non riscrivono i dati e non richiedono altre chiamate LLM. SVG e
+  PNG esportano sempre la mappa intera con tutte le relazioni, anche dopo pan/zoom.
+  PNG limitati a 4096 pixel per lato e sei megapixel; proporzioni del PDF calcolate
+  sulla mappa completa. Il testo e le relazioni rimangono nel report.
+- Prompt con tema centrale, 2–5 rami e approfondimenti pertinenti, fino a 24 concetti
+  e 48 relazioni. Fatti, decisioni, proposte, rischi, azioni e dubbi restano distinti.
+  Dettaglio e riscontro letterale facoltativi: una citazione inventata blocca il
+  risultato, conservando quello precedente. Le mappe dei vecchi progetti vengono
+  ridisegnate senza rigenerarle; per ottenere nuovi raggruppamenti semantici si può
+  premere nuovamente **Mappa** sul documento originale.
+
+Motore locale `concept-map.js` incluso nell'APK e nella cache PWA, senza dipendenze
+esterne per il disegno. Prove su layout e dati, ripristino progetti, quattro
+larghezze, gesti reali del browser e completezza dei download SVG/PNG.
+
+## Contesto dei modelli e risultati formattati (2.5.0)
+
+- **Connessioni e modelli** separa finestra di contesto e spazio della
+  risposta, con impostazioni per provider e ID modello. Il catalogo conserva
+  `context_length`/`context_window` e `max_completion_tokens` quando pubblicati.
+  I limiti noti prevalgono sui valori manuali. Se mancano, il limite prudenziale è
+  32.768 token: è possibile indicare fino a 2.000.000 token di contesto e 131.072 di
+  risposta. La configurazione non aumenta i limiti reali del provider.
+- Rimossi i tagli fissi ogni 6.500/10.000 caratteri e il tetto di 24 parti. Sintesi,
+  punti chiave, grafici e mappe ricevono tutto il documento quando rientra nella
+  finestra stimata. Correzione/riscrittura devono rientrare anche nell'output: se
+  necessario lavorano su parti complete con contesto ai margini e verifica finale.
+- La stima multiprovider usa byte UTF-8 / 3, senza affermare un conteggio esatto per
+  ogni tokenizer. Ingresso, output, istruzioni e margini condividono la finestra.
+  Un errore esplicito di contesto o dimensione riduce le parti conservando tutti i
+  caratteri. Una risposta troncata può ottenere più spazio, fino al limite scelto,
+  o una richiesta più compatta per analisi/JSON. Recuperi limitati (massimo otto
+  suddivisioni adattive per operazione), nessun retry per 401/403/429 o errori di rete.
+  Nessun risultato incompleto sostituisce quello valido precedente.
+- GPT-OSS usa `reasoning_effort: low` con fallback per parametri non supportati;
+  la prova del modello non è più limitata a 128 token. Timeout delle analisi fino a
+  sei minuti, con annullamento nativo/browser; l'audio conserva i suoi timeout.
+- Titoli, grassetto, liste, citazioni, codice e tabelle sono resi come documenti.
+  Su telefono le righe delle tabelle diventano schede con nomi delle colonne.
+  HTML del modello e URL non sicuri non vengono eseguiti. I risultati già salvati
+  usano la stessa vista, senza nuove chiamate LLM. Markdown originale conservato;
+  copia e TXT leggibili, PDF con sezioni e campi al posto di pipe/asterischi grezzi.
+- Colori distinti per i sei strumenti e i nodi della mappa, palette per le categorie
+  dei grafici, scelta locale barre/linee/torta/radar con controllo di compatibilità.
+  Tabelle consultabili per valori/citazioni del grafico e relazioni della mappa.
+  PNG e PDF mantengono uno sfondo opaco per il contrasto delle etichette; il PDF
+  include anche valori/riscontri del grafico e testo delle relazioni della mappa.
+
+Verifiche con risposte API simulate, incluso un documento di oltre 800.000 token
+stimati inviato in un'unica richiesta, estremi del documento conservati in tutte
+le analisi, riscritture complete, errori di contesto/output/quota e markup ostile.
+Non è una prova di inferenza reale su ciascun provider: servono chiave, accesso e
+limiti adeguati nell'account. Le altre limitazioni di accuratezza restano valide.
+
+Riferimenti: [metadati modelli OpenRouter](https://openrouter.ai/docs/api/api-reference/models/get-models),
+[compatibilità OpenAI Ollama](https://docs.ollama.com/api/openai-compatibility),
+[controlli reasoning Ollama](https://docs.ollama.com/capabilities/thinking).
+
+## Parole brevi e confini dei blocchi audio (2.4.2)
+
+La ricomposizione gestisce anche piccoli scarti dei tempi fra WAV consecutivi: fino a
+350 ms di sovrapposizione dei timestamp, senza alterare audio o sottotitoli. Un breve
+passaggio non assegnato (massimo 5 parole in 2,4 s), fra due parti della stessa voce,
+può restare nel paragrafo con sottolineatura e marcatore esplicito nei report/AI.
+I vuoti fra parti vicine devono essere entro 1,2 s e l'intero raccordo entro 4 s.
+Queste soglie regolano la presentazione, non certificano chi ha pronunciato le parole.
+
+All'inizio/fine della registrazione, anche mentre si attende il WAV successivo, fino
+a due parole entro 900 ms possono comparire nella scheda vicina come **non assegnate**,
+solo nella stessa sessione nativa ed entro 500 ms. All'arrivo di una voce diversa il
+raccordo viene ricalcolato e le parole tornano separate. Un'origine diversa non viene
+unita soltanto perché usa la stessa etichetta Voce 1.
+
+L'allineamento locale conserva il motivo della mancata attribuzione: disallineamento
+temporale, voce sconosciuta, sovrapposizione/cambio di persona, metadati indisponibili.
+I cambi di persona e le sovrapposizioni esplicitamente rilevati non vengono ricomposti;
+le voci sconosciute non vengono agganciate con il solo contesto di un lato. I vecchi
+progetti senza questi metadati mantengono l'attribuzione originale e i segnali di revisione.
+
+## Pause e continuità del parlato (2.4.1)
+
+Le brevi pause del rilevatore vocale non devono creare una scheda per parole come
+"con". L'allineamento raccorda vuoti fino a 800 ms solo fra intervalli della stessa
+voce non già incerta, senza altre voci o intervalli sconosciuti in mezzo. Le parole
+attribuite per questa continuità restano marcate da verificare. Non vengono estesi
+gli intervalli attraverso cambi di persona, sovrapposizioni o silenzi lunghi.
+
+La vista continua funziona anche sui frammenti già salvati: una breve isola fra due
+parti con la stessa etichetta vocale può comparire nel paragrafo, sottolineata come
+non assegnata (soglie aggiornate nella 2.4.2). I dati originali e i sottotitoli mantengono
+la vera attribuzione; analisi AI e report usano un esplicito marcatore
+`[Non assegnato: ...]`. Le voci candidate già incerte restano segnalate. Nessun trasferimento di identità tra registrazioni diverse.
+I frammenti sconosciuti adiacenti possono formare un passaggio chiaramente non assegnato;
+una pausa significativa fra parti della stessa persona diventa un nuovo paragrafo.
+Il contatore principale mostra gli interventi, separatamente dai frammenti audio.
+
+Non viene ritagliato né eliminato alcun silenzio dal WAV, nessuna parola viene scartata
+e per applicare la vista ai vecchi progetti non serve una nuova richiesta a Groq.
+
+## Trascrizione ed elaborazione con revisione (2.4)
+
+- Il registratore preferisce una pausa energetica dopo circa 30 secondi, fino al
+  limite di 35 secondi. È una scelta euristica per ridurre i tagli nel parlato, non
+  un rilevatore infallibile di fine parola. Nessun campione viene eliminato o
+  duplicato; pausa, stop e cambi manuali di partecipante continuano a chiudere il file.
+- Le nuove installazioni selezionano `whisper-large-v3`; le scelte già salvate, incluso
+  Turbo, restano valide. La terminologia nelle impostazioni accetta un breve elenco
+  di nomi/sigle/grafie. Il contesto audio usa questa lista e le ultime parole del
+  segmento immediatamente precedente, solo se contiguo e non segnalato come incerto.
+  Nessun testo di segmenti futuri o di altre registrazioni. Impostazioni fotografate
+  nella sessione Android; prompt limitato conservativamente a 220 byte UTF-8.
+- Groq riceve WAV completi, lingua, `verbose_json` e metadati dei segmenti; per le voci
+  locali si aggiungono i tempi delle parole nella stessa richiesta. I metadati di
+  log-probabilità/ripetizione segnalano audio **da riascoltare**, senza scartare parole.
+  La mancanza di metadati compare come **Qualità audio non stimata**. Sono indicatori
+  euristici, non una percentuale di accuratezza e non una verifica del significato.
+- **Da verificare** mostra i passaggi con voce incerta/non assegnata o audio segnalato.
+  **▶** riascolta il WAV originale ai tempi del frammento, **Ferma ascolto** interrompe
+  la riproduzione. Nella vista continua aprire il dettaglio dei frammenti. Il riascolto
+  non è disponibile durante la registrazione e si ferma uscendo dall'app/cambiando
+  progetto. **✓** conferma il testo dopo la revisione; un'ulteriore modifica invalida
+  la conferma. Questa azione non conferma automaticamente l'identità di una voce.
+- Correggi/Migliora ricevono un contesto limitato ai margini delle parti lunghe.
+  I controlli automatici bloccano risultati troppo brevi, cifre aggiunte/mancanti o
+  alterate e attribuzioni eliminate. Correggi segnala anche riscritture lessicali
+  troppo estese sui singoli blocchi. Il confronto dei valori numerici non certifica
+  l'associazione cifra/fatto né l'accuratezza semantica: resta necessaria la revisione.
+  Originali e risultati precedenti vengono conservati se un controllo fallisce.
+- Sintesi/Punti chiave chiedono decisioni, proposte, dissensi, responsabili, scadenze
+  e riscontri nel testo; i dati assenti restano non indicati. Grafici e mappe mantengono
+  i controlli di schema/evidenze già presenti. PDF/TXT/Markdown riportano i passaggi da
+  verificare e, nell'app Android, segnalano eventuali segmenti ancora non trascritti.
+- Una risposta 429 sospende ulteriori upload automatici della coda: registrazione e
+  salvataggio dell'audio continuano. Il recupero Android riutilizza le risposte valide
+  in cache e prosegue sui file recuperabili anche dopo un errore su un altro segmento.
+  Altre richieste rimangono in attesa di **Riprova** dopo il ripristino della quota.
+
+Riferimenti: [Groq speech-to-text](https://console.groq.com/docs/speech-to-text),
+[soglie euristiche nel decoder Whisper](https://github.com/openai/whisper/blob/main/whisper/transcribe.py).
+Verifiche automatiche: contesto, termini Unicode, cifre, completezza, conferme manuali,
+quote, ripristino, tempi/percorsi degli estratti e playback reale Android/browser.
+Non è stata misurata la WER su registrazioni reali italiane dell'utente: questi test
+verificano il flusso e i controlli, non certificano equivalenza con servizi professionali.
+
+## Testo continuo per partecipante (2.3.2)
+
+I segmenti consecutivi attribuiti alla stessa persona vengono mostrati come un unico
+intervento, anche quando la trascrizione arriva in più richieste. La cronologia dei
+cambi reali di persona rimane invariata. I frammenti non assegnati restano distinti:
+assegnarli dal dettaglio li unisce agli interventi consecutivi del partecipante scelto.
+Il dettaglio **Modifica o assegna i frammenti** conserva le azioni sui testi originali.
+
+Correggi e Migliora ricevono già il testo riunito, con il nome una volta per intervento,
+e producono paragrafi senza timestamp o intestazioni delle parti tecniche. TXT, Markdown
+e PDF usano gli stessi interventi riuniti. SRT/VTT conservano i tempi dei segmenti originali.
+I dati dei progetti non vengono riscritti: la vista continua funziona anche riaprendo
+registrazioni precedenti. Nessuna richiesta AI aggiuntiva per il raggruppamento.
+
+## Integrità della trascrizione (2.3.1)
+
+Il testo completo ricevuto da Whisper viene conservato indipendentemente dall'esito
+dell'attribuzione delle voci. Una timeline danneggiata, parole senza tempi validi o
+un errore di scrittura dei file vocali non impediscono il salvataggio del TXT.
+Prima di mostrare gli interventi, l'app confronta tutto il loro testo con il TXT:
+se mancano parole, numeri o punteggiatura mostra il testo intero come
+**Non assegnato · da verificare**. Le parole fuori dagli intervalli vocali non vengono scartate.
+
+Per recuperare segmenti già ricevuti ma rimasti senza TXT nelle versioni precedenti,
+aprire la registrazione e usare **Riprova audio non trascritto**. Una risposta valida
+nella cache viene riutilizzata senza una nuova richiesta API. L'audio originale resta
+disponibile; la correzione non può ricostruire parole che il servizio Whisper non ha restituito.
+
+Test di regressione su timeline/cache incomplete, errori di scrittura dei risultati
+vocali, tempi mancanti e recupero senza rete; verificati anche sul filesystem/JSON Android.
+
+## Riconoscimento nativo delle voci (2.3)
+
+La registrazione Android usa **Attribuzione delle voci → Automatica sul dispositivo**.
+L'APK contiene i modelli: non serve una chiave Deepgram e non viene scaricato un modello
+al primo utilizzo. È sempre possibile scegliere **Selezione manuale** prima di registrare.
+
+- Motore JNI **sherpa-onnx 2.0.1**, segmentazione **pyannote 3.0 int8** e identificatori
+  vocali **WeSpeaker ResNet34 LM**, CPU con due thread. Modelli scaricati solo durante
+  la build da release ufficiali, con SHA-256 verificati; attribuzioni e licenze incluse.
+- A ogni segmento audio (circa 30 secondi, o prima se si ferma/mette in pausa), il motore
+  rileva intervalli vocali e speaker. Un registro di embedding nella cartella privata
+  della sessione mantiene ID coerenti tra segmenti. Questi profili non vengono inviati
+  al provider e non sono condivisi tra registrazioni diverse.
+- La trascrizione rimane affidata al servizio Whisper configurato: l'audio continua
+  quindi a essere inviato a Groq. La stessa richiesta per segmento richiede i tempi
+  delle parole; i cambi di voce vengono allineati a quei tempi, senza una chiamata
+  aggiuntiva a Deepgram né richieste separate per ogni persona.
+- Le voci iniziano come **Voce 1**, **Voce 2**, ecc. Usare **✎** per associare il nome;
+  il nome si conserva nella sessione e viene applicato ai nuovi interventi della stessa
+  voce. Il motore distingue le voci ma non conosce automaticamente i nomi anagrafici.
+  Nuove registrazioni ripartono con etichette anonime.
+- Campioni troppo brevi, parole tra due speaker, voci sovrapposte e corrispondenze
+  ambigue rimangono **Non assegnato · da verificare**. È possibile correggere il
+  partecipante dal testo. Le soglie di similarità non sono probabilità di identità.
+- I risultati locali, gli ID vocali e i tempi vengono conservati con il progetto.
+  Riprova recupera i risultati remoti già presenti senza reinviarli; errori del motore
+  non cancellano l'audio o il testo e non comportano una falsa attribuzione manuale.
+
+I test JVM coprono stabilità degli ID, ambiguità, sovrapposizioni e allineamento.
+Un test strumentale Android carica **gli stessi modelli/JNI dell'APK** e un campione
+ufficiale a due voci, verifica due speaker, ripristino dei profili e allineamento JSON.
+Le prestazioni e l'accuratezza nel rumore reale dipendono dal dispositivo e dalla registrazione.
+
+## Strumenti e risultati del progetto (2.2)
+
+La scheda **Analisi AI** permette di scegliere trascrizione, appunti o entrambi.
+**Correggi** preserva il significato, **Migliora** rielabora il registro, **Riassumi**
+separa sintesi/decisioni/questioni/prossimi passi, **Punti chiave** distingue azioni,
+responsabili, scadenze e proposte. Le istruzioni vietano di inventare dati mancanti.
+I testi lunghi vengono suddivisi e consolidati; gli output troncati sono segnalati,
+senza salvare un risultato incompleto. I limiti di contesto effettivi dipendono dal modello.
+
+- **Grafico**: il conteggio delle parole per partecipante è calcolato sul testo e non
+  richiede una chiamata AI. In modalità **Dati numerici citati** ogni valore deve avere
+  una citazione presente nel contenuto, con etichetta e numero verificabili; la citazione
+  compare nel risultato e nel CSV. Non sono stime della durata del parlato. Le evidenze
+  verificano la corrispondenza testuale, non sostituiscono una revisione umana del contesto.
+- **Mappa**: ID, nodi e collegamenti validati, etichette leggibili, impaginazione adattata
+  alla larghezza disponibile. Il testo delle relazioni rimane consultabile nel risultato.
+- Ogni strumento conserva il suo ultimo risultato, selezionabile, copiabile, scaricabile
+  e aggiungibile agli appunti. Risultati e diagrammi vengono salvati nel progetto/bozza;
+  PDF, TXT e Markdown includono i risultati testuali. Grafici: PNG/CSV. Mappe: SVG/PNG.
+- **Annulla** interrompe l'attesa e chiede al bridge Android di chiudere la connessione.
+  Le risposte tardive non possono modificare un altro progetto o un contenuto cambiato.
+  Un annullamento non revoca l'elaborazione già ricevuta dal provider.
+- Errori di rete o di formato conservano i risultati precedenti. Non vengono effettuati
+  reinvii automatici per errori di rete della generazione AI. Rimangono solo i fallback
+  per parametri esplicitamente rifiutati dal provider.
+- Import audio: suddivisione automatica oltre 25 MB, sorgente conservata e parti completate recuperabili; vedere i limiti del browser sopra.
+  Un'importazione riuscita diventa una nuova sessione e viene conservata in IndexedDB.
+- Le bozze con soli appunti/disegni sono recuperabili; disegni con annulla/ripristina e
+  coordinate adattate al ridimensionamento. La copia dei risultati usa la clipboard nativa
+  nell'APK. Gli errori di salvataggio audio/disegno sono mostrati prima di dichiarare il successo.
+
+Verifiche aggiunte: test di analisi con risposte simulate, flussi browser dei sei strumenti,
+11 download reali, riapertura del progetto e layout 320/390/768/1440 px. Non sono una prova
+con le chiavi reali dell'utente né della registrazione sul suo dispositivo.
+
+## Audio riprodotto sullo stesso telefono o tablet (2.1)
+
+Nella scheda **Rec**, scegliere **Sorgente audio → Audio del dispositivo (video)**.
+Premere **Registra**, consentire i permessi richiesti e confermare la condivisione Android.
+Passare all'app del video e avviarne la riproduzione. Tornare a VoiceScribe per leggere la
+trascrizione, mettere in pausa o fermare; **Ferma** funziona anche dalla notifica.
+Salvataggio automatico, progetti, recupero dei segmenti e download WAV funzionano come
+con il microfono. Per tornare alle riunioni, fermare e scegliere **Microfono**.
+
+- Richiede l'APK su **Android 10+**; la scelta è disabilitata su Android 8/9 e con APK
+  precedenti. La PWA nel browser continua a registrare il microfono.
+- Acquisisce **solo l'audio interno**, senza aprire il microfono o registrare immagini.
+  Non richiede il vivavoce; l'audio passa dall'API di cattura Android anche usando cuffie.
+- Usa `AudioPlaybackCaptureConfiguration`/`MediaProjection` in un servizio di tipo
+  `mediaProjection`. Il consenso di sistema è richiesto **a ogni nuova registrazione**.
+  Su Android 14+ il servizio viene promosso prima di ottenere il token di proiezione;
+  il servizio microfono continua a dichiarare esclusivamente il tipo `microphone` a runtime.
+- Sono acquisibili i flussi media/game/unknown delle app che lo consentono, nello stesso
+  profilo Android. App che vietano la cattura, contenuti protetti, telefonate e flussi
+  di comunicazione non sono supportati. Nessun aggiramento o ripiego automatico sul microfono.
+- Dopo circa 8 secondi di silenzio digitale compare **Nessun audio ricevuto**: avviare
+  il video o provare un'app che consenta la cattura. I WAV mantengono silenzio e tempi,
+  ma i segmenti interamente silenziosi non vengono inviati a Whisper, anche al recupero.
+- Se Android revoca la condivisione (incluso il blocco schermo sui sistemi che la
+  interrompono), la cattura termina e l'audio acquisito viene finalizzato e conservato.
+  Lo schermo spento resta supportato dal registratore **Microfono**; per i video mantenere
+  la riproduzione attiva secondo le regole dell'app sorgente e del sistema.
+
+Prova aggiuntiva su dispositivo: riprodurre un video consentito sul telefono e sul tablet,
+anche con cuffie; verificare WAV e testo, cambio app, Pausa/Riprendi, Ferma dalla notifica,
+annullamento del consenso, revoca della condivisione e una seconda registrazione con
+nuovo consenso. Provare un'app che blocca la cattura: deve mostrare l'avviso, senza testo
+inventato o audio del microfono. I test UI simulati e la build non sostituiscono questa prova.
+
+Riferimento: [cattura audio di altre app](https://developer.android.com/media/platform/av-capture).
 
 L'APK 1.7 usa **lo stesso `index.html` della PWA**: tema scuro, colori, microfono, schede Rec/Note/AI, disegno, progetti ed esportazioni. Il backup `index53.backup-20260930-090012.html` è stato consultato come riferimento grafico; non sono stati ripristinati i suoi vecchi bug/API. L'interfaccia HTML viene inclusa automaticamente nell'APK durante la build, senza copie manuali da mantenere.
 

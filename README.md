@@ -1,5 +1,15 @@
 # VoiceScribe Pro
 
+## Correzione registrazioni lunghe — 2.7.1
+
+- Risultato e avanzamento restano visibili: segmenti trascritti/totali, segmenti in attesa, errore del provider o nessun parlato riconosciuto. Un recupero parziale non viene indicato come completato.
+- In caso di rete, chiave o quota non disponibili la cattura continua a salvare l'audio; dopo i tentativi limitati sul primo segmento fallito la trascrizione si sospende. Non si accumulano ore di richieste fallite. I brevi `Retry-After` vengono rispettati; per attese lunghe resta disponibile il recupero manuale.
+- **💾 → apri la registrazione → Riprova audio non trascritto** recupera i segmenti mancanti nell'APK. I WAV nativi e le trascrizioni già ottenute rimangono su disco anche dopo la chiusura dell'app. La versione web ha lo stesso pulsante e conserva risultati e coda in IndexedDB, senza trattenere tutti i segmenti nella memoria JavaScript.
+- Il timeout web comprende anche la lettura della risposta. Risposte prive di un campo testo valido e fallimenti di salvataggio restano errori recuperabili; una risposta con testo vuoto viene indicata come assenza di parlato.
+- Verifica aggiunta: `node tools/long-recording-test.js`, test del collegamento Android con 240 segmenti e test JVM su due ore di WAV, ripresa a metà, errori HTTP e timeout. Sono prove simulate senza chiamate API: non attestano la qualità su audio reale né il comportamento del dispositivo a schermo bloccato per due ore.
+
+Per una registrazione precedente senza testo: conservarla ed esportarne l'audio prima di reinstallare/disinstallare l'app. Il recupero è possibile se i segmenti audio sono ancora presenti sul dispositivo; l'aggiornamento non può ricreare audio già eliminato.
+
 Web app in **un unico file HTML** per registrare audio, trascriverlo (Groq Whisper), prendere appunti, disegnare, analizzare il contenuto con un LLM (Groq) e riportare tutto in PDF/TXT/SRT/VTT/Markdown.
 
 ## File del progetto
