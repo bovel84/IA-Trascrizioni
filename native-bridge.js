@@ -44,6 +44,7 @@ window.initNativeRecorder = function () {
     if (!window.AndroidRecorder || window.nativeRecorderReady) return;
     window.nativeRecorderReady = true;
     const bridge = window.AndroidRecorder;
+    let exportNote, retryExportButton, cancelExportButton;
     const sourceSelect = $('captureSourceSelect');
     const playbackSupported = typeof bridge.canCapturePlayback === 'function' && bridge.canCapturePlayback();
     $('nativeAudioSource').hidden = false;
@@ -171,6 +172,10 @@ window.initNativeRecorder = function () {
         startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
     };
     window.applyNativeRecorderState = state => {
+        if(state.exportBusy)setWorkTask('export',state.exportStatus||'Salvataggio del file in corso…','Attendi la conferma del salvataggio.');else clearWorkTask('export');
+        if(exportNote){exportNote.textContent=state.exportStatus||'';exportNote.style.display=state.exportStatus?'block':'none';}
+        if(retryExportButton)retryExportButton.style.display=state.exportFailed?'block':'none';
+        if(cancelExportButton)cancelExportButton.style.display=state.exportFailed?'block':'none';
         if(state.importActive){
             setWorkTask('import',state.importStatus||'Importazione audio in corso…',state.importPhase==='copy'?'Salvataggio del file originale.':'Suddivisione automatica e trascrizione ordinata.',state.importPhase==='copy'?null:state.importPercent,()=>{bridge.cancelImport?.();$('workCancel').disabled=true;});
         }else{clearWorkTask('import');$('workCancel').disabled=false;}
@@ -293,6 +298,11 @@ window.initNativeRecorder = function () {
     $('bgWarning').textContent = 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
     const section = document.querySelector('.retranscribe-section');
     if (section) {
+        exportNote=document.createElement('p');exportNote.className='retranscribe-info';exportNote.setAttribute('role','status');section.appendChild(exportNote);
+        if(bridge.retryExport){
+            retryExportButton=document.createElement('button');retryExportButton.className='retranscribe-btn';retryExportButton.textContent='Riprova salvataggio';retryExportButton.onclick=()=>bridge.retryExport();section.appendChild(retryExportButton);
+            cancelExportButton=document.createElement('button');cancelExportButton.className='model-refresh';cancelExportButton.textContent='Annulla salvataggio';cancelExportButton.onclick=()=>bridge.cancelExport();section.appendChild(cancelExportButton);
+        }
         window.retryPendingTranscription = () => {
             if (!window.nativeAudioSession) return showToast('Apri prima una registrazione salvata');
             if (!whisperKey) return showToast('Inserisci chiave Whisper');

@@ -1,5 +1,11 @@
 # VoiceScribe Pro
 
+## Esportazione Android affidabile — 2.7.2
+
+Il salvataggio dei file usa una coda indipendente dalla trascrizione e conserva su disco sorgente e stato prima di aprire il selettore documenti. La ricreazione della schermata o del processo non perde il riferimento all'audio. I WAV preparati per l'esportazione restano nei file privati dell'app fino al completamento; un errore conserva il file per **Riprova salvataggio**. **Annulla salvataggio** elimina soltanto l'eventuale copia temporanea, lasciando i segmenti registrati e gli originali importati.
+
+La conferma arriva dopo copia e chiusura del flusso, con numero di byte effettivamente scritti. Una destinazione vuota/incompleta, quando il provider ne espone la dimensione, viene segnalata come errore. Una sessione senza campioni audio non apre il selettore né produce un file vuoto. Un WAV silenzioso rimane invece un WAV non vuoto. Verifiche aggiunte: esportazione WAV di due ore, conservazione dei sorgenti, errori di scrittura/chiusura, ripresa dopo ricreazione e copia indipendente da una trascrizione bloccata.
+
 ## Correzione registrazioni lunghe — 2.7.1
 
 - Risultato e avanzamento restano visibili: segmenti trascritti/totali, segmenti in attesa, errore del provider o nessun parlato riconosciuto. Un recupero parziale non viene indicato come completato.

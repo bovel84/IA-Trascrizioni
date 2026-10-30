@@ -1537,7 +1537,7 @@
         function setWorkTask(key,title,detail='',percent=null,cancel=null){workTasks.set(key,{title,detail,percent,cancel});updateWorkIndicator();}
         function clearWorkTask(key){workTasks.delete(key);updateWorkIndicator();}
         function updateWorkIndicator(){
-            const task=['import','ai','audio','processing','live'].map(key=>workTasks.get(key)).find(Boolean),box=$('workIndicator');box.hidden=!task;
+            const task=['export','import','ai','audio','processing','live'].map(key=>workTasks.get(key)).find(Boolean),box=$('workIndicator');box.hidden=!task;
             if(!task){if(workClock!==null)clearInterval(workClock);workClock=null;workStarted=0;return;}
             if(!workStarted)workStarted=Date.now();
             if(workClock===null)workClock=setInterval(updateWorkIndicator,1000);
@@ -3807,7 +3807,7 @@
 
         window.exportAudio = async () => {
             const audio = await ensureAudio();
-            if (!audio) return showToast('Nessun audio');
+            if (!audio || audio.size === 0) return showToast('Audio assente o vuoto: conserva la registrazione e riprova il recupero');
             const url = URL.createObjectURL(audio);
             const a = document.createElement('a');
             a.href = url; a.download = `voicescribe_${Date.now()}.${extFromMime(audio.type)}`;

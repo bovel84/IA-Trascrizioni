@@ -38,15 +38,29 @@ public final class MainActivity extends Activity {
     private Intent projectionData;
     private int projectionResult;
     private ValueCallback<Uri[]> filePicker;
-    private File download;
-    private boolean downloadDisposable;
-    private final Deque<Download> downloads = new ArrayDeque<>();
-    private boolean exporting;
+    private DocumentExports documentExports;
+    private DocumentExports.Listener exportListener;
     private Intent pendingImport;
     private String importKey,importModel,importLanguage;
 
     public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        documentExports=DocumentExports.get(this);
+        exportListener=new DocumentExports.Listener(){
+            public boolean pick(DocumentExports.Entry entry){
+                if(!hasWindowFocus()||isFinishing()||isDestroyed())return false;
+                try {
+                    startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(entry.type).putExtra(Intent.EXTRA_TITLE,entry.name)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),30);
+                    return true;
+                } catch(Exception e){toast("Selettore file non disponibile: riprova Scarica Audio");return false;}
+            }
+            public void changed(String message){
+                if(message.startsWith("File salvato")||message.contains("non riuscit"))toast(message);
+            }
+        };
+        documentExports.attach(exportListener);
         web = new WebView(this); web.setBackgroundColor(0xff0a0a0f); setContentView(web);
         web.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
@@ -131,6 +145,7 @@ public final class MainActivity extends Activity {
     }
     public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
+        if(focused&&documentExports!=null)documentExports.resume();
         if (focused && pendingStart) { pendingStart = false; begin(); }
         if(focused&&pendingImport!=null){Intent next=pendingImport;pendingImport=null;launchImport(next);}
     }
@@ -227,30 +242,10 @@ public final class MainActivity extends Activity {
         }
     }
     private File combinedAudio(String id) throws IOException {
-        File dir = session(id); repair(dir); File[] files = Transcriber.segments(dir);
-        if (files.length == 0) throw new IOException("Attendi il primo segmento o ferma la registrazione");
-        File out = File.createTempFile("voicescribe-", ".wav", getCacheDir());
-        try (WavFile wav = new WavFile(out)) {
-            byte[] buffer = new byte[8192];
-            for (File file : files) try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
-                input.seek(44); int n; while ((n = input.read(buffer)) > 0) wav.write(buffer, n);
-            }
-        }
-        return out;
-    }
-    private static final class Download {
-        final File file; final String name, type;
-        final boolean disposable;
-        Download(File file, String name, String type,boolean disposable) { this.file = file; this.name = name; this.type = type;this.disposable=disposable; }
-    }
-    private void offerDownload(File file, String name, String type) {
-        offerDownload(file,name,type,true);
-    }
-    private void offerDownload(File file,String name,String type,boolean disposable){downloads.add(new Download(file,name,type,disposable));if(!exporting)nextDownload();}
-    private void nextDownload() {
-        Download next = downloads.poll(); if (next == null) { exporting = false; return; }
-        exporting = true; download = next.file;downloadDisposable=next.disposable;
-        startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(next.type).putExtra(Intent.EXTRA_TITLE, next.name), 30);
+        File dir=session(id);
+        if(RecordingService.active&&dir.getName().equals(latest()))throw new IOException("Ferma prima la registrazione per esportare tutto l’audio");
+        repair(dir);
+        return AudioExport.combine(dir,documentExports.directory());
     }
     public final class RecorderBridge {
         @JavascriptInterface public void setTheme(String theme){ui.post(()->{
@@ -344,6 +339,7 @@ public final class MainActivity extends Activity {
                     .put("importPhase",AudioImportService.phase).put("importStatus",AudioImportService.status).put("importPercent",AudioImportService.percent);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
                     .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("listening",transcriptPlayer!=null&&transcriptPlayer.isPlaying())
+                    .put("exportBusy",documentExports.busy()).put("exportFailed",documentExports.failed()).put("exportStatus",documentExports.status())
                     .put("source", RecordingService.source).put("localVoices",RecordingService.active?RecordingService.localVoices:getSharedPreferences("native",0).getBoolean("localVoices",true)).put("voiceStatus",RecordingService.voiceStatus).put("status", RecordingService.status).toString();
             } catch (Exception e) { return "{\"active\":false,\"recording\":false,\"status\":\"Lettura sessione fallita\"}"; }
         }
@@ -382,29 +378,29 @@ public final class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void batterySettings() { ui.post(() -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())))); }
+        @JavascriptInterface public void retryExport(){ui.post(()->documentExports.retry());}
+        @JavascriptInterface public void cancelExport(){ui.post(()->documentExports.cancel());}
         @JavascriptInterface public void exportAudio(String id) {
-            worker.execute(() -> {
-                try {
-                    File dir=session(id),source=new File(dir,"source.audio"),metadata=new File(dir,"import.json");
-                    if(source.isFile()&&metadata.isFile()){
-                        JSONObject info=VoiceData.read(metadata);if(!info.optBoolean("sourceComplete"))throw new IOException("Copia incompleta: conserva il file originale selezionato");
-                        String name=info.optString("sourceName","audio_originale").replaceAll("[^a-zA-Z0-9._-]","_"),type=info.optString("sourceMime","application/octet-stream");
-                        ui.post(()->offerDownload(source,name,type,false));return;
-                    }
-                    File file = combinedAudio(id); ui.post(() -> offerDownload(file, "voicescribe_" + id + ".wav", "audio/wav"));
+            documentExports.prepare(()->{
+                File dir=session(id),source=new File(dir,"source.audio"),metadata=new File(dir,"import.json");
+                if(source.isFile()&&metadata.isFile()){
+                    JSONObject info=VoiceData.read(metadata);
+                    if(!info.optBoolean("sourceComplete"))throw new IOException("Copia incompleta: conserva il file originale selezionato");
+                    String name=info.optString("sourceName","audio_originale").replaceAll("[^a-zA-Z0-9._-]","_"),type=info.optString("sourceMime","application/octet-stream");
+                    return new DocumentExports.Entry(source,name,type,false);
                 }
-                catch (Exception e) { ui.post(() -> toast(e.getMessage())); }
+                File file=combinedAudio(id);
+                return new DocumentExports.Entry(file,"voicescribe_"+id+".wav","audio/wav",true);
             });
         }
         @JavascriptInterface public void download(String name, String type, String base64) {
-            if (base64.length() > 64 * 1024 * 1024) { ui.post(() -> toast("Export troppo grande")); return; }
-            worker.execute(() -> {
-                try {
-                    byte[] data = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-                    File file = File.createTempFile("export-", ".tmp", getCacheDir()); Files.write(file.toPath(), data);
-                    String safeName = name.replaceAll("[^a-zA-Z0-9._-]", "_");
-                    ui.post(() -> offerDownload(file, safeName, type.isEmpty() ? "application/octet-stream" : type));
-                } catch (Exception e) { ui.post(() -> toast("Export fallito: " + e.getMessage())); }
+            if(base64.length()>64*1024*1024){ui.post(()->toast("Export troppo grande"));return;}
+            documentExports.prepare(()->{
+                byte[] data=android.util.Base64.decode(base64,android.util.Base64.DEFAULT);
+                if(data.length==0)throw new IOException("Il contenuto da esportare è vuoto");
+                File file=File.createTempFile("document-",".tmp",documentExports.directory());
+                Files.write(file.toPath(),data);
+                return new DocumentExports.Entry(file,name.replaceAll("[^a-zA-Z0-9._-]","_"),type.isEmpty()?"application/octet-stream":type,true);
             });
         }
     }
@@ -431,20 +427,9 @@ public final class MainActivity extends Activity {
             return;
         }
         if (request == 10 && filePicker != null) { filePicker.onReceiveValue(result == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null); filePicker = null; }
-        if (request == 30) {
-            File file = download; download = null;
-            boolean disposable=downloadDisposable;
-            if (result == RESULT_OK && data != null && data.getData() != null && file != null) {
-                Uri destination = data.getData();
-                worker.execute(() -> {
-                    try (OutputStream out = getContentResolver().openOutputStream(destination)) { Files.copy(file.toPath(), out); ui.post(() -> toast("File salvato")); }
-                    catch (Exception e) { ui.post(() -> toast("Salvataggio fallito: " + e.getMessage())); }
-                    finally { if(disposable)file.delete(); }
-                });
-            } else if (file != null&&disposable) file.delete();
-            nextDownload();
-        }
+        if(request==30)documentExports.result(result,data==null?null:data.getData(),data==null?0:data.getFlags());
     }
+
     public void onBackPressed() { web.evaluateJavascript("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))", null); moveTaskToBack(true); }
     protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
     protected void onPause() {
@@ -453,6 +438,7 @@ public final class MainActivity extends Activity {
         super.onPause();
     }
     protected void onDestroy() {
+        if(documentExports!=null)documentExports.detach(exportListener);
         if(transcriptPlayer!=null)transcriptPlayer.close();
         if (filePicker != null) filePicker.onReceiveValue(null);
         if (web != null) { web.removeJavascriptInterface("AndroidRecorder"); web.destroy(); web = null; }
