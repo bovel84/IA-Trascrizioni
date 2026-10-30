@@ -10,6 +10,8 @@ import java.util.Comparator;
 
 /** Files are the durable queue: a WAV without a matching TXT needs transcription. */
 final class Transcriber {
+    interface ConnectionFactory { HttpURLConnection open() throws IOException; }
+    interface Wait { void sleep(long millis) throws InterruptedException; }
     static File[] segments(File session) {
         File[] files = session == null ? null : session.listFiles((dir, name) -> name.endsWith(".wav"));
         if (files == null) return new File[0];
@@ -30,6 +32,9 @@ final class Transcriber {
         return text.toString();
     }
     static void transcribe(File wav, String key, String model, String language) throws Exception {
+        transcribe(wav, key, model, language, () -> (HttpURLConnection) new URL("https://api.groq.com/openai/v1/audio/transcriptions").openConnection(), Thread::sleep);
+    }
+    static void transcribe(File wav, String key, String model, String language, ConnectionFactory factory, Wait wait) throws Exception {
         if(result(wav).exists())return;
         if (VoiceData.response(wav).exists()) {
             JSONObject cached=null;
@@ -41,13 +46,17 @@ final class Transcriber {
         // Also applies to retry/recovery after a process interruption.
         if (!WavFile.hasSignal(wav)) { Files.write(result(wav).toPath(), new byte[0]); return; }
         for (int attempt = 0; ; attempt++) {
-            try { upload(wav, key, model, language); return; }
-            catch (Retryable e) { if (attempt == 2) throw e; Thread.sleep(1500L * (attempt + 1)); }
+            try { upload(wav, key, model, language, factory.open()); return; }
+            catch (Retryable e) {
+                // Long quota windows are recoverable work, not a reason to block
+                // hundreds of subsequent segments or ignore Retry-After.
+                if (attempt == 2 || e.delayMs > 10000) throw e;
+                wait.sleep(Math.max(e.delayMs, 1500L * (attempt + 1)));
+            }
         }
     }
-    private static void upload(File wav, String key, String model, String language) throws Exception {
+    private static void upload(File wav, String key, String model, String language, HttpURLConnection conn) throws Exception {
         String boundary = "VoiceScribe" + java.util.UUID.randomUUID();
-        HttpURLConnection conn = (HttpURLConnection) new URL("https://api.groq.com/openai/v1/audio/transcriptions").openConnection();
         conn.setConnectTimeout(15000); conn.setReadTimeout(90000);
         conn.setRequestMethod("POST"); conn.setDoOutput(true);
         conn.setRequestProperty("Authorization", "Bearer " + key);
@@ -72,10 +81,11 @@ final class Transcriber {
                 out.write(suffix);
             }
             int code = conn.getResponseCode();
-            if(code==429)throw new QuotaLimited();
+            if(code==429)throw new QuotaLimited(retryDelayMillis(conn.getHeaderField("Retry-After")));
             if (code >= 500) throw new Retryable("Groq HTTP " + code);
             if (code < 200 || code >= 300) {
                 String detail = errorDetail(conn);
+                if (key != null && !key.isEmpty()) detail = detail.replace(key, "[chiave nascosta]");
                 throw new IOException("Groq HTTP " + code + (detail.isEmpty() ? ": controlla chiave, formato e modello" : ": " + detail));
             }
             ByteArrayOutputStream body = new ByteArrayOutputStream();
@@ -131,12 +141,22 @@ final class Transcriber {
         bytes(out, "--" + b + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + value + "\r\n");
     }
     private static void bytes(OutputStream out, String s) throws IOException { out.write(s.getBytes(StandardCharsets.UTF_8)); }
-    private static final class Retryable extends IOException {
-        private static final long serialVersionUID = 1L;
-        Retryable(String message) { super(message); }
+    static long retryDelayMillis(String value) {
+        try {
+            double seconds = Double.parseDouble(value);
+            if (Double.isFinite(seconds) && seconds >= 0) return (long) Math.min(86400000, Math.ceil(seconds * 1000));
+        } catch (Exception ignored) { }
+        return 60000; // Unknown quota window: leave durable work for manual retry.
     }
-    static final class QuotaLimited extends IOException {
+    private static class Retryable extends IOException {
+        private static final long serialVersionUID = 1L;
+        final long delayMs;
+        Retryable(String message) { this(message, 0); }
+        Retryable(String message, long delayMs) { super(message); this.delayMs = delayMs; }
+    }
+    static final class QuotaLimited extends Retryable {
         private static final long serialVersionUID=1L;
-        QuotaLimited(){super("Limite di frequenza o quota Groq raggiunto: audio conservato, riprova più tardi");}
+        QuotaLimited(){this(60000);}
+        QuotaLimited(long delay){super("Limite Groq raggiunto (HTTP 429) · riprova dopo "+Math.max(1,(delay+999)/1000)+" s",delay);}
     }
 }

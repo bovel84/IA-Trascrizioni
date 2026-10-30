@@ -758,6 +758,7 @@
                     <div class="chunk-indicator" id="chunkIndicator">Chunk: 0</div>
                     <div class="visualizer" id="visualizer" style="display: none;"></div>
                     <p class="record-hint" id="recordHint">Tocca per registrare</p>
+                    <p class="retranscribe-info" id="transcriptionStatus" role="status" aria-live="polite"></p>
                 </div>
 
                 <div class="progress-section" id="progressSection">
@@ -960,6 +961,7 @@
             <div class="tab-content" id="savedTab">
                 <div class="retranscribe-section">
                     <button class="retranscribe-btn" onclick="loadAudioFile()"><span>📁</span><span>Carica Audio da Trascrivere</span></button>
+                    <button class="retranscribe-btn" id="retryTranscriptionBtn" onclick="retryPendingTranscription()" style="margin-top:0.6rem">🔄 Riprova audio non trascritto</button>
                     <p class="retranscribe-info">Audio anche oltre 25 MB · suddivisione automatica. WAV, MP3, M4A, OGG, FLAC e WebM secondo i codec del dispositivo.</p>
                 </div>
                 <div class="section-title" style="margin-top: 1rem;">📂 Progetti Salvati</div>
@@ -1060,6 +1062,52 @@
             });
         }
 
+        // Queue metadata never retains audio blobs. Read one segment at a time,
+        // so a network outage cannot keep hours of audio in the JS heap.
+        async function listChunkMetadata(sessionId) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('audioChunks', 'readonly');
+                const request = tx.objectStore('audioChunks').openCursor();
+                const items = [];
+                request.onsuccess = () => {
+                    const cursor = request.result;
+                    if (!cursor) return resolve(items.sort((a, b) => a.timestamp - b.timestamp || a.id - b.id));
+                    const row = cursor.value;
+                    if (row.sessionId === sessionId) {
+                        const { chunk, ...metadata } = row;
+                        items.push(metadata);
+                    }
+                    cursor.continue();
+                };
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function getChunkFromDB(id) {
+            return new Promise((resolve, reject) => {
+                const request = db.transaction('audioChunks', 'readonly').objectStore('audioChunks').get(id);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function saveChunkTranscript(id, text, quality = {}) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('audioChunks', 'readwrite');
+                const store = tx.objectStore('audioChunks');
+                const read = store.get(id);
+                read.onsuccess = () => {
+                    if (!read.result) return reject(new Error('Segmento audio non trovato'));
+                    const write = store.put({ ...read.result, transcriptionDone: true, transcriptionText: text, transcriptionQuality: quality });
+                    write.onerror = () => reject(write.error);
+                };
+                read.onerror = () => reject(read.error);
+                tx.oncomplete = () => resolve();
+                tx.onerror = tx.onabort = () => reject(tx.error || new Error('Salvataggio trascrizione fallito'));
+            });
+        }
+
         async function clearChunksFromDB(sessionId) {
             if (!db) await initDB();
             return new Promise((resolve, reject) => {
@@ -1082,7 +1130,7 @@
         // cosi' il recupero all'avvio non ripropone una sessione gia' conclusa).
         async function moveChunksSession(from, to) {
             if (!db) await initDB();
-            return new Promise((resolve) => {
+            return new Promise((resolve, reject) => {
                 const tx = db.transaction('audioChunks', 'readwrite');
                 const store = tx.objectStore('audioChunks');
                 const request = store.openCursor();
@@ -1091,9 +1139,11 @@
                     if (cursor) {
                         if (cursor.value.sessionId === from) cursor.update({ ...cursor.value, sessionId: to });
                         cursor.continue();
-                    } else resolve();
+                    }
                 };
-                request.onerror = () => resolve();
+                tx.oncomplete = () => resolve();
+                tx.onerror = tx.onabort = () => reject(tx.error || new Error('Audio conservato nella sessione da recuperare'));
+                request.onerror = () => reject(request.error);
             });
         }
 
@@ -1564,6 +1614,8 @@
         let liveQueue = [];          // chunk in attesa di trascrizione
         let failedChunks = [];       // chunk da ritentare
         let liveProcessing = false;  // true mentre la coda viene consumata
+        let transcriptionIssue = '', completedChunks = 0, emptyChunks = 0;
+        let audioSaveIssue = '', importedAudioChunks = new Set();
         let lastChunkSaved = Promise.resolve();
         const AUDIO_SESSION = 'current_audio';  // sessione IndexedDB dell'audio corrente
         const REC_SESSION = 'temp_recording';   // sessione IndexedDB durante la registrazione
@@ -1602,6 +1654,29 @@
             return fetch(url, { ...options, signal: controller.signal }).finally(() => {
                 clearTimeout(timer); external?.removeEventListener('abort', abort);
             });
+        }
+
+        async function fetchTranscriptionJSON(options, timeoutMs = 90000) {
+            const controller = new AbortController();
+            const sourceSignal = options.signal;
+            const cancel = () => controller.abort();
+            if (sourceSignal?.aborted) cancel();
+            sourceSignal?.addEventListener('abort', cancel, { once: true });
+            let timer;
+            const timeout = new Promise((resolve, reject) => {
+                timer = setTimeout(() => {
+                    controller.abort();
+                    const error = new Error('Timeout trascrizione'); error.name = 'AbortError'; reject(error);
+                }, timeoutMs);
+            });
+            try {
+                return await Promise.race([timeout, (async () => {
+                    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { ...options, signal: controller.signal });
+                    // The deadline must include the response body, not just headers.
+                    const data = await res.json();
+                    return { res, data };
+                })()]);
+            } finally { clearTimeout(timer); sourceSignal?.removeEventListener('abort', cancel); }
         }
 
         function formatDuration(ms) {
@@ -1962,6 +2037,7 @@
                 duration: $('timer').textContent,
                 entries: transcriptEntries,
                 transcriptIncomplete,
+                importedAudioChunks: [...importedAudioChunks],
                 speakers,
                 notes: notesText,
                 chart: chartData,
@@ -2001,6 +2077,7 @@
             window.nativeAudioSession = s.nativeAudioSession || null;
             window.nativeDiarizedSession = s.nativeDiarizedSession || null;
             transcriptEntries = Array.isArray(s.entries) ? s.entries : [];
+            importedAudioChunks = new Set(s.importedAudioChunks || transcriptEntries.map(e => e.audioChunkId).filter(id => id != null));
             if (Array.isArray(s.speakers) && s.speakers.length) {
                 const clean = s.speakers.filter(x => typeof x === 'string' && x.trim()).slice(0, 32);
                 if (clean.length) speakers = clean;
@@ -2040,31 +2117,66 @@
 
         async function checkRecoveredChunks() {
             try {
-                const chunks = await getChunksFromDB(REC_SESSION);
+                const chunks = await listChunkMetadata(REC_SESSION);
                 if (chunks.length > 0) {
                     if (confirm(`Trovati ${chunks.length} chunk audio di una sessione interrotta. Recuperare?`)) {
                         await processRecoveredChunks(chunks);
-                    } else await clearChunksFromDB(REC_SESSION);
+                    } else showToast('Audio conservato: puoi recuperarlo con Riprova audio non trascritto');
                 }
+                const current = await listChunkMetadata(AUDIO_SESSION);
+                if (current.some(c => !c.transcriptionDone)) setTranscriptionStatus('Audio salvato · alcuni segmenti attendono la trascrizione. Usa Riprova audio non trascritto.');
             } catch (e) {}
         }
 
         async function processRecoveredChunks(chunks) {
-            showProgress(true, `Recupero ${chunks.length} chunk...`, 0);
             isProcessing = true; updateUI();
+            transcriptionIssue = '';
+            liveQuotaLimited = false; liveSpeechContext = '';
+            chunkCount = chunks.length;
+            completedChunks = chunks.filter(c => c.transcriptionDone).length;
+            emptyChunks = chunks.filter(c => c.transcriptionDone && !c.transcriptionText).length;
             const t0 = chunks[0]?.timestamp || Date.now();
-            let completed=0,previous='';
-            for (let i = 0; i < chunks.length; i++) {
-                showProgress(true, `Trascrivo chunk ${i + 1}/${chunks.length}...`, (i / chunks.length) * 100);
-                try {
-                    const quality={};const text = await transcribeBlob(chunks[i].chunk,0,speechPrompt(transcriptionGlossary,previous),quality);previous=quality.transcriptReview?'':text;completed++;
-                    if (text) addEntry(text, Number.isFinite(chunks[i].offsetMs) ? chunks[i].offsetMs : Math.max(0, (chunks[i].timestamp || t0) - t0), {...(chunks[i].participant || { speaker: 0, speakerName: 'Non assegnato' }),...quality});
-                } catch (e) {previous='';if(e.quota)break;}
+            try {
+                for (let i = 0; i < chunks.length; i++) {
+                    const item = chunks[i];
+                    const offsetMs = Number.isFinite(item.offsetMs) ? item.offsetMs : Math.max(0, (item.timestamp || t0) - t0);
+                    if (item.transcriptionDone) {
+                        liveSpeechContext = item.transcriptionQuality?.transcriptReview ? '' : item.transcriptionText;
+                        importChunkTranscript(item.transcriptionText, { ...item, offsetMs, speaker: { ...item.participant, ...item.transcriptionQuality } }); continue;
+                    }
+                    showProgress(true, `Trascrivo segmento ${i + 1}/${chunks.length}…`, (completedChunks / chunks.length) * 100);
+                    try { await transcribeStoredChunk({ ...item, offsetMs, speaker: item.participant || { speaker: 0, speakerName: 'Non assegnato' } }); }
+                    catch (e) { transcriptionIssue = e.message; break; }
+                }
+                await moveChunksSession(REC_SESSION, AUDIO_SESSION);
+                audioBlob = null;
+            } finally {
+                showProgress(false); isProcessing = false; updateUI();
+                showTranscriptionSummary();
+                scheduleAutosave(true);
             }
-            await moveChunksSession(REC_SESSION, AUDIO_SESSION);
-            audioBlob = null;
-            showProgress(false); isProcessing = false; updateUI();
-            transcriptIncomplete=completed<chunks.length;scheduleAutosave(true);refreshTranscript();showToast(`Audio recuperato · ${completed}/${chunks.length} segmenti trascritti`);
+        }
+
+        window.retryPendingTranscription = async () => {
+            if (isRecording || isProcessing || diarizationBusy) return showToast('Ferma prima la registrazione');
+            if (!whisperKey) { openConnectionSettings(); return showToast('Inserisci chiave Whisper'); }
+            const interrupted = await listChunkMetadata(REC_SESSION);
+            const chunks = interrupted.length ? interrupted : await listChunkMetadata(AUDIO_SESSION);
+            if (!chunks.length) return showToast('Nessun segmento audio da recuperare');
+            await processRecoveredChunks(chunks);
+        };
+
+        function setTranscriptionStatus(message) { $('transcriptionStatus').textContent = message; }
+
+        function showTranscriptionSummary() {
+            transcriptIncomplete = !!audioSaveIssue || completedChunks < chunkCount;
+            refreshTranscript();
+            if (audioSaveIssue) { setTranscriptionStatus(audioSaveIssue + ' · i segmenti precedenti restano recuperabili'); updateChunkIndicator(); return; }
+            const pending = Math.max(0, chunkCount - completedChunks);
+            const summary = `Audio salvato · trascritti ${completedChunks}/${chunkCount} segmenti`;
+            setTranscriptionStatus(pending ? `${summary} · ${pending} da riprovare. ${transcriptionIssue} Usa Riprova audio non trascritto.`
+                : emptyChunks === chunkCount ? `${summary} · nessun parlato riconosciuto` : summary);
+            updateChunkIndicator();
         }
 
         function setupVisualizer() {
@@ -2257,8 +2369,12 @@
                 analyser = audioContext.createAnalyser();
                 audioContext.createMediaStreamSource(currentStream).connect(analyser);
                 analyser.fftSize = 256;
+                const interrupted = await listChunkMetadata(REC_SESSION);
+                const current = await listChunkMetadata(AUDIO_SESSION);
+                if (interrupted.length || current.some(c => !c.transcriptionDone)) throw new Error('Audio da recuperare: usa prima Riprova audio non trascritto. Per scartarlo scegli Nuovo progetto.');
                 currentSessionId = REC_SESSION; chunkCount = 0;
                 liveQueue = []; failedChunks = []; liveProcessing = false;liveSpeechContext='';liveQuotaLimited=false;transcriptIncomplete=false;
+                completedChunks = emptyChunks = 0; transcriptionIssue = audioSaveIssue = ''; importedAudioChunks.clear(); setTranscriptionStatus('');
                 isPaused = false; pausedTime = 0; pauseStartTime = null; // Reset pausa
                 startTime = Date.now();
                 await clearCurrentAudio();
@@ -2300,8 +2416,15 @@
                 if (!chunkData.length) { lastChunkSaved = Promise.resolve(); return; }
                 const chunkBlob = new Blob(chunkData, { type: mime });
                 chunkData = [];
-                lastChunkSaved = saveChunkToDB(chunkBlob, currentSessionId, { offsetMs: chunkOffset, participant: chunkSpeaker }).catch(() => {});
-                enqueueChunk(chunkBlob, chunkOffset, chunkSpeaker);
+                const previousSave = lastChunkSaved;
+                lastChunkSaved = previousSave.then(async () => {
+                    const id = await saveChunkToDB(chunkBlob, currentSessionId, { offsetMs: chunkOffset, participant: chunkSpeaker, glossary: transcriptionGlossary });
+                    enqueueChunk(id, chunkOffset, chunkSpeaker);
+                }).catch(e => {
+                    audioSaveIssue = transcriptionIssue = 'Salvataggio audio non riuscito: ' + (e.message || 'spazio esaurito');
+                    setTranscriptionStatus(transcriptionIssue); showToast(transcriptionIssue);
+                    if (isRecording) stopRecording().catch(error => showToast(error.message));
+                });
             };
             mediaRecorder.start(1000);
             chunkCount++;
@@ -2310,7 +2433,7 @@
 
         function updateChunkIndicator() {
             const el = $('chunkIndicator');
-            const pending = liveQueue.length + failedChunks.length;
+            const pending = Math.max(0, chunkCount - completedChunks);
             let text = `Chunk: ${chunkCount}`;
             if (pending) text += ` · in coda: ${pending}`;
             if (liveProcessing) text += ' · trascrivo...';
@@ -2355,13 +2478,15 @@
 
             // 1) svuoto la coda di trascrizione (con retry)
             // 2) rendo persistente l'audio spostando i chunk su 'current_audio'
-            await processPendingChunks();
-            await moveChunksSession(REC_SESSION, AUDIO_SESSION);
-            audioBlob = null;
-            $('chunkIndicator').classList.remove('active', 'busy');
-            isProcessing = false; updateUI();
-            $('recordHint').textContent = 'Tocca per registrare';
-            scheduleAutosave(true);
+            try {
+                await processPendingChunks();
+                await moveChunksSession(REC_SESSION, AUDIO_SESSION);
+                audioBlob = null;
+            } catch (e) { transcriptionIssue = e.message; }
+            finally {
+                showProgress(false); isProcessing = false; updateUI();
+                showTranscriptionSummary(); scheduleAutosave(true);
+            }
         }
 
         // ============ PAUSE FUNCTIONALITY ============
@@ -2411,8 +2536,8 @@
         // Ogni chunk viene trascritto appena chiuso (ogni 2 minuti): la
         // trascrizione e' quindi visibile in tempo reale e una chiusura
         // imprevista non fa perdere piu' di un chunk.
-        function enqueueChunk(blob, offsetMs, speaker = { speaker: currentSpeaker, speakerName: speakers[currentSpeaker - 1] }) {
-            liveQueue.push({ blob, offsetMs, speaker, glossary:transcriptionGlossary });
+        function enqueueChunk(id, offsetMs, speaker = { speaker: currentSpeaker, speakerName: speakers[currentSpeaker - 1] }) {
+            liveQueue.push({ id, offsetMs, speaker, glossary: transcriptionGlossary });
             updateChunkIndicator();
             processLiveQueue();
         }
@@ -2421,55 +2546,59 @@
             if (liveProcessing) return;
             liveProcessing = true;
             updateChunkIndicator();
-            while (liveQueue.length) {
+            try { while (liveQueue.length && !transcriptionIssue) {
                 const item = liveQueue.shift();
                 if(liveQuotaLimited){item.rateLimited=true;failedChunks.push(item);updateChunkIndicator();continue;}
                 updateLiveProgress();
                 try {
-                    item.prompt=speechPrompt(item.glossary,liveSpeechContext);
-                    item.quality={};const text = await transcribeBlob(item.blob,0,item.prompt,item.quality);liveSpeechContext=item.quality.transcriptReview?'':text;
-                    if (text) addEntry(text, item.offsetMs, {...item.speaker,...item.quality});
+                    await transcribeStoredChunk(item);
                 } catch (e) {
                     liveSpeechContext='';
                     item.rateLimited=!!e.quota;
                     if(e.quota)liveQuotaLimited=true;
                     failedChunks.push(item);
+                    transcriptionIssue = e.message;
+                    setTranscriptionStatus('Registrazione conservata · trascrizione sospesa: ' + e.message + '. Usa Riprova audio non trascritto al termine.');
                     if (isRecording) showToast(`⚠️ Chunk non trascritto (${e.message})`);
                 }
                 updateChunkIndicator();
-            }
-            liveProcessing = false;
-            updateChunkIndicator();
+            } } finally { liveProcessing = false; updateChunkIndicator(); }
+        }
+
+        function importChunkTranscript(text, item) {
+            if (!text || importedAudioChunks.has(item.id) || transcriptEntries.some(e => e.audioChunkId === item.id)) return;
+            addEntry(text, item.offsetMs, item.speaker || item.participant || { speaker: 0, speakerName: 'Non assegnato' });
+            transcriptEntries[transcriptEntries.length - 1].audioChunkId = item.id;
+            importedAudioChunks.add(item.id);
+            scheduleAutosave(true);
+        }
+
+        async function transcribeStoredChunk(item) {
+            const stored = await getChunkFromDB(item.id);
+            if (!stored?.chunk) throw new Error('Segmento audio non disponibile');
+            const quality = stored.transcriptionQuality || {};
+            const prompt = speechPrompt(stored.glossary ?? item.glossary ?? transcriptionGlossary, liveSpeechContext);
+            const text = stored.transcriptionDone ? stored.transcriptionText : await transcribeBlob(stored.chunk, 0, prompt, quality);
+            if (!stored.transcriptionDone) await saveChunkTranscript(item.id, text, quality);
+            liveSpeechContext = quality.transcriptReview ? '' : text;
+            completedChunks++; if (!text) emptyChunks++;
+            importChunkTranscript(text, { ...item, speaker: { ...(item.speaker || stored.participant || { speaker: 0, speakerName: 'Non assegnato' }), ...quality } });
         }
 
         async function processPendingChunks() {
             showProgress(true, 'Trascrivo gli ultimi chunk...', 60);
-            while (liveProcessing || liveQueue.length) await sleep(200);
-            // retry dei chunk falliti (rete instabile, rate limit, ...)
-            for (let attempt = 1; attempt <= 2 && failedChunks.length; attempt++) {
-                const retry = failedChunks; failedChunks = [];
-                for (let i = 0; i < retry.length; i++) {
-                    if(retry[i].rateLimited){failedChunks.push(retry[i]);continue;}
-                    showProgress(true, `Riprovo i chunk mancanti (tentativo ${attempt}/2): ${i + 1}/${retry.length}`, 60 + (i / retry.length) * 40);
-                    try {
-                        const quality={};const text = await transcribeBlob(retry[i].blob, 1,retry[i].prompt||speechPrompt(retry[i].glossary),quality);
-                        if (text) addEntry(text, retry[i].offsetMs, {...retry[i].speaker,...quality});
-                    } catch (e) { retry[i].rateLimited=!!e.quota;failedChunks.push(retry[i]); }
-                    updateChunkIndicator();
-                }
-                if(failedChunks.length&&failedChunks.every(item=>item.rateLimited))break;
-                if (failedChunks.length) await sleep(1200 * attempt);
-            }
-            if (failedChunks.length) showToast(`⚠️ ${failedChunks.length} chunk non trascritti (l'audio e' salvato)`);
-            transcriptIncomplete=failedChunks.length>0;
-            refreshTranscript();scheduleAutosave(true);
-            failedChunks = [];
-            showProgress(false);
+            await processLiveQueue();
+            while (liveProcessing) await sleep(100);
+            // Failed/pending IDs stay on disk and are retried explicitly, without
+            // repeating hours of timeouts on the same failed credentials/quota.
+            transcriptIncomplete = !!transcriptionIssue || liveQueue.length > 0 || failedChunks.length > 0;
+            refreshTranscript(); scheduleAutosave(true);
+            liveQueue = []; failedChunks = [];
         }
 
         function updateLiveProgress(customTitle) {
             if (isRecording) return;
-            const done = Math.max(0, chunkCount - liveQueue.length - failedChunks.length);
+            const done = completedChunks;
             const pct = chunkCount ? (done / chunkCount) * 100 : 0;
             showProgress(true, customTitle || `Trascrivo ${done}/${chunkCount} chunk...`, pct);
         }
@@ -2486,24 +2615,31 @@
             form.append('response_format', 'verbose_json');form.append('timestamp_granularities[]','segment');
             let res, data;
             try {
-                res = await fetchWithTimeout('https://api.groq.com/openai/v1/audio/transcriptions', {
+                ({ res, data } = await fetchTranscriptionJSON({
                     method: 'POST', headers: { 'Authorization': `Bearer ${whisperKey}` }, body: form, signal
-                }, 90000);
-                data = await res.json().catch(() => ({}));
+                }));
             } catch (e) {
                 if(signal?.aborted)throw new Error('Importazione interrotta');
                 if (attempt < 2) { await sleep(1500 * (attempt + 1)); return transcribeBlob(blob, attempt + 1,prompt,quality,signal); }
                 throw new Error(e.name === 'AbortError' ? 'timeout' : e.message);
             }
-            // Quota/rate limits require waiting, not repeated uploads of the same audio.
-            if(res.status===429){const error=new Error('Limite di frequenza o quota Groq raggiunto. Audio conservato: riprova più tardi.');error.quota=true;throw error;}
+            if (res.status === 429) {
+                const seconds = Number(res.headers?.get('retry-after'));
+                if (Number.isFinite(seconds) && seconds > 0 && seconds <= 10 && attempt < 2) {
+                    await sleep(seconds * 1000);
+                    return transcribeBlob(blob, attempt + 1, prompt, quality, signal);
+                }
+                const error = new Error('Limite Groq raggiunto (HTTP 429)' + (seconds > 0 ? `: riprova dopo ${Math.ceil(seconds)} s` : ': attendi il ripristino della quota'));
+                error.quota = true; throw error;
+            }
             if (res.status >= 500 && attempt < 2) {
                 await sleep(1500 * (attempt + 1));
                 return transcribeBlob(blob, attempt + 1,prompt,quality,signal);
             }
-            if (!res.ok) throw new Error(data.error?.message || `Errore ${res.status}`);
-            if(quality)Object.assign(quality,speechQuality(data));
-            return (data.text || '').trim();
+            if (!res.ok) throw new Error(String(data.error?.message || `Errore ${res.status}`).split(whisperKey).join('[chiave nascosta]'));
+            if (typeof data.text !== 'string') throw new Error('Risposta senza testo valido: audio conservato');
+            if (quality) Object.assign(quality, speechQuality(data));
+            return data.text.trim();
         }
 
         function showProgress(show, title = '', percent = 0) {
@@ -2514,7 +2650,7 @@
 
         // Persist the original before conversion. Successful parts are cached and never resent on resume.
         async function cacheImportedPart(part,text,quality){
-            return new Promise((resolve,reject)=>{const tx=db.transaction('audioChunks','readwrite'),request=tx.objectStore('audioChunks').put({...part,importText:text,importQuality:quality});tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Salvataggio parte non completato'));request.onerror=()=>reject(request.error);});
+            return new Promise((resolve,reject)=>{const tx=db.transaction('audioChunks','readwrite'),request=tx.objectStore('audioChunks').put({...part,importText:text,importQuality:quality,transcriptionDone:true,transcriptionText:text,transcriptionQuality:quality});tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Salvataggio parte non completato'));request.onerror=()=>reject(request.error);});
         }
         window.loadAudioFile = () => $('audioFileInput').click();
         window.retryBrowserImport=async id=>{const record=savedRecordings.find(r=>r.id===id);if(!record)return;const file=await getSessionAudio(id);if(!file)return showToast('Sorgente audio non disponibile');await importAudioFile(file,record);};
@@ -3709,6 +3845,7 @@
                 // sessione live continua a essere modificata
                 entries: transcriptEntries.map(entry => ({ ...entry })),
                 transcriptIncomplete,
+                importedAudioChunks: [...importedAudioChunks],
                 speakers: [...speakers], notes: notesText,
                 aiResults: aiResults.map(r => ({ ...r })), activeAIResult,
                 hasAudio: !!audio || !!nativeAudioSession, nativeDiarizedSession: window.nativeDiarizedSession || null, nativeAudioSession, hasDrawing: drawingHistory.length > 0, hasNotes: !!notesText,
@@ -3773,6 +3910,7 @@
                 ...entry,
                 offsetMs: typeof entry.offsetMs === 'number' ? entry.offsetMs : parseDuration(entry.time)
             }));
+            importedAudioChunks = new Set(r.importedAudioChunks || transcriptEntries.map(e => e.audioChunkId).filter(id => id != null));
             if (Array.isArray(r.speakers) && r.speakers.length) { speakers = [...r.speakers]; saveSpeakers(); }
             if (r.duration) $('timer').textContent = r.duration;
 
@@ -3859,8 +3997,9 @@
 
         window.newTranscript = async () => {
             if (isRecording || isProcessing || diarizationBusy) return showToast('⚠️ Attendi il completamento');
-            if (!hasCurrentContent()) return showToast('Già vuoto');
-            if (!confirm('Cancellare tutto il contenuto corrente?')) return;
+            const webAudio = window.AndroidRecorder ? [] : [...await listChunkMetadata(REC_SESSION), ...await listChunkMetadata(AUDIO_SESSION)];
+            if (!hasCurrentContent() && !webAudio.length) return showToast('Già vuoto');
+            if (!confirm(webAudio.some(c => !c.transcriptionDone) ? 'Cancellare tutto il contenuto corrente, compreso l’audio ancora da trascrivere? Esporta prima l’audio da conservare.' : 'Cancellare tutto il contenuto corrente?')) return;
             resetAnalysisScope(); aiResults = []; activeAIResult = '';
             transcriptEntries = []; audioBlob = null; notesText = '';
             window.nativeAudioSession = null; window.nativeDiarizedSession = null;
@@ -3879,6 +4018,10 @@
             renderAllEntries(); updateStats();
             $('chartCard').hidden = true; $('mapCard').hidden = true; renderAIResults();
             await clearCurrentAudio();
+            if (!window.AndroidRecorder) await clearChunksFromDB(REC_SESSION);
+            chunkCount = completedChunks = emptyChunks = 0; transcriptionIssue = '';
+            audioSaveIssue = ''; importedAudioChunks.clear();
+            setTranscriptionStatus(''); updateChunkIndicator();
             clearAutosave();
             showToast('✔ Nuovo progetto');
         };

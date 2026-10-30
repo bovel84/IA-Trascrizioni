@@ -188,6 +188,22 @@ async function main() {
     run('syncNativeRecorder()');check('native import polling cannot duplicate completed parts',run('transcriptEntries.length')===1);
     state.importActive=false;state.pending=0;state.importStatus='Audio importato e trascritto';run('syncNativeRecorder()');
     check('native completion clears progress and releases the recorder',ctx.__elements.get('workIndicator').hidden&&!run('isProcessing'));
+    state = { active: false, recording: false, paused: false, retrying: false, status: 'Audio salvato',
+        sessionId: 'session-1790766000001', elapsedMs: 7200000, chunkCount: 240, pending: 240,
+        transcribedCount: 0, emptyCount: 0, lastError: 'Limite Groq raggiunto (HTTP 429)', entries: [] };
+    run(`window.nativeAudioSession = '${state.sessionId}'; window.nativeDiarizedSession = null; syncNativeRecorder();`);
+    check('two-hour failure displays persistent progress and the actual error', /0\/240/.test(ctx.__elements.get('transcriptionStatus').textContent) && /429/.test(ctx.__elements.get('transcriptionStatus').textContent));
+    check('audio-only failed session stays in saved recordings with recovery metadata', run(`savedRecordings.find(r => r.nativeAudioSession === '${state.sessionId}').pendingTranscription`) === 240);
+    run('retryPendingTranscription()');
+    check('Retry targets the opened session with the saved Whisper configuration', calls.some(c => c[0] === 'retry' && c[1] === state.sessionId && c[2] === 'gsk_test'));
+    state.retrying = true; run('syncNativeRecorder()');
+    check('recovery displays progress and processing feedback', run('isProcessing') && ctx.__elements.get('progressSection').classList.contains('active'));
+    const priorCount = run('transcriptEntries.length');
+    state.entries = Array.from({ length: 240 }, (_, i) => ({ nativeSegmentId: `${state.sessionId}/${String(i * 30000).padStart(12, '0')}.wav`, offsetMs: i * 30000, text: `Frase ${i}` }));
+    state.pending = 0; state.transcribedCount = 240; state.lastError = ''; state.retrying = false;
+    run('syncNativeRecorder(); syncNativeRecorder();');
+    check('full two-hour native recovery imports every result once', run('transcriptEntries.length') === priorCount + 240);
+    check('native recovery finishes at 240/240 and releases processing controls', /240\/240/.test(ctx.__elements.get('transcriptionStatus').textContent) && !run('isProcessing') && !ctx.__elements.get('progressSection').classList.contains('active'));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

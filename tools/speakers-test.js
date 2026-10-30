@@ -26,7 +26,8 @@ async function main() {
     // Capture attribution must be taken before the async transcription returns.
     let finish;
     ctx.fetch = () => new Promise(resolve => { finish = resolve; });
-    run("speakers=['Anna','Luca']; currentSpeaker=1; enqueueChunk(new Blob(['audio']),0); currentSpeaker=2;");
+    await run("(async () => { speakers=['Anna','Luca']; currentSpeaker=1; const id=await saveChunkToDB(new Blob(['audio']), REC_SESSION); enqueueChunk(id,0); currentSpeaker=2; })()");
+    while (!finish) await new Promise(r=>setTimeout(r,1));
     finish({ok:true,status:200,json:async()=>({text:'Risposta in ritardo'})});
     while (run('liveProcessing')) await new Promise(r=>setTimeout(r,1));
     check('delayed transcription retains speaker captured with the audio', run('transcriptEntries[0].speakerName') === 'Anna');

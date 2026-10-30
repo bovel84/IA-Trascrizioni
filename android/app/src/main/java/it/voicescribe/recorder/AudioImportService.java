@@ -82,7 +82,7 @@ public final class AudioImportService extends Service {
                     }
                     progress("transcribe","Trascrizione · parte "+(i+1)+" di "+files.length,percent);
                     Transcriber.transcribe(wav,key,model,language);
-                }catch(Exception e){if(Thread.currentThread().isInterrupted())throw e;pending++;failure=e.getMessage();if(e instanceof Transcriber.QuotaLimited)quota=true;}
+                }catch(Exception e){if(Thread.currentThread().isInterrupted())throw e;pending++;failure=e.getMessage();quota=true;}
             }
             getSharedPreferences("native",0).edit().putString("latest",sessionId).apply();
             boolean spoken=false;for(File file:files)if(Transcriber.result(file).isFile()&&Transcriber.result(file).length()>0){spoken=true;break;}
