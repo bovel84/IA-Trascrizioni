@@ -17,8 +17,8 @@ const idle=async()=>{while(run('liveProcessing'))await new Promise(r=>setTimeout
  check('low probability and excessive repetition are review flags',run('speechQuality({segments:[{avg_logprob:-2,compression_ratio:3}]}).transcriptReview'));
  const requests=[];
  ctx.fetch=async(url,options)=>{requests.push(options.body);return{ok:true,status:200,json:async()=>({text:requests.length===1?'Il lavoro SFIRS prosegue.':'Testo incerto conservato.',segments:[{avg_logprob:requests.length===1?-.1:-2,compression_ratio:1.4}]})};};
- run("transcriptEntries=[];notesText='';liveSpeechContext='';liveQuotaLimited=false;enqueueChunk(new Blob(['audio']),0,{speaker:1,speakerName:'Anna',speakerReview:false});");await idle();
- run("enqueueChunk(new Blob(['audio']),30000,{speaker:2,speakerName:'Luca',speakerReview:false});");await idle();
+ await run("(async()=>{transcriptEntries=[];notesText='';liveSpeechContext='';liveQuotaLimited=false;const id=await saveChunkToDB(new Blob(['audio']),REC_SESSION);enqueueChunk(id,0,{speaker:1,speakerName:'Anna',speakerReview:false});})()");await idle();
+ await run("(async()=>{const id=await saveChunkToDB(new Blob(['audio']),REC_SESSION);enqueueChunk(id,30000,{speaker:2,speakerName:'Luca',speakerReview:false});})()");await idle();
  check('contiguous browser chunks carry prior words and glossary',requests.length===2&&requests[1].get('prompt').includes('SFIRS')&&requests[1].get('prompt').includes('prosegue.'));
  check('transcription requests include segment metadata without another API call',requests[0].get('response_format')==='verbose_json'&&requests[0].get('timestamp_granularities[]')==='segment');
  check('suspect text is preserved exactly and marked for review',run('transcriptEntries[1].text')==='Testo incerto conservato.'&&run('transcriptEntries[1].transcriptReview'));
@@ -40,7 +40,7 @@ const idle=async()=>{while(run('liveProcessing'))await new Promise(r=>setTimeout
  check('editorial check results are recorded with the reusable output',run('aiResults[0].editorialChecks.sourceWords')>1000);
  check('splitting at paragraphs preserves every source character',run("splitAnalysisText('Prima frase. '.repeat(2000),6500).join('')")===('Prima frase. '.repeat(2000)));
  let uploads=0;ctx.fetch=async()=>{uploads++;return{ok:false,status:429,json:async()=>({error:{message:'quota'}})};};
- run("liveQuotaLimited=false;failedChunks=[];enqueueChunk(new Blob(['uno']),60000);enqueueChunk(new Blob(['due']),90000);");await idle();await run('processPendingChunks()');
+ await run("(async()=>{liveQuotaLimited=false;failedChunks=[];const first=await saveChunkToDB(new Blob(['uno']),REC_SESSION);const second=await saveChunkToDB(new Blob(['due']),REC_SESSION);enqueueChunk(first,60000);enqueueChunk(second,90000);})()");await idle();await run('processPendingChunks()');
  check('quota exhaustion pauses later uploads and automatic final retries',uploads===1&&run('liveQuotaLimited'));
  check('partial transcription remains marked in the draft and AI source',run('sessionSnapshot().transcriptIncomplete')&&run('analysisSource("transcript").label').includes('parziale'));
  check('exports disclose incomplete audio and unresolved review flags',run('transcriptReviewNotes().join(" ")').includes('TRASCRIZIONE PARZIALE'));

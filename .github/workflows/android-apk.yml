@@ -61,6 +61,7 @@ jobs:
           node tools/rich-results-test.js
           node tools/concept-map-test.js
           node tools/audio-import-test.js
+          node tools/long-recording-test.js
       - name: Verify responsive layout and capture previews
         env:
           CHROME_BIN: /usr/bin/google-chrome

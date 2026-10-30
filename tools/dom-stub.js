@@ -78,8 +78,9 @@ class El {
     focus() {}
 }
 // ---------- IndexedDB finto ----------
-function makeRequest(exec) {
+function makeRequest(exec, transaction) {
     const request = { result: undefined, error: null, onsuccess: null, onerror: null };
+    if (transaction) transaction.pending++;
     queueMicrotask(() => {
         try {
             request.result = exec();
@@ -87,7 +88,9 @@ function makeRequest(exec) {
         } catch (error) {
             request.error = error;
             if (request.onerror) request.onerror({ target: request });
+            if (transaction) { transaction.error = error; transaction.onerror?.(); }
         }
+        if (transaction) { transaction.pending--; transaction.complete(); }
     });
     return request;
 }
@@ -99,24 +102,25 @@ class FakeObjectStore {
             const key = value.id !== undefined ? value.id : this.autoKey++;
             this.rows.set(key, this.name==='audioChunks'?{...value,id:key}:value);
             return key;
-        });
+        }, this.transaction);
     }
     put(value) {
         return makeRequest(() => {
             const key = this.name==='audioChunks'?(value.id??this.autoKey++):(value.sessionId??this.autoKey++);
             this.rows.set(key, this.name==='audioChunks'?{...value,id:key}:value);
             return key;
-        });
+        }, this.transaction);
     }
-    get(key) { return makeRequest(() => this.rows.get(key)); }
-    delete(key) { return makeRequest(() => { this.rows.delete(key); }); }
-    getAll() { return makeRequest(() => [...this.rows.values()]); }
+    get(key) { return makeRequest(() => this.rows.get(key), this.transaction); }
+    delete(key) { return makeRequest(() => { this.rows.delete(key); }, this.transaction); }
+    getAll() { return makeRequest(() => [...this.rows.values()], this.transaction); }
     openCursor() {
         const request = { result: null, error: null, onsuccess: null, onerror: null };
         const items = [...this.rows.entries()];
+        const tx = this.transaction; if (tx) tx.pending++;
         let index = 0;
         const step = () => {
-            if (index >= items.length) { request.result = null; if (request.onsuccess) request.onsuccess({ target: request }); return; }
+            if (index >= items.length) { request.result = null; if (request.onsuccess) request.onsuccess({ target: request }); if (tx) { tx.pending--; tx.complete(); } return; }
             const [key, value] = items[index++];
             request.result = {
                 value,
@@ -132,8 +136,15 @@ class FakeObjectStore {
 }
 
 class FakeTransaction {
-    constructor(db) { this.db = db; setTimeout(()=>this.oncomplete?.(),0); }
-    objectStore(name) { return this.db.stores.get(name); }
+    constructor(db) { this.db = db; this.pending = 0; this.finished = false; }
+    complete() { queueMicrotask(() => { if (!this.pending && !this.finished) { this.finished = true; this.oncomplete?.(); } }); }
+    objectStore(name) {
+        const store = Object.create(this.db.stores.get(name));
+        store.transaction = this;
+        // auto-increment is shared by all transactions, as in IndexedDB.
+        Object.defineProperty(store, 'autoKey', { get: () => this.db.stores.get(name).autoKey, set: value => { this.db.stores.get(name).autoKey = value; } });
+        return store;
+    }
 }
 
 class FakeDB {

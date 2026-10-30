@@ -131,6 +131,8 @@ window.initNativeRecorder = function () {
             }
             record.nativeImportedSegmentIds = [...imported];
             record.duration = formatDuration(state.elapsedMs || 0);
+            record.pendingTranscription = state.pending || 0;
+            record.transcriptionError = state.lastError || '';
             changed = true;
         }
         if (changed) {
@@ -213,11 +215,21 @@ window.initNativeRecorder = function () {
             : 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
         $('chunkIndicator').textContent = `Chunk: ${state.chunkCount || 0}${state.pending ? ` · in coda: ${state.pending}` : ''}`;
         $('chunkIndicator').classList.toggle('active', !!state.active || !!state.pending);
+        $('chunkIndicator').classList.toggle('busy', !!state.retrying || (!!state.active && !state.recording));
+        const completed = state.transcribedCount ?? (state.entries || []).length;
+        const total = (state.chunkCount || 0) + (state.partialCount || 0);
+        const progress = total ? `Audio salvato · trascritti ${completed}/${total} segmenti` : '';
+        setTranscriptionStatus(progress + (state.pending ? ` · ${state.pending} in attesa` : '')
+            + (state.lastError ? ` · ${state.lastError}. Usa Riprova audio non trascritto.` : '')
+            + (total && completed === total && state.emptyCount === completed ? ' · nessun parlato riconosciuto' : ''));
+        if (state.retrying || (!!state.active && !state.recording)) {
+            showProgress(true, state.status || 'Trascrizione in corso…', total ? completed / total * 100 : 0);
+        } else if (wasRetrying || wasActive) showProgress(false);
         $('recordHint').textContent = state.active || state.retrying ? (state.status || 'Registrazione in corso') : 'Tocca per registrare';
         if (!state.active && state.status && state.status !== 'Pronto') $('recordHint').textContent = state.status;
         const bars = $('visualizer').querySelectorAll('.visualizer-bar');
         bars.forEach((bar, i) => { bar.style.height = `${Math.max(8, (state.level || 0) * (32 + (i % 4) * 4))}px`; });
-        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${state.pending}:${state.importPhase||''}:${!!state.active}`;
+        const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${state.pending}:${state.importPhase||''}:${state.lastError}:${!!state.active}`;
         if (state.sessionId && stamp !== lastArchive) { saveArchives([state]); lastArchive = stamp; }
         if (wasActive && !state.active) { audioBlob = null; scheduleAutosave(true); }
         if (wasRetrying && !state.retrying) {
@@ -281,14 +293,12 @@ window.initNativeRecorder = function () {
     $('bgWarning').textContent = 'REGISTRAZIONE ANDROID · PUOI BLOCCARE LO SCHERMO';
     const section = document.querySelector('.retranscribe-section');
     if (section) {
-        const retry = document.createElement('button'); retry.className = 'retranscribe-btn'; retry.textContent = '🔄 Riprova audio non trascritto';
-        retry.onclick = () => {
+        window.retryPendingTranscription = () => {
             if (!window.nativeAudioSession) return showToast('Apri prima una registrazione salvata');
             if (!whisperKey) return showToast('Inserisci chiave Whisper');
             if (isRecording || isProcessing) return showToast('Attendi il completamento della registrazione');
             bridge.retry(window.nativeAudioSession, whisperKey, sttModel, $('languageSelect').value);
         };
-        section.appendChild(retry);
         const battery = document.createElement('button'); battery.className = 'model-refresh'; battery.textContent = '🔋 Impostazioni batteria'; battery.onclick = () => bridge.batterySettings(); section.appendChild(battery);
     }
     // Blob/data downloads from the existing PDF/TXT/SRT/VTT/PNG buttons use Android's save dialog.

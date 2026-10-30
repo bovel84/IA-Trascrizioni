@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
     private volatile boolean starting, retrying, diarizing;
     private final ExecutorService aiCancellation = Executors.newSingleThreadExecutor();
     private final ConcurrentMap<String, AiHttp.Control> aiRequests = new ConcurrentHashMap<>();
+    private volatile String retrySessionId = "";
     private String key, model, language;
     private boolean pendingStart;
     private static final int PLAYBACK_PERMISSION = 40;
@@ -112,6 +113,7 @@ public final class MainActivity extends Activity {
         if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
         captureSource = source; projectionData = null;
         key = apiKey; model = selectedModel; language = lang; starting = true;
+        retrySessionId = "";
         ArrayList<String> permissions = new ArrayList<>();
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.POST_NOTIFICATIONS);
@@ -132,7 +134,7 @@ public final class MainActivity extends Activity {
         if (focused && pendingStart) { pendingStart = false; begin(); }
         if(focused&&pendingImport!=null){Intent next=pendingImport;pendingImport=null;launchImport(next);}
     }
-    private void launchImport(Intent intent){try{startForegroundService(intent);}catch(Exception e){toast("Importazione non avviata: "+e.getMessage());}}
+    private void launchImport(Intent intent){try{retrySessionId="";startForegroundService(intent);}catch(Exception e){toast("Importazione non avviata: "+e.getMessage());}}
     private void begin() {
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app e premi Registra"); return; }
         try {
@@ -163,13 +165,14 @@ public final class MainActivity extends Activity {
     private String latest() { return getSharedPreferences("native", 0).getString("latest", ""); }
     private JSONObject snapshot(String id) throws Exception {
         File dir = session(id); JSONArray entries = new JSONArray(); long size = 0;
-        int pending = 0; File[] files = Transcriber.segments(dir);
+        int pending = 0, transcribed = 0, empty = 0; File[] files = Transcriber.segments(dir);
         boolean local=VoiceData.enabled(dir); JSONObject voiceNames=VoiceData.names(dir);
         for (File wav : files) {
             size += Math.max(0, wav.length() - 44);
             if (Transcriber.result(wav).exists()) {
+                transcribed++;
                 String text = new String(Files.readAllBytes(Transcriber.result(wav).toPath()), StandardCharsets.UTF_8);
-                if (text.trim().isEmpty()) continue;
+                if (text.trim().isEmpty()) { empty++; continue; }
                 JSONObject quality=VoiceData.readQuality(wav);
                 if(local) {
                     try {
@@ -204,10 +207,15 @@ public final class MainActivity extends Activity {
             } else pending++;
         }
         File[] partials = dir.listFiles((d,n) -> n.endsWith(".part"));
-        if (partials != null) for (File partial : partials) size += Math.max(0, partial.length() - 44);
+        int recoverable = 0;
+        if (partials != null) for (File partial : partials) {
+            size += Math.max(0, partial.length() - 44);
+            if (partial.length() > 44) recoverable++;
+        }
         boolean imported=new File(dir,"import.json").isFile(),incomplete=false;
         if(imported)try{incomplete=!VoiceData.read(new File(dir,"import.json")).optBoolean("decoded");}catch(Exception e){incomplete=true;}
-        return new JSONObject().put("sessionId", id).put("entries", entries).put("elapsedMs", size * 1000 / WavFile.BYTES_PER_SECOND).put("chunkCount", files.length).put("pending", pending+(incomplete?1:0)).put("sessionLocalVoices",local).put("importedAudio",imported).put("importIncomplete",incomplete);
+        return new JSONObject().put("sessionId", id).put("entries", entries).put("elapsedMs", size * 1000 / WavFile.BYTES_PER_SECOND).put("chunkCount", files.length).put("pending", pending+recoverable+(incomplete?1:0)).put("sessionLocalVoices",local).put("importedAudio",imported).put("importIncomplete",incomplete)
+            .put("partialCount",recoverable).put("transcribedCount",transcribed).put("emptyCount",empty).put("lastError",TranscriptionBatch.lastError(dir));
     }
     private void repair(File dir) throws IOException {
         if (RecordingService.active && dir.getName().equals(latest())) return;
@@ -330,7 +338,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String state() {
             try {
                 String imported=AudioImportService.sessionId;
-                String id = AudioImportService.active&&!imported.isEmpty()&&new File(getFilesDir(),imported).isDirectory()?imported:latest(); JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
+                String id = AudioImportService.active&&!imported.isEmpty()&&new File(getFilesDir(),imported).isDirectory()?imported:retrySessionId.isEmpty()?latest():retrySessionId; JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 boolean importSession=id.equals(AudioImportService.sessionId);
                 state.put("importActive",AudioImportService.active).put("importReady",importSession&&AudioImportService.ready).put("importSessionId",AudioImportService.sessionId)
                     .put("importPhase",AudioImportService.phase).put("importStatus",AudioImportService.status).put("importPercent",AudioImportService.percent);
@@ -347,25 +355,27 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void retry(String id, String apiKey, String selectedModel, String lang) {
             ui.post(() -> {
                 if (RecordingService.active || AudioImportService.active || retrying || diarizing || !hasWindowFocus()) return;
+                if (apiKey == null || apiKey.trim().isEmpty() || selectedModel == null || selectedModel.trim().isEmpty() || lang == null || !lang.matches("[a-z]{2}")) { toast("Inserisci chiave Whisper, modello e lingua"); return; }
                 try{if(new File(session(id),"import.json").isFile()){launchImport(new Intent(MainActivity.this,AudioImportService.class).putExtra("resume",id).putExtra("key",apiKey).putExtra("model",selectedModel).putExtra("language",lang));return;}}catch(Exception e){toast(e.getMessage());return;}
-                retrying = true;
+                retrying = true; retrySessionId = id;
                 worker.execute(() -> {
                     try {
                         File dir = session(id); repair(dir);
-                        NativeVoiceEngine engine=null;int pending=0;boolean quotaLimited=false;String lastError="";
+                        final NativeVoiceEngine[] engine = { null };
+                        TranscriptionBatch batch = new TranscriptionBatch(dir, wav -> {
+                            if(VoiceData.enabled(dir)&&!VoiceData.timeline(wav).exists()){
+                                try{if(engine[0]==null)engine[0]=new NativeVoiceEngine(MainActivity.this,dir);engine[0].analyse(wav);}
+                                catch(Exception|LinkageError e){try{NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}catch(Exception ignored){ /* Preserve full audio even when attribution fails. */ }}
+                            }
+                            Transcriber.transcribe(wav,apiKey,selectedModel,lang);
+                        });
                         try {
                             for(File wav:Transcriber.segments(dir)){
-                                if(quotaLimited&&!Transcriber.result(wav).exists()&&!Transcriber.hasCachedResponse(wav)){pending++;continue;}
-                                try{
-                                if(VoiceData.enabled(dir)&&!VoiceData.timeline(wav).exists()){
-                                    try{if(engine==null)engine=new NativeVoiceEngine(MainActivity.this,dir);engine.analyse(wav);}
-                                    catch(Exception|LinkageError e){try{NativeVoiceEngine.unavailable(wav,"Analisi voci non riuscita: "+e.getMessage());}catch(Exception ignored){ /* Transcribe the entire WAV even if voice metadata cannot be saved. */ }}
-                                }
-                                Transcriber.transcribe(wav,apiKey,selectedModel,lang);
-                                }catch(Exception e){pending++;lastError=e.getMessage();if(e instanceof Transcriber.QuotaLimited)quotaLimited=true;}
+                                batch.process(wav);
+                                RecordingService.status = batch.finish();
                             }
-                        }finally{if(engine!=null)engine.close();}
-                        RecordingService.status = pending==0?"Sessione recuperata e trascritta":"Audio conservato · "+pending+" segmenti in attesa · "+lastError;
+                        }finally{if(engine[0]!=null)engine[0].close();}
+                        RecordingService.status = batch.finish();
                     } catch (Exception e) { RecordingService.status = "Audio conservato · " + e.getMessage(); }
                     finally { retrying = false; }
                 });

@@ -10,6 +10,7 @@ dependencies {
     implementation files(rootProject.layout.buildDirectory.file('voice-deps/sherpa.aar')).builtBy(prepareVoices)
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
@@ -22,8 +23,8 @@ android {
         targetSdk 35
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
-        versionCode 22
-        versionName '2.7.0'
+        versionCode 23
+        versionName '2.7.1'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
