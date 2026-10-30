@@ -54,6 +54,7 @@ public class DocumentExportsTest {
     }
     @Test public void activityRecreationAndBlockedTranscriptionCannotLeaveAnEmptyDocument()throws Exception{
         MainActivity activity=(MainActivity)instrument.startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        MainActivity.RecorderBridge oldBridge=activity.new RecorderBridge();
         String id="session-"+System.currentTimeMillis();File session=new File(app.getFilesDir(),id);assertTrue(session.mkdir());
         File wav=new File(session,"000000000000.wav"),target=new File(root,"export.wav");
         try(WavFile out=new WavFile(wav)){out.write(new byte[32000],32000);}
@@ -70,6 +71,8 @@ public class DocumentExportsTest {
             Instrumentation.ActivityMonitor monitor=instrument.addMonitor(MainActivity.class.getName(),null,false);
             instrument.runOnMainSync(activity::recreate);recreated=(MainActivity)instrument.waitForMonitorWithTimeout(monitor,15000);instrument.removeMonitor(monitor);
             assertNotNull("Activity was not recreated",recreated);final MainActivity current=recreated;
+            // A callback already sent by the old WebView may arrive after destruction.
+            assertTrue(activity.isDestroyed());oldBridge.setTheme("light");instrument.waitForIdleSync();
             instrument.runOnMainSync(()->current.onActivityResult(30,Activity.RESULT_OK,new Intent().setData(Uri.fromFile(target))));
             waitForSaved(exports,target,32044);assertEquals(32044,wav.length());
         }finally{

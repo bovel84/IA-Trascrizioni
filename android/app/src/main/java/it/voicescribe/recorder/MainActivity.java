@@ -249,6 +249,7 @@ public final class MainActivity extends Activity {
     }
     public final class RecorderBridge {
         @JavascriptInterface public void setTheme(String theme){ui.post(()->{
+            if(web==null||isFinishing()||isDestroyed())return;
             boolean light="light".equals(theme);int color=light?0xfff4f7f6:0xff101519;
             getWindow().setStatusBarColor(color);getWindow().setNavigationBarColor(color);web.setBackgroundColor(color);
             int flags=getWindow().getDecorView().getSystemUiVisibility(),mask=android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;

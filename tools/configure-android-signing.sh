@@ -14,6 +14,7 @@ test -s "$signing_dir/keystore-password.txt"
 # They are never printed, passed as arguments or written in the repository.
 base64 < "$signing_dir/voicescribe-release.p12" | tr -d '\r\n' | \
   gh secret set VOICESCRIBE_KEYSTORE_B64 --repo "$repository"
-gh secret set VOICESCRIBE_KEYSTORE_PASSWORD --repo "$repository" < "$signing_dir/keystore-password.txt"
+tr -d '\r\n' < "$signing_dir/keystore-password.txt" | \
+  gh secret set VOICESCRIBE_KEYSTORE_PASSWORD --repo "$repository"
 gh workflow run android-apk.yml --repo "$repository" --ref main
 echo 'Firma permanente configurata. Build Android avviata su GitHub.'

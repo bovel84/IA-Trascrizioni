@@ -113,7 +113,7 @@ jobs:
           python3 tools/sign-android-apk.py \
             --input android/app/build/outputs/apk/release/app-release-unsigned.apk \
             --apksigner "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" \
-            --output "$RUNNER_TEMP/voicescribe-signed/VoiceScribe-2.7.3.apk"
+            --output "$RUNNER_TEMP/voicescribe-signed/VoiceScribe.apk"
           echo 'ready=true' >> "$GITHUB_OUTPUT"
           echo "### Official APK: permanent certificate, versionCode $VOICESCRIBE_VERSION_CODE" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload interface previews
