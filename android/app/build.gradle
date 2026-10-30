@@ -1,4 +1,11 @@
 plugins { id 'com.android.application' }
+def apkVersionCode = (System.getenv('VOICESCRIBE_VERSION_CODE') ?: '25').toInteger()
+if (apkVersionCode < 25 || apkVersionCode > 2100000000) {
+    throw new GradleException('VOICESCRIBE_VERSION_CODE must be between 25 and 2100000000')
+}
+// Only the isolated emulator fixture uses a test key. Release APKs are signed
+// after all checks by tools/sign-android-apk.py, using the pinned permanent key.
+def updateTestKey = System.getenv('VOICESCRIBE_TEST_KEYSTORE_FILE')
 def prepareVoices = tasks.register('prepareNativeVoices', Exec) {
     workingDir rootProject.projectDir.parentFile
     commandLine 'python3', 'tools/prepare-voices.py'
@@ -23,8 +30,31 @@ android {
         targetSdk 35
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
-        versionCode 24
-        versionName '2.7.2'
+        versionCode apkVersionCode
+        versionName '2.7.3'
+    }
+    signingConfigs {
+        updateFixture {
+            if (updateTestKey) {
+                storeFile file(updateTestKey)
+                storePassword System.getenv('VOICESCRIBE_TEST_KEYSTORE_PASSWORD')
+                keyAlias 'voicescribe'
+                keyPassword System.getenv('VOICESCRIBE_TEST_KEYSTORE_PASSWORD')
+                storeType 'PKCS12'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            debuggable false
+            minifyEnabled false
+        }
+        upgradeTest {
+            initWith debug
+            applicationIdSuffix '.updatetest'
+            matchingFallbacks = ['debug']
+            signingConfig updateTestKey ? signingConfigs.updateFixture : signingConfigs.debug
+        }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
