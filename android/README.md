@@ -1,5 +1,48 @@
 # VoiceScribe Pro Android — microfono e audio dei video
 
+## Firma permanente e aggiornamenti (2.7.3)
+
+Il package rimane `it.voicescribe.pro`. Gli APK ufficiali sono release non
+debuggabili firmate con la stessa chiave RSA privata; il certificato pubblico
+atteso è registrato in `signing-certificate.sha256`. Non viene generata una chiave
+sostitutiva quando manca la configurazione. La chiave privata non entra nel
+repository, nelle cache o negli artifact GitHub.
+
+Configurare una volta nei segreti Actions del repository:
+
+- `VOICESCRIBE_KEYSTORE_B64`: contenuto PKCS12 codificato Base64 (non è cifratura).
+- `VOICESCRIBE_KEYSTORE_PASSWORD`: password del PKCS12 e della chiave `voicescribe`.
+
+Il backup privato consegnato separatamente contiene la chiave e uno script
+`configura-firma.sh`. Dal computer/Termux con `gh` già autenticato, eseguire
+`bash configura-firma.sh` nella cartella estratta: aggiunge i due segreti e avvia
+il workflow. Conservare questo backup privatamente: serve per tutti gli aggiornamenti.
+
+Il workflow firma solo le build di `main`, dopo i controlli, e verifica il
+certificato con Android SDK `apksigner`. Il `versionCode` è `100000 + run_number`
+del workflow, così cresce anche tra ricompilazioni della stessa versione. Una
+riesecuzione dello stesso run conserva il proprio codice. Una vecchia esecuzione
+rieseguita non può essere usata per distribuire un aggiornamento più recente.
+Le build locali partono da 25: impostare `VOICESCRIBE_VERSION_CODE` a un valore
+superiore all'APK installato prima di distribuirle.
+
+Senza segreti il workflow pubblica soltanto `VoiceScribe-Unsigned-APK`, che non è
+installabile. Include il candidato release e il JAR ufficiale di `apksigner` per
+firmare localmente usando `tools/sign-android-apk.py` e la stessa chiave privata.
+`VoiceScribe-Audio-APK` contiene esclusivamente l'APK ufficiale firmato.
+
+La prova su emulatore usa una chiave temporanea separata e il package isolato
+`it.voicescribe.pro.updatetest`: installazione versione 25, scrittura di dati
+privati, `adb install -r` versione 26 e verifica che i dati rimangano. Il test non
+tocca il package reale dell'app.
+
+**Migrazione dalle vecchie firme debug:** per aggiornare un'app Android servono
+lo stesso package e la stessa chiave. Le vecchie build non conservavano la loro
+chiave privata; il certificato pubblico dentro l'APK non permette di ricostruirla.
+Prima della reinstallazione iniziale esportare e verificare progetti e audio.
+Non disinstallare se ci sono ancora registrazioni da recuperare. Gli aggiornamenti
+successivi firmati con la nuova chiave si installano sopra la nuova versione.
+
 ## Mappe Android, importazione e aspetto (2.7.0)
 
 - Corretto il router degli asset Android: il modulo delle mappe veniva incluso nell’APK ma restituito con HTTP 404 dalla WebView. La vista ora mostra il tema a dimensione leggibile; un elenco completo sostituisce il riquadro vuoto in caso di errore del modulo.
@@ -346,7 +389,7 @@ Aprire `android/` in Android Studio con JDK 17 e SDK 35, oppure:
 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Il workflow **Android APK** su GitHub Actions esegue build e test e pubblica l'APK debug installabile in **VoiceScribe-Audio-APK**. È avviabile manualmente da Actions e si attiva con modifiche al codice Android, HTML o adapter. La firma debug è temporanea per ogni build: APK di esecuzioni diverse possono avere certificati differenti e richiedere reinstallazione (esportare i dati prima). Nessuna chiave di firma viene conservata nella cache o nel repository. Per aggiornamenti stabili occorre una chiave release privata configurata con autorizzazione esplicita.
+Il workflow **Android APK** esegue build e test e pubblica la release con firma permanente in **VoiceScribe-Audio-APK** quando sono configurati i segreti indicati sopra. È avviabile manualmente da Actions e si attiva con modifiche al codice Android, HTML o adapter. Gli APK debug locali servono allo sviluppo; non distribuirli come aggiornamenti della release.
 
 Controlli: sintassi/ID, **59 test web**, **22 test adapter Android simulato**, **3 test JVM WAV**; sorgenti compilati contro API 35. Anteprima grafica verificata a 390×844, senza scorrimento orizzontale. Questi controlli non sono una prova fisica del nuovo APK sul telefono.
 
@@ -369,6 +412,6 @@ Controlli: sintassi/ID, **59 test web**, **22 test adapter Android simulato**, *
 - `app/src/main/assets/vendor/`: versioni già usate di jsPDF 2.5.1 e Chart.js 4.4.2.
 - `../sw.js`: nuova cache con adapter per la versione web.
 - `../tools/native-bridge-test.js`: regressioni di UI/servizio/progetti/export.
-- `../.github/workflows/android-apk.yml`: build aggiornata, test web/adapter e firma di prova standard.
+- `../.github/workflows/android-apk.yml`: build, test Android/web, prova di aggiornamento e firma permanente della release.
 
 Riferimenti: [contenuti locali WebView](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content), [bridge JavaScript](https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges), [servizio microphone](https://developer.android.com/develop/background-work/services/fgs/service-types#microphone).

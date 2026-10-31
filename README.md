@@ -1,5 +1,16 @@
 # VoiceScribe Pro
 
+## Aggiornamenti Android — 2.7.3
+
+Gli APK ufficiali usano una chiave permanente e un codice versione crescente.
+La build verifica il certificato prima della pubblicazione e non distribuisce più
+APK con firme debug diverse a ogni esecuzione. Il test Android installa due
+versioni consecutive e controlla che file, preferenze e dati WebView restino presenti.
+La prima configurazione richiede i due segreti descritti in [android/README.md](android/README.md).
+I vecchi APK con firma temporanea richiedono una migrazione iniziale: esportare i
+progetti e gli audio prima di disinstallare; la nuova firma non può sostituire la
+chiave privata perduta delle build precedenti.
+
 ## Esportazione Android affidabile — 2.7.2
 
 Il salvataggio dei file usa una coda indipendente dalla trascrizione e conserva su disco sorgente e stato prima di aprire il selettore documenti. La ricreazione della schermata o del processo non perde il riferimento all'audio. I WAV preparati per l'esportazione restano nei file privati dell'app fino al completamento; un errore conserva il file per **Riprova salvataggio**. **Annulla salvataggio** elimina soltanto l'eventuale copia temporanea, lasciando i segmenti registrati e gli originali importati.
