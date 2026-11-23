@@ -1,13 +1,20 @@
 package it.voicescribe.recorder;
 
+import android.Manifest;
 import android.app.Instrumentation;
 import android.content.Intent;
+import android.os.Build;
+import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.webkit.WebView;
 import android.view.ViewGroup;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.*;
 import org.junit.runner.RunWith;
+import org.json.JSONObject;
+import org.json.JSONArray;
+import java.io.File;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
@@ -39,5 +46,98 @@ public class PackagedWorkspaceTest {
     @Test public void appearanceAndBusyIndicatorWorkInTheNativeShell()throws Exception{
         assertEquals("true",js("(()=>{$('themeSelect').value='light';$('themeSelect').onchange({target:$('themeSelect')});setWorkTask('import','Preparazione audio · 3 di 8','Sorgente conservata',35);return document.documentElement.dataset.theme==='light'&&!$('workIndicator').hidden&&$('workProgress').value===35;})()"));
         assertEquals("true",js("(()=>{$('themeToggle').click();clearWorkTask('import');return document.documentElement.dataset.theme==='dark'&&$('workIndicator').hidden;})()"));
+    }
+
+    @Test public void oneTapRecordsAndSavesAudioWithoutGroq() throws Exception {
+        Assume.assumeTrue(Build.VERSION.SDK_INT >= 28);
+        instrument.getUiAutomation().grantRuntimePermission(
+            instrument.getTargetContext().getPackageName(), Manifest.permission.RECORD_AUDIO);
+        instrument.waitForIdleSync();
+        try {
+            js("whisperKey = ''; $('captureSourceSelect').value = 'microphone'; $('recordBtn').click(); true");
+            JSONObject captured = recorderState();
+            long deadline = SystemClock.elapsedRealtime() + 20000;
+            while ((!captured.optBoolean("recording") || captured.optLong("elapsedMs") < 1000)
+                && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                captured = recorderState();
+            }
+            assertTrue(captured.toString(), captured.optBoolean("recording") && captured.optLong("elapsedMs") >= 1000);
+            String session = captured.getString("sessionId");
+            js("syncNativeRecorder(); $('recordBtn').click(); true");
+            deadline = SystemClock.elapsedRealtime() + 10000;
+            JSONObject finished = recorderState();
+            while (finished.optBoolean("active") && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                finished = recorderState();
+            }
+            assertFalse(finished.toString(), finished.optBoolean("active"));
+            assertEquals(session, finished.getString("sessionId"));
+            assertEquals(0, finished.optInt("transcribedCount", -1));
+            assertTrue(finished.toString(), finished.optInt("pending") > 0);
+            File[] audio = Transcriber.segments(new File(instrument.getTargetContext().getFilesDir(), session));
+            assertTrue("WAV with PCM samples must be finalized on stop", audio.length > 0 && audio[0].length() > 44);
+            assertEquals("true", js("syncNativeRecorder(); savedRecordings.some(r => r.nativeAudioSession === '" + session + "' && r.hasAudio)"));
+        } finally {
+            js("AndroidRecorder.stop(); true");
+        }
+    }
+
+    private JSONObject recorderState() throws Exception {
+        return new JSONObject(js("JSON.parse(AndroidRecorder.state())"));
+    }
+
+    @Test public void screenRecordingProducesAnMp4AfterAndroidConsent() throws Exception {
+        JSONArray before = new JSONArray(js("JSON.parse(AndroidRecorder.screenVideos())"));
+        try {
+            js("$('captureSourceSelect').value = 'screen'; $('recordBtn').click(); true");
+            long deadline = SystemClock.elapsedRealtime() + 15000;
+            boolean accepted = false;
+            while (!accepted && SystemClock.elapsedRealtime() < deadline) {
+                accepted = approveScreenConsent();
+                if (!accepted) Thread.sleep(150);
+            }
+            assertTrue("Android screen consent should appear", accepted);
+
+            deadline = SystemClock.elapsedRealtime() + 18000;
+            JSONObject capture = recorderState();
+            while ((!capture.optBoolean("screenRecording") || capture.optLong("screenElapsedMs") < 1800)
+                && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(150);
+                capture = recorderState();
+            }
+            assertTrue(capture.toString(), capture.optBoolean("screenRecording"));
+
+            js("syncNativeRecorder(); $('recordBtn').click(); true");
+            deadline = SystemClock.elapsedRealtime() + 12000;
+            JSONObject stopped = recorderState();
+            while (stopped.optBoolean("screenActive") && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                stopped = recorderState();
+            }
+            assertFalse(stopped.toString(), stopped.optBoolean("screenActive"));
+            JSONArray after = new JSONArray(js("JSON.parse(AndroidRecorder.screenVideos())"));
+            assertEquals(stopped.toString(), before.length() + 1, after.length());
+            File file = ScreenVideos.open(instrument.getTargetContext().getFilesDir(), after.getJSONObject(0).getString("name"));
+            assertTrue("The newly saved MP4 must contain readable video frames", ScreenVideos.hasFrames(file));
+            assertEquals("true", js("syncNativeRecorder(); !$('screenVideosSection').hidden"));
+        } finally {
+            js("AndroidRecorder.stop(); true");
+        }
+    }
+
+    private boolean approveScreenConsent() {
+        AccessibilityNodeInfo root = instrument.getUiAutomation().getRootInActiveWindow();
+        if (root == null || !"com.android.systemui".equals(String.valueOf(root.getPackageName()))) return false;
+        for (String label : new String[] {"Start now", "Share screen", "Share"}) {
+            for (AccessibilityNodeInfo button : root.findAccessibilityNodeInfosByText(label)) {
+                if (button.isClickable() && button.isEnabled() && label.equals(String.valueOf(button.getText()))
+                    && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+            }
+        }
+        for (AccessibilityNodeInfo button : root.findAccessibilityNodeInfosByViewId("android:id/button1")) {
+            if (button.isEnabled() && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+        }
+        return false;
     }
 }

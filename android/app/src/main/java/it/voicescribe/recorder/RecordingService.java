@@ -13,8 +13,10 @@ import java.util.concurrent.*;
 public final class RecordingService extends Service {
     static final String STOP = "it.voicescribe.STOP";
     static final String MICROPHONE = "microphone", PLAYBACK = "playback";
+    private static final String NO_PLAYBACK_AUDIO = "Nessun audio ricevuto. Verifica la riproduzione. Per Teams, importa il VTT o l’MP4 in Progetti.";
     static volatile String source = MICROPHONE;
     static volatile boolean active, recording, paused;
+    static volatile boolean automaticTranscription;
     static volatile String status = "Pronto";
     static volatile double level;
     static volatile String voiceStatus="Riconoscimento voci pronto";
@@ -75,11 +77,11 @@ public final class RecordingService extends Service {
             captureIssue = null; level = 0;
             boolean playback = PLAYBACK.equals(source);
             if (playback && Build.VERSION.SDK_INT < 29) throw new IOException("Audio del dispositivo disponibile da Android 10");
-            if (Build.VERSION.SDK_INT >= 29) startForeground(1, notification(playback ? "Avvio audio del dispositivo…" : "Avvio microfono…"),
+            status = playback ? "Avvio audio del dispositivo…" : "Avvio microfono…";
+            if (Build.VERSION.SDK_INT >= 29) startForeground(1, notification(status),
                 playback ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION : ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-            else startForeground(1, notification("Avvio microfono…"));
+            else startForeground(1, notification(status));
             key = intent.getStringExtra("key"); model = intent.getStringExtra("model"); language = intent.getStringExtra("language");
-            if (key == null || key.trim().isEmpty()) throw new IOException("Chiave Groq mancante");
             if (playback) {
                 Intent consent = intent.getParcelableExtra("projectionData");
                 int result = intent.getIntExtra("projectionResult", Activity.RESULT_CANCELED);
@@ -91,13 +93,16 @@ public final class RecordingService extends Service {
             }
             session = new File(getFilesDir(), "session-" + System.currentTimeMillis());
             if (!session.mkdir()) throw new IOException("Impossibile creare la sessione");
-            batch = new TranscriptionBatch(session, this::transcribeSegment);
+            batch = key != null && !key.trim().isEmpty() ? new TranscriptionBatch(session, this::transcribeSegment) : null;
+            automaticTranscription = batch != null;
             localVoices=getSharedPreferences("native",0).getBoolean("localVoices",true);
             VoiceData.write(new File(session,"native-voices.json"),new org.json.JSONObject().put("enabled",localVoices).put("model",VoiceData.MODEL));
             VoiceData.write(new File(session,"transcription-settings.json"),new org.json.JSONObject().put("glossary",SpeechContext.glossary(getSharedPreferences("native",0).getString("glossary",""))).put("model",model).put("language",language));
-            voiceStatus=localVoices ? "Riconoscimento sul dispositivo · attendo il primo segmento" : "Attribuzione manuale dei partecipanti";
+            voiceStatus = !localVoices ? "Attribuzione manuale dei partecipanti"
+                : batch == null ? "Riconoscimento voci disponibile con la trascrizione"
+                : "Riconoscimento sul dispositivo · attendo il primo segmento";
             getSharedPreferences("native", 0).edit().putString("latest", session.getName()).apply();
-            active = recording = true; paused = false; stopping = false;
+            active = true; recording = false; paused = false; stopping = false;
             // AudioRecord delivers PCM to application code: that thread must keep writing
             // and closing segments while the CPU would otherwise sleep. No screen lock.
             cpu = ((PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VoiceScribe:Capture");
@@ -116,6 +121,8 @@ public final class RecordingService extends Service {
         long totalBytes = 0, segmentBytes = 0;
         long silentBytes = 0;
         boolean silenceWarning = false;
+        boolean playbackSignal = false;
+        boolean captureStarted = false;
         SpeakerSelection capturedSpeaker = selectedSpeaker;
         String failure = null;
         try {
@@ -135,11 +142,15 @@ public final class RecordingService extends Service {
             if (audio.getState() != AudioRecord.STATE_INITIALIZED) throw new IOException("Sorgente audio non disponibile");
             audio.startRecording();
             if (audio.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) throw new IOException("Registrazione non avviata");
+            if (stopping || captureIssue != null) return;
+            captureStarted = true;
+            recording = true;
             if (Build.VERSION.SDK_INT >= 29) audio.registerAudioRecordingCallback(getMainExecutor(), new AudioManager.AudioRecordingCallback() {
                 public void onRecordingConfigChanged(java.util.List<AudioRecordingConfiguration> configs) {
                     for (AudioRecordingConfiguration config : configs) {
                         if (audio != null && config.getClientAudioSessionId() == audio.getAudioSessionId() && config.isClientSilenced()) {
-                            captureIssue = status = "Sorgente audio silenziata dal sistema: sessione interrotta";
+                            captureIssue = status = PLAYBACK.equals(source) ? NO_PLAYBACK_AUDIO
+                                : "Android ha silenziato il microfono. La registrazione è stata interrotta.";
                             recording = false;
                         }
                     }
@@ -148,7 +159,7 @@ public final class RecordingService extends Service {
             String captureStatus = PLAYBACK.equals(source) ? "Audio del dispositivo · apri l'app e avvia il video" : "Registrazione in corso · schermo bloccabile · segmenti di circa 30 s";
             announce(captureStatus);
             byte[] buf = new byte[4096];
-            while (recording) {
+            while (recording && !stopping && captureIssue == null) {
                 int n = audio.read(buf, 0, buf.length, AudioRecord.READ_BLOCKING);
                 if (n < 0) throw new IOException("Registrazione interrotta (AudioRecord " + n + ")");
                 if (n == 0) continue;
@@ -161,9 +172,10 @@ public final class RecordingService extends Service {
                     continue;
                 }
                 if (PLAYBACK.equals(source)) {
+                    playbackSignal = playbackSignal || peak > 0;
                     silentBytes = peak == 0 ? silentBytes + n : 0;
                     boolean silent = silentBytes >= WavFile.BYTES_PER_SECOND * 8L;
-                    if (silent && !silenceWarning) announce("Nessun audio ricevuto · avvia il video; l'app potrebbe vietare la cattura");
+                    if (silent && !silenceWarning) announce(NO_PLAYBACK_AUDIO);
                     else if (!silent && silenceWarning) announce(captureStatus);
                     silenceWarning = silent;
                 }
@@ -185,7 +197,9 @@ public final class RecordingService extends Service {
                     submit(finalizeSegment(partial)); partial = null; segmentBytes = 0;
                 }
             }
-        } catch (Exception e) { failure = "Registrazione interrotta: " + e.getMessage(); }
+        } catch (Exception e) {
+            failure = (captureStarted ? "Registrazione interrotta: " : "Avvio fallito: ") + e.getMessage();
+        }
         finally {
             recording = false; paused = false;
             level = 0;
@@ -197,17 +211,23 @@ public final class RecordingService extends Service {
             catch (Exception e) { failure = "Audio parziale da recuperare: " + e.getMessage(); }
             releaseProjection();
             if (captureIssue != null) failure = captureIssue;
+            if (failure == null && PLAYBACK.equals(source) && !playbackSignal) failure = NO_PLAYBACK_AUDIO;
+            if (failure == null && totalBytes == 0) failure = "Nessun audio acquisito.";
+            String savedStatus = batch == null ? "Audio salvato in Progetti · trascrizione in attesa della chiave Groq"
+                : "Audio salvato · completo le trascrizioni";
             if (failure != null) status = failure;
-            else if (stopping) status = "Audio salvato · completo le trascrizioni";
-            final String captureFailure = failure;
-            // Keep CPU alive for this bounded final queue too. Every request has timeouts.
-            uploads.execute(() -> {
-                if (captureFailure != null) status = captureFailure;
-                else status = batch.finish();
-                if(voiceEngine!=null){voiceEngine.close();voiceEngine=null;}
-                releaseCpu();
-                new Handler(getMainLooper()).post(() -> { active = false; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); });
-            });
+            else status = savedStatus;
+            if (batch == null) {
+                stopCaptureService();
+            } else {
+                final String captureFailure = failure;
+                // Keep CPU alive for this bounded final queue too. Every request has timeouts.
+                uploads.execute(() -> {
+                    status = captureFailure != null ? captureFailure : batch.finish();
+                    if(voiceEngine!=null){voiceEngine.close();voiceEngine=null;}
+                    stopCaptureService();
+                });
+            }
             uploads.shutdown();
         }
     }
@@ -217,10 +237,16 @@ public final class RecordingService extends Service {
         return wav;
     }
     private void submit(File file) {
+        if (batch == null) return;
         uploads.execute(() -> {
             batch.process(file);
             if (recording) announce((paused ? "In pausa · " : "Registrazione in corso · ") + batch.finish());
         });
+    }
+    private void stopCaptureService() {
+        key = null;
+        releaseCpu();
+        new Handler(getMainLooper()).post(() -> { active = false; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); });
     }
     private void transcribeSegment(File file) throws Exception {
                 if(localVoices && !VoiceData.timeline(file).exists()){

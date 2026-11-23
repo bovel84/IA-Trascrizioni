@@ -4,13 +4,20 @@ import android.Manifest;
 import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
+import android.graphics.Rect;
 import android.media.projection.MediaProjectionConfig;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
+import android.view.Gravity;
+import android.view.ViewGroup;
 import android.webkit.*;
 import android.widget.Toast;
+import android.widget.FrameLayout;
+import android.widget.MediaController;
+import android.widget.VideoView;
 import org.json.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +30,7 @@ public final class MainActivity extends Activity {
     private static final String PAGE = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
     private volatile TranscriptPlayer transcriptPlayer;
+    private Dialog screenPreview;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService aiWorker = new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
@@ -32,7 +40,7 @@ public final class MainActivity extends Activity {
     private volatile String retrySessionId = "";
     private String key, model, language;
     private boolean pendingStart;
-    private static final int PLAYBACK_PERMISSION = 40;
+    private static final int PROJECTION_PERMISSION = 40;
     private String captureSource = RecordingService.MICROPHONE;
     private boolean awaitingProjection;
     private Intent projectionData;
@@ -54,7 +62,7 @@ public final class MainActivity extends Activity {
                         .setType(entry.type).putExtra(Intent.EXTRA_TITLE,entry.name)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION),30);
                     return true;
-                } catch(Exception e){toast("Selettore file non disponibile: riprova Scarica Audio");return false;}
+                } catch(Exception e){toast("Selettore file non disponibile. Riprova a salvare il file.");return false;}
             }
             public void changed(String message){
                 if(message.startsWith("File salvato")||message.contains("non riuscit"))toast(message);
@@ -108,38 +116,52 @@ public final class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (filePicker != null) filePicker.onReceiveValue(null);
                 filePicker = callback;
-                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*"), 10); return true;
+                boolean transcript = Arrays.stream(params.getAcceptTypes()).anyMatch(type -> type.contains(".vtt") || type.contains("text/vtt"));
+                // Document providers may report VTT as text/plain or application/octet-stream.
+                // The page validates the WebVTT header before saving the chosen file.
+                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(transcript ? "*/*" : "audio/*"), 10);
+                return true;
             }
         });
         web.loadUrl(PAGE);
     }
     private void toast(String text) { Toast.makeText(this, text, Toast.LENGTH_LONG).show(); }
     private void startError(String message) {
-        starting = false; pendingStart = false; RecordingService.status = message;
+        starting = false; pendingStart = false;
+        if (ScreenRecordingService.SOURCE.equals(captureSource)) ScreenRecordingService.status = message;
+        else RecordingService.status = message;
         awaitingProjection = false; projectionData = null; key = null;
         if (web != null) web.evaluateJavascript("window.nativeRecorderError && window.nativeRecorderError(" + JSONObject.quote(message) + ")", null);
     }
     private void requestStart(String apiKey, String selectedModel, String lang, String source) {
-        if (RecordingService.active || AudioImportService.active || starting || retrying || diarizing) return;
+        if (starting || RecordingService.active || ScreenRecordingService.active) return;
+        captureSource = source;
+        if (AudioImportService.active || retrying || diarizing) {
+            startError("Attendi il completamento dell’elaborazione");
+            return;
+        }
         if(transcriptPlayer!=null)transcriptPlayer.close();
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare la registrazione"); return; }
         if (RecordingService.PLAYBACK.equals(source) && Build.VERSION.SDK_INT < 29) { startError("L'audio del dispositivo richiede Android 10 o successivo"); return; }
-        if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
-        captureSource = source; projectionData = null;
-        key = apiKey; model = selectedModel; language = lang; starting = true;
+        boolean screen = ScreenRecordingService.SOURCE.equals(source);
+        projectionData = null;
+        if (screen) ScreenRecordingService.status = "";
+        boolean transcriptionConfigured = selectedModel != null && !selectedModel.trim().isEmpty()
+            && lang != null && lang.matches("[a-z]{2}");
+        key = transcriptionConfigured && apiKey != null ? apiKey.trim() : "";
+        model = selectedModel; language = lang; starting = true;
         retrySessionId = "";
-        ArrayList<String> permissions = new ArrayList<>();
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.POST_NOTIFICATIONS);
-        if (!permissions.isEmpty()) { requestPermissions(permissions.toArray(new String[0]), 20); return; }
+        if (!screen && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, 20);
+            return;
+        }
         begin();
     }
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request != 20) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { startError("Permesso microfono negato"); return; }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-            toast("Notifiche negate: usa Ferma nell'app; servizio visibile in App attive");
         pendingStart = true;
         if (hasWindowFocus()) { pendingStart = false; begin(); }
     }
@@ -151,25 +173,80 @@ public final class MainActivity extends Activity {
     }
     private void launchImport(Intent intent){try{retrySessionId="";startForegroundService(intent);}catch(Exception e){toast("Importazione non avviata: "+e.getMessage());}}
     private void begin() {
-        if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app e premi Registra"); return; }
+        boolean screen = ScreenRecordingService.SOURCE.equals(captureSource);
+        if (isDestroyed() || isFinishing() || (!hasWindowFocus() && !(screen && projectionData != null))) {
+            startError("Torna nell'app e premi Registra");
+            return;
+        }
         try {
-            if (RecordingService.PLAYBACK.equals(captureSource) && projectionData == null) {
+            if ((screen || RecordingService.PLAYBACK.equals(captureSource)) && projectionData == null) {
                 if (awaitingProjection) return;
                 MediaProjectionManager manager = getSystemService(MediaProjectionManager.class);
                 Intent consent = Build.VERSION.SDK_INT >= 34
                     ? manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
                     : manager.createScreenCaptureIntent();
                 awaitingProjection = true;
-                startActivityForResult(consent, PLAYBACK_PERMISSION);
+                startActivityForResult(consent, PROJECTION_PERMISSION);
                 return;
             }
-            Intent service = new Intent(this, RecordingService.class).putExtra("key", key).putExtra("model", model).putExtra("language", language)
-                .putExtra("source", captureSource);
+            Intent service = screen ? screenRecordingIntent()
+                : new Intent(this, RecordingService.class).putExtra("key", key).putExtra("model", model)
+                    .putExtra("language", language).putExtra("source", captureSource);
             if (projectionData != null) service.putExtra("projectionResult", projectionResult).putExtra("projectionData", projectionData);
             startForegroundService(service);
             projectionData = null; // A consent token is consumed once, never reused for another recording.
             ui.postDelayed(() -> { starting = false; key = null; }, 400);
         } catch (Exception e) { startError("Avvio non consentito: " + e.getMessage()); }
+    }
+    private Intent screenRecordingIntent() {
+        int width, height, density;
+        if (Build.VERSION.SDK_INT >= 30) {
+            Rect bounds = getWindowManager().getMaximumWindowMetrics().getBounds();
+            width = bounds.width();
+            height = bounds.height();
+            density = getResources().getConfiguration().densityDpi;
+        } else {
+            DisplayMetrics display = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(display);
+            width = display.widthPixels;
+            height = display.heightPixels;
+            density = display.densityDpi;
+        }
+        return new Intent(this, ScreenRecordingService.class)
+            .putExtra("width", width).putExtra("height", height).putExtra("density", density);
+    }
+
+    private void previewScreenVideo(String name) {
+        if (!hasWindowFocus() || isFinishing() || isDestroyed() || ScreenRecordingService.active
+            || RecordingService.active || screenPreview != null) return;
+        try {
+            File file = ScreenVideos.open(getFilesDir(), name);
+            FrameLayout frame = new FrameLayout(this);
+            frame.setMinimumHeight(getResources().getDisplayMetrics().heightPixels / 2);
+            VideoView video = new VideoView(this);
+            frame.addView(video, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+            AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Video dello schermo")
+                .setView(frame).setPositiveButton("Chiudi", null).create();
+            MediaController controller = new MediaController(this);
+            video.setMediaController(controller);
+            video.setOnErrorListener((player, what, extra) -> {
+                toast("Impossibile riprodurre il video");
+                dialog.dismiss();
+                return true;
+            });
+            dialog.setOnDismissListener(ignored -> {
+                video.stopPlayback();
+                screenPreview = null;
+            });
+            screenPreview = dialog;
+            dialog.show();
+            video.setVideoPath(file.getAbsolutePath());
+            video.start();
+        } catch (IOException | RuntimeException e) {
+            if (screenPreview != null) screenPreview.dismiss();
+            toast("Impossibile aprire il video");
+        }
     }
     private File session(String id) throws IOException {
         if (id == null || !id.matches("session-[0-9]{13}")) throw new IOException("Sessione non valida");
@@ -256,10 +333,12 @@ public final class MainActivity extends Activity {
             getWindow().getDecorView().setSystemUiVisibility(light?flags|mask:flags&~mask);
         });}
         @JavascriptInterface public void importAudio(String apiKey,String selectedModel,String lang){ui.post(()->{
-            if(RecordingService.active||AudioImportService.active||starting||retrying||diarizing)return;
+            if(RecordingService.active||ScreenRecordingService.active||AudioImportService.active||starting||retrying||diarizing)return;
             if(apiKey==null||apiKey.trim().isEmpty()||selectedModel==null||selectedModel.trim().isEmpty()||lang==null||!lang.matches("[a-z]{2}")){toast("Inserisci chiave Whisper, modello e lingua");return;}
             importKey=apiKey;importModel=selectedModel;importLanguage=lang;
-            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),50);
+            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"audio/*", "video/mp4"})
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 50);
         });}
         @JavascriptInterface public void cancelImport(){ui.post(()->{if(AudioImportService.active)startService(new Intent(MainActivity.this,AudioImportService.class).setAction(AudioImportService.CANCEL));});}
         @JavascriptInterface public void selectSpeaker(int id, String name) {
@@ -269,7 +348,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void diarize(String requestId, String sessionId, String apiKey, String lang) {
             if (!requestId.matches("[0-9]{1,12}")) return;
             ui.post(() -> {
-                if (RecordingService.active || AudioImportService.active || starting || retrying || diarizing) { aiReply(requestId, 0, "", "Attendi il completamento della registrazione"); return; }
+                if (RecordingService.active || ScreenRecordingService.active || AudioImportService.active || starting || retrying || diarizing) { aiReply(requestId, 0, "", "Attendi il completamento della registrazione"); return; }
                 diarizing = true;
                 worker.execute(() -> {
                     File audio = null;
@@ -329,16 +408,25 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void stopListening(){ui.post(()->{if(transcriptPlayer!=null)transcriptPlayer.close();});}
         @JavascriptInterface public void start(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.MICROPHONE)); }
         @JavascriptInterface public void startPlayback(String apiKey, String selectedModel, String lang) { ui.post(() -> requestStart(apiKey, selectedModel, lang, RecordingService.PLAYBACK)); }
-        @JavascriptInterface public void stop() { ui.post(() -> { if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP)); }); }
+        @JavascriptInterface public void startScreen() { ui.post(() -> requestStart(null, null, null, ScreenRecordingService.SOURCE)); }
+        @JavascriptInterface public void stop() { ui.post(() -> {
+            if (ScreenRecordingService.active) startService(new Intent(MainActivity.this, ScreenRecordingService.class).setAction(ScreenRecordingService.STOP));
+            else if (RecordingService.active) startService(new Intent(MainActivity.this, RecordingService.class).setAction(RecordingService.STOP));
+        }); }
         @JavascriptInterface public void pause(boolean value) { if (RecordingService.recording) RecordingService.paused = value; }
         @JavascriptInterface public String state() {
             try {
+                boolean screenActive = ScreenRecordingService.active;
                 String imported=AudioImportService.sessionId;
-                String id = AudioImportService.active&&!imported.isEmpty()&&new File(getFilesDir(),imported).isDirectory()?imported:retrySessionId.isEmpty()?latest():retrySessionId; JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
+                String id = screenActive ? "" : AudioImportService.active&&!imported.isEmpty()&&new File(getFilesDir(),imported).isDirectory()?imported:retrySessionId.isEmpty()?latest():retrySessionId;
+                JSONObject state = id.isEmpty() ? new JSONObject() : snapshot(id);
                 boolean importSession=id.equals(AudioImportService.sessionId);
                 state.put("importActive",AudioImportService.active).put("importReady",importSession&&AudioImportService.ready).put("importSessionId",AudioImportService.sessionId)
                     .put("importPhase",AudioImportService.phase).put("importStatus",AudioImportService.status).put("importPercent",AudioImportService.percent);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
+                    .put("screenActive", screenActive).put("screenRecording", ScreenRecordingService.recording)
+                    .put("screenElapsedMs", ScreenRecordingService.elapsedMs()).put("screenStatus", ScreenRecordingService.status)
+                    .put("automaticTranscription", RecordingService.active && RecordingService.automaticTranscription)
                     .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("listening",transcriptPlayer!=null&&transcriptPlayer.isPlaying())
                     .put("exportBusy",documentExports.busy()).put("exportFailed",documentExports.failed()).put("exportStatus",documentExports.status())
                     .put("source", RecordingService.source).put("localVoices",RecordingService.active?RecordingService.localVoices:getSharedPreferences("native",0).getBoolean("localVoices",true)).put("voiceStatus",RecordingService.voiceStatus).put("status", RecordingService.status).toString();
@@ -349,9 +437,18 @@ public final class MainActivity extends Activity {
             if (dirs != null) { Arrays.sort(dirs, Comparator.comparing(File::getName).reversed()); for (File dir : dirs) try { data.put(snapshot(dir.getName())); } catch (Exception ignored) { } }
             return data.toString();
         }
+        @JavascriptInterface public String screenVideos() {
+            try { return ScreenVideos.list(getFilesDir(), !starting && !ScreenRecordingService.active).toString(); }
+            catch (JSONException e) { return "[]"; }
+        }
+        @JavascriptInterface public void playScreenVideo(String name) { ui.post(() -> previewScreenVideo(name)); }
+        @JavascriptInterface public void exportScreenVideo(String name) {
+            documentExports.prepare(() -> new DocumentExports.Entry(
+                ScreenVideos.open(getFilesDir(), name), "VoiceScribe-" + name, "video/mp4", false));
+        }
         @JavascriptInterface public void retry(String id, String apiKey, String selectedModel, String lang) {
             ui.post(() -> {
-                if (RecordingService.active || AudioImportService.active || retrying || diarizing || !hasWindowFocus()) return;
+                if (RecordingService.active || ScreenRecordingService.active || AudioImportService.active || retrying || diarizing || !hasWindowFocus()) return;
                 if (apiKey == null || apiKey.trim().isEmpty() || selectedModel == null || selectedModel.trim().isEmpty() || lang == null || !lang.matches("[a-z]{2}")) { toast("Inserisci chiave Whisper, modello e lingua"); return; }
                 try{if(new File(session(id),"import.json").isFile()){launchImport(new Intent(MainActivity.this,AudioImportService.class).putExtra("resume",id).putExtra("key",apiKey).putExtra("model",selectedModel).putExtra("language",lang));return;}}catch(Exception e){toast(e.getMessage());return;}
                 retrying = true; retrySessionId = id;
@@ -418,11 +515,16 @@ public final class MainActivity extends Activity {
             else if(web!=null)web.evaluateJavascript("window.nativeImportRequested=false",null);
             importKey=null;importModel=null;importLanguage=null;return;
         }
-        if (request == PLAYBACK_PERMISSION) {
+        if (request == PROJECTION_PERMISSION) {
             if (!starting || !awaitingProjection) return;
             awaitingProjection = false;
-            if (result != RESULT_OK || data == null) { startError("Cattura audio del dispositivo annullata"); return; }
+            boolean screen = ScreenRecordingService.SOURCE.equals(captureSource);
+            if (result != RESULT_OK || data == null) {
+                startError(screen ? "Condivisione dello schermo annullata" : "Cattura audio del dispositivo annullata");
+                return;
+            }
             projectionData = data; projectionResult = result;
+            if (screen) { begin(); return; }
             pendingStart = true;
             if (hasWindowFocus()) { pendingStart = false; begin(); }
             return;
@@ -434,6 +536,7 @@ public final class MainActivity extends Activity {
     public void onBackPressed() { web.evaluateJavascript("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))", null); moveTaskToBack(true); }
     protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
     protected void onPause() {
+        if (screenPreview != null) screenPreview.dismiss();
         if(transcriptPlayer!=null)transcriptPlayer.close();
         if (web != null) { web.evaluateJavascript("typeof autosaveNow === 'function' && autosaveNow()", null); web.onPause(); }
         super.onPause();

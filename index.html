@@ -732,10 +732,11 @@
                 <div class="session-controls">
                 <div class="recording-section"><div class="recorder-caption"><span class="ready-dot"></span> REGISTRATORE</div>
                     <div class="audio-source" id="nativeAudioSource" hidden>
-                        <label for="captureSourceSelect">Sorgente audio</label>
+                        <label for="captureSourceSelect">Modalità di registrazione</label>
                         <select class="control-select" id="captureSourceSelect" aria-describedby="captureSourceHint">
                             <option value="microphone">Microfono</option>
                             <option value="playback" id="playbackSourceOption">Audio del dispositivo (video)</option>
+                            <option value="screen" id="screenSourceOption" hidden>Video dello schermo</option>
                         </select>
                         <p id="captureSourceHint" aria-live="polite"></p>
                     </div>
@@ -755,6 +756,7 @@
                         <div class="record-rings"></div>
                     </div>
                     <div class="timer" id="timer" aria-label="Durata registrazione">00:00</div>
+                    <div class="timer" id="screenTimer" aria-label="Durata video" hidden>00:00</div>
                     <div class="chunk-indicator" id="chunkIndicator">Chunk: 0</div>
                     <div class="visualizer" id="visualizer" style="display: none;"></div>
                     <p class="record-hint" id="recordHint">Tocca per registrare</p>
@@ -960,12 +962,19 @@
             <!-- Saved Tab -->
             <div class="tab-content" id="savedTab">
                 <div class="retranscribe-section">
-                    <button class="retranscribe-btn" onclick="loadAudioFile()"><span>📁</span><span>Carica Audio da Trascrivere</span></button>
+                    <button type="button" class="retranscribe-btn" onclick="loadAudioFile()"><span>📁</span><span id="audioImportLabel">Carica Audio da Trascrivere</span></button>
                     <button class="retranscribe-btn" id="retryTranscriptionBtn" onclick="retryPendingTranscription()" style="margin-top:0.6rem">🔄 Riprova audio non trascritto</button>
-                    <p class="retranscribe-info">Audio anche oltre 25 MB · suddivisione automatica. WAV, MP3, M4A, OGG, FLAC e WebM secondo i codec del dispositivo.</p>
+                    <p class="retranscribe-info" id="audioImportInfo">Audio anche oltre 25 MB · suddivisione automatica. WAV, MP3, M4A, OGG, FLAC e WebM secondo i codec del dispositivo.</p>
+                    <button type="button" class="retranscribe-btn" id="teamsImportBtn" aria-describedby="teamsImportHelp">Importa trascrizione Teams (.vtt)</button>
+                    <p class="retranscribe-info" id="teamsImportHelp">In Teams apri Riepilogo → Trascrizione → Scarica e scegli .vtt. VoiceScribe salva il testo nei Progetti.</p>
+                    <p class="retranscribe-info" id="teamsImportStatus" role="status"></p>
                 </div>
                 <div class="section-title" style="margin-top: 1rem;">📂 Progetti Salvati</div>
                 <div class="recordings-list" id="recordingsList"></div>
+                <section id="screenVideosSection" hidden>
+                    <div class="section-title" style="margin-top: 1rem;">Video dello schermo</div>
+                    <div class="recordings-list" id="screenVideoList"></div>
+                </section>
             </div>
         </main>
     </div>
@@ -1006,6 +1015,7 @@
     </div>
     <div class="toast" id="toast"></div>
     <input type="file" id="diarizationFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg" hidden>
+    <input type="file" id="teamsTranscriptInput" accept=".vtt,text/vtt" hidden>
     <aside id="workIndicator" class="work-indicator" hidden role="status" aria-live="polite"><span class="work-spinner" aria-hidden="true"></span><div><strong id="workTitle">Elaborazione in corso…</strong><span id="workDetail"></span><progress id="workProgress" max="100" hidden aria-label="Avanzamento"></progress></div><span id="workElapsed" aria-hidden="true"></span><button id="workCancel" type="button" class="analysis-button" hidden>Interrompi</button></aside>
     <input type="file" id="audioFileInput" accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac,.aac">
 
@@ -1508,6 +1518,7 @@
     <script>
         // ============ MAIN APP ============
         let isRecording = false, isProcessing = false, isPaused = false, mediaRecorder = null, audioBlob = null;
+        let transcriptOnly = false, openedProjectId = null;
         let transcriptEntries = [], speakers = loadSpeakers(), currentSpeaker = 1;
         let startTime = null, timerInterval = null, audioContext = null, analyser = null, animationId = null;
         let pausedTime = 0, pauseStartTime = null; // Per gestire la pausa
@@ -2016,6 +2027,7 @@
         }
 
         async function ensureAudio() {
+            if (transcriptOnly) return null;
             if (audioBlob) return audioBlob;
             try {
                 const chunks = await getChunksFromDB(AUDIO_SESSION);
@@ -2036,6 +2048,8 @@
                 date: new Date().toISOString(),
                 duration: $('timer').textContent,
                 entries: transcriptEntries,
+                openedProjectId,
+                transcriptOnly,
                 transcriptIncomplete,
                 importedAudioChunks: [...importedAudioChunks],
                 speakers,
@@ -2073,6 +2087,8 @@
 
         function restoreSnapshot(s) {
             resetAnalysisScope();
+            openedProjectId = s.openedProjectId ?? null;
+            transcriptOnly = !!s.transcriptOnly;
             transcriptIncomplete=!!s.transcriptIncomplete;
             window.nativeAudioSession = s.nativeAudioSession || null;
             window.nativeDiarizedSession = s.nativeDiarizedSession || null;
@@ -2116,6 +2132,7 @@
         }
 
         async function checkRecoveredChunks() {
+            if (transcriptOnly) return;
             try {
                 const chunks = await listChunkMetadata(REC_SESSION);
                 if (chunks.length > 0) {
@@ -2159,6 +2176,7 @@
 
         window.retryPendingTranscription = async () => {
             if (isRecording || isProcessing || diarizationBusy) return showToast('Ferma prima la registrazione');
+            if (transcriptOnly) return showToast('Questa trascrizione è un progetto di testo. Usa Nuova per tornare al recupero dell’audio.');
             if (!whisperKey) { openConnectionSettings(); return showToast('Inserisci chiave Whisper'); }
             const interrupted = await listChunkMetadata(REC_SESSION);
             const chunks = interrupted.length ? interrupted : await listChunkMetadata(AUDIO_SESSION);
@@ -2344,7 +2362,7 @@
                     $('diarizationStatus').textContent = 'Analisi non applicata; testo originale conservato.'; return;
                 }
                 if (file) {
-                    audioBlob = file; window.nativeAudioSession = null;
+                    transcriptOnly = false; audioBlob = file; window.nativeAudioSession = null;
                     await clearChunksFromDB(AUDIO_SESSION);
                 }
                 window.nativeDiarizedSession = window.nativeAudioSession || null;
@@ -2358,10 +2376,15 @@
         };
 
         // ============ RECORDING ============
+        function confirmNewAudioRecording() {
+            return !transcriptOnly || confirm('Avviare una nuova registrazione? Salva prima eventuali modifiche al progetto Teams.');
+        }
+
         async function startRecording() {
-            window.stopTranscriptAudio();
             if (diarizationBusy) return;
             if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
+            if (!confirmNewAudioRecording()) return;
+            window.stopTranscriptAudio();
             try {
                 if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microfono non disponibile: usa HTTPS o l’APK Android per registrare.');
                 currentStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 } });
@@ -2372,6 +2395,7 @@
                 const interrupted = await listChunkMetadata(REC_SESSION);
                 const current = await listChunkMetadata(AUDIO_SESSION);
                 if (interrupted.length || current.some(c => !c.transcriptionDone)) throw new Error('Audio da recuperare: usa prima Riprova audio non trascritto. Per scartarlo scegli Nuovo progetto.');
+                if (transcriptOnly) clearWorkspace();
                 currentSessionId = REC_SESSION; chunkCount = 0;
                 liveQueue = []; failedChunks = []; liveProcessing = false;liveSpeechContext='';liveQuotaLimited=false;transcriptIncomplete=false;
                 completedChunks = emptyChunks = 0; transcriptionIssue = audioSaveIssue = ''; importedAudioChunks.clear(); setTranscriptionStatus('');
@@ -2702,6 +2726,87 @@
             const file=event.target.files[0];event.target.value='';if(!file)return;
             if(hasCurrentContent()&&!confirm('Importare come nuova sessione? Salva prima il progetto corrente. Verrà sostituito dopo una trascrizione riuscita.'))return;
             await importAudioFile(file);
+        };
+
+        function vttTimeMs(text) {
+            const time = /^(-)?(?:(\d{2,}):)?([0-5]\d):([0-5]\d)\.(\d{3})$/.exec(text);
+            if (!time) return NaN;
+            const ms = ((Number(time[2] || 0) * 60 + Number(time[3])) * 60 + Number(time[4])) * 1000 + Number(time[5]);
+            return Number.isSafeInteger(ms) ? (time[1] ? -ms : ms) : NaN;
+        }
+
+        function parseTranscriptVtt(source) {
+            const blocks = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split(/\n(?:[ \t]*\n)+/);
+            if (!/^WEBVTT(?:[ \t][^\n]*)?(?:\n|$)/.test(blocks.shift())) throw new Error('Seleziona una trascrizione WebVTT (.vtt) scaricata da Teams.');
+            const entities = { amp: '&', lt: '<', gt: '>', nbsp: '\u00A0', lrm: '\u200E', rlm: '\u200F', quot: '"', '#39': "'" };
+            const decode = value => value.replace(/&(amp|lt|gt|nbsp|lrm|rlm|quot|#39);/g, (_, name) => entities[name]);
+            const names = new Map(), entries = [];
+            let origin = 0, end = -Infinity;
+            for (const block of blocks) {
+                const lines = block.trim().split('\n');
+                if (!lines[0] || /^(NOTE(?:[ \t]|$)|STYLE$|REGION$)/.test(lines[0])) continue;
+                const timingIndex = lines[0].includes('-->') ? 0 : 1;
+                const timing = /^(\S+)[ \t]+-->[ \t]+(\S+)(?:[ \t]+.*)?$/.exec(lines[timingIndex]?.trim() || '');
+                const offsetMs = vttTimeMs(timing?.[1]), endMs = vttTimeMs(timing?.[2]);
+                if (!(endMs > offsetMs)) throw new Error('Il file VTT contiene un intervallo di tempo non valido.');
+                const cue = lines.slice(timingIndex + 1).join('\n').trim();
+                const voice = /^<v(?:\.[^\s>]+)*[ \t]+([^>\n]+)>/i.exec(cue);
+                const name = decode(voice?.[1] || '').trim();
+                const text = decode(cue
+                    .replace(/<\/?(?:b|i|u|c|v|lang|ruby|rt)(?:[ .\t][^>\n]*)?>/gi, '')
+                    .replace(/<(?:\d{2,}:)?[0-5]\d:[0-5]\d\.\d{3}>/g, ''))
+                    .replace(/[ \t]*\n[ \t]*/g, ' ').trim();
+                if (!text) continue;
+                if (name && !names.has(name) && names.size < 32) names.set(name, names.size + 1);
+                entries.push({ text, offsetMs, endMs, speaker: names.get(name) || 0,
+                    speakerName: name || 'Non assegnato', timestamp: Date.now() });
+                origin = Math.min(origin, offsetMs);
+                end = Math.max(end, endMs);
+            }
+            if (!entries.length) throw new Error('Nel file VTT non ci sono interventi da importare.');
+            // Some Teams transcripts contain offsets before the meeting's time origin.
+            if (!Number.isSafeInteger(end - origin)) throw new Error('Il file VTT contiene un intervallo di tempo non valido.');
+            for (const entry of entries) {
+                entry.offsetMs -= origin;
+                entry.endMs -= origin;
+                entry.time = formatDuration(entry.offsetMs);
+            }
+            return { entries, speakers: [...names.keys()], duration: formatDuration(end - origin) };
+        }
+
+        $('teamsImportBtn').onclick = () => {
+            if (isRecording || isProcessing || diarizationBusy) return showToast('Attendi il completamento dell’audio in corso.');
+            $('teamsTranscriptInput').click();
+        };
+        $('teamsTranscriptInput').onchange = async ({ target }) => {
+            const file = target.files[0];
+            target.value = '';
+            const button = $('teamsImportBtn'), status = $('teamsImportStatus');
+            if (!file || button.disabled) return;
+            button.disabled = true;
+            try {
+                if (file.size > 5 * 1024 * 1024) throw new Error('Il file VTT supera 5 MB. Seleziona il file di testo scaricato da Teams.');
+                const transcript = parseTranscriptVtt(await file.text());
+                const audio = window.AndroidRecorder ? [] : await Promise.all([listChunkMetadata(AUDIO_SESSION), listChunkMetadata(REC_SESSION)]);
+                const open = !hasCurrentContent() && !aiJob && !isRecording && !isProcessing && !diarizationBusy && audio.every(chunks => !chunks.length);
+                let id = Date.now();
+                while (savedRecordings.some(record => record.id === id)) id++;
+                const name = file.name?.replace(/\.vtt$/i, '').trim() || 'Riunione Teams';
+                const record = { id, name, date: new Date().toISOString(), ...transcript, transcriptOnly: true };
+                const records = [...savedRecordings, record];
+                try { localStorage.setItem('voicescribe_recordings', JSON.stringify(records)); }
+                catch (e) { throw new Error('Spazio insufficiente per salvare la trascrizione nei Progetti.'); }
+                savedRecordings = records;
+                renderSavedRecordings();
+                status.textContent = 'Trascrizione importata. La trovi in Progetti.';
+                if (open) await window.loadRec(id);
+                else showToast(status.textContent);
+            } catch (e) {
+                status.textContent = e.message || 'Impossibile leggere la trascrizione Teams.';
+                showToast(status.textContent);
+            } finally {
+                button.disabled = false;
+            }
         };
 
         // AI Analysis
@@ -3066,7 +3171,7 @@
             aiJob.controller.abort(); aiJob = null; updateAIControls();
             $('aiToolStatus').textContent = 'Analisi annullata. I risultati precedenti sono conservati.';
         };
-        function resetAnalysisScope() { window.cancelAI();window.stopTranscriptAudio();transcriptIncomplete=false;liveQuotaLimited=false; analysisGeneration++; $('aiToolStatus').textContent = ''; }
+        function resetAnalysisScope() { window.cancelAI();window.stopTranscriptAudio();openedProjectId=null;transcriptOnly=false;transcriptIncomplete=false;liveQuotaLimited=false; analysisGeneration++; $('aiToolStatus').textContent = ''; }
         function splitAnalysisText(text, limit = 10000) {
             const chunks = []; let start = 0;
             while (start < text.length) {
@@ -3429,7 +3534,7 @@
                 + `<span class="entry-actions">`
                 + `<button class="entry-btn" title="Modifica" onclick="editEntry(${index})">✏️</button>`
                 + `<button class="entry-btn" title="Copia testo" onclick="copyEntry(${index})">📋</button>`
-                + `<button class="entry-btn" title="Riascolta audio originale" aria-label="Riascolta audio originale" onclick="listenEntry(${index})">▶</button>`
+                + (transcriptOnly ? '' : `<button class="entry-btn" title="Riascolta audio originale" aria-label="Riascolta audio originale" onclick="listenEntry(${index})">▶</button>`)
                 + `<button class="entry-btn" title="Conferma testo dopo la revisione" aria-label="Conferma testo dopo la revisione" onclick="confirmTranscriptEntry(${index})">✓</button>`
                 + `<button class="entry-btn danger" title="Elimina" onclick="deleteEntry(${index})">🗑️</button>`
                 + `</span></div>`
@@ -3475,7 +3580,7 @@
         }
         function transcriptTurns() {
             const turns=[], indices=new Map(transcriptEntries.map((entry,index)=>[entry,index]));
-            const list=orderedEntries(),inline=inlineTranscriptFragments(list);
+            const list=orderedEntries(),inline=transcriptOnly?new Map():inlineTranscriptFragments(list);
             for(const entry of list) {
                 const index=indices.get(entry), last=turns[turns.length-1];
                 const label=inline.get(entry)||entry;
@@ -3577,7 +3682,7 @@
             $('wordCount2').textContent = words.length;
             $('speakerCount2').textContent = new Set(transcriptEntries.filter(e=>e.speaker && e.speakerName && e.speakerName!=='Non assegnato').map(e=>e.speakerName)).size;
             const pending=transcriptEntries.filter(needsTranscriptReview).length;
-            $('transcriptQualityStatus').textContent=transcriptEntries.length?`${transcriptEntries.length} frammenti audio · ${pending} da verificare · ${transcriptEntries.some(e=>e.transcriptQualityAvailable)?'Indicatori audio disponibili':'Qualità audio non stimata'}${pendingTranscriptAudio()?' · Trascrizione parziale':''}`:pendingTranscriptAudio()?'Audio salvato · testo ancora da trascrivere.':'Nessuna trascrizione da verificare.';
+            $('transcriptQualityStatus').textContent=transcriptOnly ? 'Trascrizione importata da file VTT' : transcriptEntries.length?`${transcriptEntries.length} frammenti audio · ${pending} da verificare · ${transcriptEntries.some(e=>e.transcriptQualityAvailable)?'Indicatori audio disponibili':'Qualità audio non stimata'}${pendingTranscriptAudio()?' · Trascrizione parziale':''}`:pendingTranscriptAudio()?'Audio salvato · testo ancora da trascrivere.':'Nessuna trascrizione da verificare.';
             $('transcriptReviewBtn').disabled=!pending;$('transcriptReviewBtn').setAttribute('aria-pressed',String(transcriptReviewOnly));
             updateAIControls();
         }
@@ -3844,6 +3949,7 @@
                 // copia delle voci: il progetto salvato non deve cambiare se la
                 // sessione live continua a essere modificata
                 entries: transcriptEntries.map(entry => ({ ...entry })),
+                transcriptOnly,
                 transcriptIncomplete,
                 importedAudioChunks: [...importedAudioChunks],
                 speakers: [...speakers], notes: notesText,
@@ -3866,6 +3972,7 @@
                 catch (e2) { savedRecordings.pop(); return showToast('⚠️ Spazio insufficiente: elimina qualche progetto'); }
             }
             $('saveModal').classList.remove('active');
+            openedProjectId = sessionId;
             renderSavedRecordings();
             clearAutosave();
             showToast('✅ Progetto salvato');
@@ -3903,6 +4010,8 @@
             if (isRecording || isProcessing || diarizationBusy) return showToast('Attendi il completamento');
             const r = savedRecordings.find(x => x.id === id); if (!r) return;
             resetAnalysisScope();
+            openedProjectId = r.id;
+            transcriptOnly = !!r.transcriptOnly;
             transcriptIncomplete=!!r.transcriptIncomplete;
             window.nativeAudioSession = window.AndroidRecorder ? (r.nativeAudioSession || null) : null;
             window.nativeDiarizedSession = r.nativeDiarizedSession || null;
@@ -3924,7 +4033,10 @@
 
             // Load drawing: entra nella history, cosi' non sparisce al primo ridisegno
             drawingHistory = []; drawingRedo = [];
-            if (r.hasDrawing) {
+            if (Array.isArray(r.drawing)) {
+                drawingHistory = r.drawing.slice();
+                redrawFromHistory();
+            } else if (r.hasDrawing) {
                 const drawingData = await getSessionDrawing(id);
                 if (drawingData) loadCanvasFromDataUrl(drawingData);
                 else redrawFromHistory();
@@ -3959,7 +4071,7 @@
                 notes: ['Dai spazio alle idee.', 'Appunti e disegni, accanto alla conversazione.'],
                 ai: ['Dal testo alla sintesi.', 'Esplora i contenuti con il tuo modello AI.'],
                 export: ['Pronto da condividere.', 'Scegli il formato più adatto al tuo lavoro.'],
-                saved: ['Le tue conversazioni.', 'Riprendi un progetto o importa un nuovo audio.']
+                saved: ['Le tue conversazioni.', 'Riprendi un progetto o importa una riunione.']
             };
             if (!pages[name]) return;
             document.querySelectorAll('.tab').forEach(t => {
@@ -3995,11 +4107,7 @@
 
         function showToast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 
-        window.newTranscript = async () => {
-            if (isRecording || isProcessing || diarizationBusy) return showToast('⚠️ Attendi il completamento');
-            const webAudio = window.AndroidRecorder ? [] : [...await listChunkMetadata(REC_SESSION), ...await listChunkMetadata(AUDIO_SESSION)];
-            if (!hasCurrentContent() && !webAudio.length) return showToast('Già vuoto');
-            if (!confirm(webAudio.some(c => !c.transcriptionDone) ? 'Cancellare tutto il contenuto corrente, compreso l’audio ancora da trascrivere? Esporta prima l’audio da conservare.' : 'Cancellare tutto il contenuto corrente?')) return;
+        function clearWorkspace() {
             resetAnalysisScope(); aiResults = []; activeAIResult = '';
             transcriptEntries = []; audioBlob = null; notesText = '';
             window.nativeAudioSession = null; window.nativeDiarizedSession = null;
@@ -4017,12 +4125,23 @@
             $('mapStatus').textContent = 'Pronta per visualizzare relazioni';
             renderAllEntries(); updateStats();
             $('chartCard').hidden = true; $('mapCard').hidden = true; renderAIResults();
-            await clearCurrentAudio();
-            if (!window.AndroidRecorder) await clearChunksFromDB(REC_SESSION);
             chunkCount = completedChunks = emptyChunks = 0; transcriptionIssue = '';
             audioSaveIssue = ''; importedAudioChunks.clear();
             setTranscriptionStatus(''); updateChunkIndicator();
             clearAutosave();
+        }
+
+        window.newTranscript = async () => {
+            if (isRecording || isProcessing || diarizationBusy) return showToast('⚠️ Attendi il completamento');
+            const keepAudio = transcriptOnly;
+            const webAudio = window.AndroidRecorder || keepAudio ? [] : [...await listChunkMetadata(REC_SESSION), ...await listChunkMetadata(AUDIO_SESSION)];
+            if (!hasCurrentContent() && !webAudio.length) return showToast('Già vuoto');
+            if (!confirm(webAudio.some(c => !c.transcriptionDone) ? 'Cancellare tutto il contenuto corrente, compreso l’audio ancora da trascrivere? Esporta prima l’audio da conservare.' : 'Cancellare tutto il contenuto corrente?')) return;
+            clearWorkspace();
+            if (!keepAudio) {
+                await clearCurrentAudio();
+                if (!window.AndroidRecorder) await clearChunksFromDB(REC_SESSION);
+            }
             showToast('✔ Nuovo progetto');
         };
 

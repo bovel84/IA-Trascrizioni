@@ -42,4 +42,19 @@ public class AudioImporterTest {
         File source=new File(dir,"source.audio");try(WavFile out=new WavFile(source)){out.write(new byte[64000],64000);}
         try{AudioImporter.decode(source,dir,value->{throw new InterruptedIOException("stop");});fail("Should stop");}catch(InterruptedIOException expected){assertTrue(source.isFile());}
     }
+
+    @Test(timeout = 60000) public void mp4WithVideoProducesAnAudioOnlyWav() throws Exception {
+        File source = new File(dir, "source.audio");
+        try (InputStream video = InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("meeting-clip.mp4")) {
+            Files.copy(video, source.toPath());
+        }
+        long originalSize = source.length();
+        AudioImporter.decode(source, dir, progress -> {});
+        File[] parts = Transcriber.segments(dir);
+        assertEquals(1, parts.length);
+        assertTrue(WavFile.hasSignal(parts[0]));
+        long audioBytes = parts[0].length() - 44;
+        assertTrue(audioBytes >= WavFile.BYTES_PER_SECOND * .9 && audioBytes <= WavFile.BYTES_PER_SECOND * 1.2);
+        assertEquals(originalSize, source.length());
+    }
 }

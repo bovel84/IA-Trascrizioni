@@ -24,6 +24,36 @@ const root=path.resolve(__dirname,'..'),output=process.env.PREVIEW_OUTPUT||path.
   }
  }
  await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('data-theme'),'light','appearance must survive restart');
+ await page.evaluate(() => {
+   whisperKey = '';
+   notesText = 'Progetto precedente da conservare';
+   $('notesTextarea').value = notesText;
+   showPanel('saved');
+ });
+ const teamsTranscript = '\uFEFFWEBVTT\r\n\r\nNOTE Riunione di prova\r\n\r\nprima-voce\r\n'
+   + '01:03:04.125 --> 01:03:06.250 align:start\r\n<v Ada &amp; Bruno><i>Primo intervento.</i></v>\r\n\r\n'
+   + '01:03:07.200 --> 01:03:08.900\r\n<v Carla>Secondo &lt;b&gt;intervento&lt;/b&gt;.\r\nRiga finale.</v>\r\n';
+ await page.locator('#teamsTranscriptInput').setInputFiles({
+   name: 'Riunione di prova.vtt', mimeType: 'text/vtt', buffer: Buffer.from(teamsTranscript)
+ });
+ await page.waitForFunction(() => $('teamsImportStatus').textContent.includes('importata'));
+ assert.equal(await page.evaluate(() => notesText), 'Progetto precedente da conservare');
+ assert.equal(requests, 0, 'VTT import does not need Whisper');
+ await page.locator('.recording-item').filter({hasText:'Riunione di prova'}).getByTitle('Apri').click();
+ assert.equal(await page.locator('#transcriptArea .transcript-text').count(), 2);
+ assert.equal(await page.locator('#transcriptArea .transcript-text').last().textContent(), 'Secondo <b>intervento</b>. Riga finale.');
+ assert.equal(await page.locator('#transcriptArea b').count(), 0, 'cue text is rendered as plain text');
+ assert.deepEqual(await page.evaluate(() => transcriptEntries.map(e => [e.speakerName,e.offsetMs,e.endMs])),
+   [['Ada & Bruno',3784125,3786250],['Carla',3787200,3788900]]);
+ assert.equal(await page.locator('#timer').textContent(), '1:03:08');
+ assert(await page.evaluate(async () => (await ensureAudio()) === null));
+
+ await page.evaluate(() => showPanel('saved'));
+ await page.locator('#teamsTranscriptInput').setInputFiles({
+   name: 'errato.vtt', mimeType: 'text/vtt', buffer: Buffer.from('WEBVTT\n\n00:08.000 --> 00:03.000\nInválido')
+ });
+ await page.waitForFunction(() => $('teamsImportStatus').textContent.includes('non valido'));
+ assert.equal(await page.locator('.recording-item').count(), 1, 'an invalid cue must leave the archive untouched');
  await page.evaluate(()=>{whisperKey='gsk_test';notesText='Progetto precedente da conservare';$('notesTextarea').value=notesText;showPanel('saved');});
  const bytes=26*1024*1024,buffer=Buffer.alloc(bytes+44);buffer.write('RIFF',0);buffer.writeUInt32LE(bytes+36,4);buffer.write('WAVEfmt ',8);buffer.writeUInt32LE(16,16);buffer.writeUInt16LE(1,20);buffer.writeUInt16LE(1,22);buffer.writeUInt32LE(16000,24);buffer.writeUInt32LE(32000,28);buffer.writeUInt16LE(2,32);buffer.writeUInt16LE(16,34);buffer.write('data',36);buffer.writeUInt32LE(bytes,40);for(let i=44;i<buffer.length;i+=2)buffer.writeInt16LE(4000,i);
  await page.locator('#audioFileInput').setInputFiles({name:'audio-26mb.wav',mimeType:'audio/wav',buffer});
