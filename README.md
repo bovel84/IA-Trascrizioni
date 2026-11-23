@@ -1,5 +1,14 @@
 # VoiceScribe Pro
 
+## Registrazione con un tocco su Android — 2.7.5
+
+Tocca **Registra** per avviare il microfono. Il primo avvio richiede il permesso Android.
+Al termine tocca lo stesso pulsante per fermare. L’audio viene archiviato
+automaticamente in **Progetti**, anche senza chiave Groq. Con la chiave già
+configurata, parte anche la trascrizione. Il progetto aperto viene salvato quando
+inizia una nuova cattura. L’opzione audio interno per i video richiede il consenso
+di Android ad ogni sessione.
+
 ## Riunioni Microsoft Teams — 2.7.4
 
 - Apri **Riepilogo → Trascrizione → Scarica** in Teams e scegli **.vtt**, se la

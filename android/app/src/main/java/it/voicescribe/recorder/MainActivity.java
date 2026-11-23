@@ -125,26 +125,30 @@ public final class MainActivity extends Activity {
         if (web != null) web.evaluateJavascript("window.nativeRecorderError && window.nativeRecorderError(" + JSONObject.quote(message) + ")", null);
     }
     private void requestStart(String apiKey, String selectedModel, String lang, String source) {
-        if (RecordingService.active || AudioImportService.active || starting || retrying || diarizing) return;
+        if (starting || RecordingService.active) return;
+        if (AudioImportService.active || retrying || diarizing) {
+            startError("Attendi il completamento dell’elaborazione");
+            return;
+        }
         if(transcriptPlayer!=null)transcriptPlayer.close();
         if (!hasWindowFocus() || isFinishing()) { startError("Torna nell'app per avviare la registrazione"); return; }
         if (RecordingService.PLAYBACK.equals(source) && Build.VERSION.SDK_INT < 29) { startError("L'audio del dispositivo richiede Android 10 o successivo"); return; }
-        if (apiKey.trim().isEmpty() || selectedModel.trim().isEmpty() || !lang.matches("[a-z]{2}")) { startError("Inserisci chiave Whisper, modello e lingua"); return; }
         captureSource = source; projectionData = null;
-        key = apiKey; model = selectedModel; language = lang; starting = true;
+        boolean transcriptionConfigured = selectedModel != null && !selectedModel.trim().isEmpty()
+            && lang != null && lang.matches("[a-z]{2}");
+        key = transcriptionConfigured && apiKey != null ? apiKey.trim() : "";
+        model = selectedModel; language = lang; starting = true;
         retrySessionId = "";
-        ArrayList<String> permissions = new ArrayList<>();
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO);
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.POST_NOTIFICATIONS);
-        if (!permissions.isEmpty()) { requestPermissions(permissions.toArray(new String[0]), 20); return; }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, 20);
+            return;
+        }
         begin();
     }
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request != 20) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { startError("Permesso microfono negato"); return; }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-            toast("Notifiche negate: usa Ferma nell'app; servizio visibile in App attive");
         pendingStart = true;
         if (hasWindowFocus()) { pendingStart = false; begin(); }
     }
@@ -346,6 +350,7 @@ public final class MainActivity extends Activity {
                 state.put("importActive",AudioImportService.active).put("importReady",importSession&&AudioImportService.ready).put("importSessionId",AudioImportService.sessionId)
                     .put("importPhase",AudioImportService.phase).put("importStatus",AudioImportService.status).put("importPercent",AudioImportService.percent);
                 return state.put("active", RecordingService.active).put("recording", RecordingService.recording).put("paused", RecordingService.paused)
+                    .put("automaticTranscription", RecordingService.active && RecordingService.automaticTranscription)
                     .put("starting", starting).put("retrying", retrying).put("diarizing", diarizing).put("level", RecordingService.level).put("listening",transcriptPlayer!=null&&transcriptPlayer.isPlaying())
                     .put("exportBusy",documentExports.busy()).put("exportFailed",documentExports.failed()).put("exportStatus",documentExports.status())
                     .put("source", RecordingService.source).put("localVoices",RecordingService.active?RecordingService.localVoices:getSharedPreferences("native",0).getBoolean("localVoices",true)).put("voiceStatus",RecordingService.voiceStatus).put("status", RecordingService.status).toString();

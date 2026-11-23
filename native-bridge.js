@@ -73,6 +73,7 @@ window.initNativeRecorder = function () {
     window.nativeVoicesEnabled=()=>voiceAvailable && voiceSelect.value==='local';
     voiceSelect.onchange=()=>{if(!voiceSelect.disabled && bridge.setLocalVoices)bridge.setLocalVoices(voiceSelect.value==='local');};
     let startRequested = false, wasActive = false, wasRetrying = false, wasImporting=false, lastArchive = '';
+    let requestedSession = null, keptProjectForSession = null;
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
     catch (e) { seen = new Set(); }
@@ -107,8 +108,11 @@ window.initNativeRecorder = function () {
             if (!state.sessionId || hidden.includes(state.sessionId)) continue;
             let record = savedRecordings.find(r => r.nativeAuto && r.nativeAudioSession === state.sessionId);
             if (!record) {
-                const id = Number(state.sessionId.replace('session-', ''));
-                record = { id, name: `${state.importedAudio?'Importazione':'Registrazione'} ${new Date(id).toLocaleString('it-IT')}`, date: new Date(id).toISOString(),
+                if (!state.elapsedMs && !state.chunkCount && !state.partialCount && !state.importedAudio) continue;
+                const started = Number(state.sessionId.replace('session-', ''));
+                let id = started;
+                while (savedRecordings.some(project => project.id === id)) id++;
+                record = { id, name: `${state.importedAudio?'Importazione':'Registrazione'} ${new Date(started).toLocaleString('it-IT')}`, date: new Date(started).toISOString(),
                     nativeAuto: true, nativeAudioSession: state.sessionId, speakers: state.sessionLocalVoices?[]:[...speakers], notes: '',
                     hasAudio: true, hasNotes: false, hasDrawing: false, hasChart: false, hasMap: false };
                 savedRecordings.push(record);
@@ -142,6 +146,32 @@ window.initNativeRecorder = function () {
             renderSavedRecordings();
         }
     }
+    function archiveWorkspaceForRecording() {
+        if (!hasCurrentContent()) return true;
+        const draft = sessionSnapshot();
+        const previous = savedRecordings.find(project => project.id === openedProjectId)
+            || savedRecordings.find(project => draft.nativeAudioSession && project.nativeAuto && project.nativeAudioSession === draft.nativeAudioSession);
+        // An unsaved legacy WebView audio blob still belongs to its open project.
+        if (audioBlob && !draft.nativeAudioSession && !previous?.hasAudio) return false;
+        let id = previous?.id ?? Date.now();
+        if (!previous) {
+            while (savedRecordings.some(project => project.id === id)) id++;
+        }
+        const record = {
+            ...previous, ...draft, id,
+            name: previous?.name || draft.name.trim() || `Progetto ${new Date(id).toLocaleString('it-IT')}`,
+            date: previous?.date || draft.date,
+            speakers: draft.speakers.slice(),
+            hasAudio: !!(draft.nativeAudioSession || previous?.hasAudio),
+            hasNotes: !!draft.notes, hasDrawing: !!draft.drawing.length, hasChart: !!draft.chart, hasMap: !!draft.concept
+        };
+        const records = previous ? savedRecordings.map(project => project === previous ? record : project) : [...savedRecordings, record];
+        try { localStorage.setItem('voicescribe_recordings', JSON.stringify(records)); }
+        catch (e) { return false; }
+        savedRecordings = records;
+        renderSavedRecordings();
+        return true;
+    }
     function importEntries(state) {
         if (window.nativeAudioSession !== state.sessionId || window.nativeDiarizedSession === state.sessionId) return;
         let changed = false;
@@ -169,7 +199,9 @@ window.initNativeRecorder = function () {
         }
     }
     window.nativeRecorderError = message => {
-        startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI(); showToast(message);
+        startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI();
+        $('recordHint').textContent = message;
+        showToast(message);
     };
     window.applyNativeRecorderState = state => {
         if(state.exportBusy)setWorkTask('export',state.exportStatus||'Salvataggio del file in corso…','Attendi la conferma del salvataggio.');else clearWorkTask('export');
@@ -181,7 +213,9 @@ window.initNativeRecorder = function () {
         }else{clearWorkTask('import');$('workCancel').disabled=false;}
         if(wasImporting&&!state.importActive&&state.importStatus)showToast(state.importStatus);
         wasImporting=!!state.importActive;
-        if(state.active&&state.recording&&state.pending)setWorkTask('live','Trascrizione e riconoscimento voci…',state.pending+' parti audio in coda');else clearWorkTask('live');
+        if (state.active && state.recording && state.pending && (state.automaticTranscription ?? !!whisperKey)) {
+            setWorkTask('live', 'Trascrizione e riconoscimento voci…', state.pending + ' parti audio in coda');
+        } else clearWorkTask('live');
         if(state.importReady&&(state.entries||[]).length&&state.sessionId!==window.nativeAudioSession&&(window.nativeImportRequested||state.importActive)){
             resetAnalysisScope();transcriptEntries=[];notesText='';drawingHistory=[];drawingRedo=[];audioBlob=null;
             $('notesTextarea').value='';$('notesCharCount').textContent='0';$('transcriptSearch').value='';
@@ -191,12 +225,21 @@ window.initNativeRecorder = function () {
         if(state.sessionId)window.nativeSessionPending[state.sessionId]=state.pending||0;
         if(!transcriptAudio){const status=state.listening?'Riascolto dell’audio originale in corso.':'';if($('transcriptPlaybackStatus').textContent!==status)$('transcriptPlaybackStatus').textContent=status;}
         if (state.active) {
-            startRequested = false;
-            if (state.sessionId && window.nativeAudioSession !== state.sessionId) {
-                if (transcriptOnly) clearWorkspace();
-                window.nativeAudioSession = state.sessionId; audioBlob = null;
+            if (startRequested && state.sessionId) {
+                requestedSession = state.sessionId;
+                startRequested = false;
             }
-        } else if (/^Avvio fallito/.test(state.status || '')) startRequested = false;
+            if (state.recording && state.sessionId && window.nativeAudioSession !== state.sessionId && keptProjectForSession !== state.sessionId) {
+                const newWorkspace = transcriptOnly || requestedSession === state.sessionId;
+                if (newWorkspace && !archiveWorkspaceForRecording()) {
+                    keptProjectForSession = state.sessionId;
+                    showToast('Registrazione avviata. L’audio sarà in Progetti e puoi continuare a consultare il progetto aperto.');
+                } else {
+                    if (newWorkspace) clearWorkspace();
+                    window.nativeAudioSession = state.sessionId; audioBlob = null;
+                }
+            }
+        } else if (!state.starting && /^(Avvio fallito|Nessun audio|Android ha silenziato|Condivisione audio terminata)/.test(state.status || '')) startRequested = false;
         isRecording = !!state.recording;
         isPaused = !!state.paused;
         isProcessing = diarizationBusy || !!state.importActive || !!state.diarizing || startRequested || !!state.starting || !!state.retrying || (!!state.active && !state.recording);
@@ -233,11 +276,12 @@ window.initNativeRecorder = function () {
         } else if (wasRetrying || wasActive) showProgress(false);
         $('recordHint').textContent = state.active || state.retrying ? (state.status || 'Registrazione in corso') : 'Tocca per registrare';
         if (!state.active && state.status && state.status !== 'Pronto') $('recordHint').textContent = state.status;
+        if (startRequested || state.starting) $('recordHint').textContent = 'Avvio registrazione…';
         const bars = $('visualizer').querySelectorAll('.visualizer-bar');
         bars.forEach((bar, i) => { bar.style.height = `${Math.max(8, (state.level || 0) * (32 + (i % 4) * 4))}px`; });
         const stamp = `${state.sessionId}:${(state.entries || []).length}:${state.chunkCount}:${state.pending}:${state.importPhase||''}:${state.lastError}:${!!state.active}`;
         if (state.sessionId && stamp !== lastArchive) { saveArchives([state]); lastArchive = stamp; }
-        if (wasActive && !state.active) { audioBlob = null; scheduleAutosave(true); }
+        if (wasActive && !state.active && window.nativeAudioSession === state.sessionId) { audioBlob = null; scheduleAutosave(true); }
         if (wasRetrying && !state.retrying) {
             const states = JSON.parse(bridge.sessions()); saveArchives(states);
             states.forEach(importEntries);
@@ -260,11 +304,10 @@ window.initNativeRecorder = function () {
         catch (e) { showToast('Impossibile leggere lo stato Android'); }
     };
     startRecording = async function () {
-        if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
-        if (!confirmNewAudioRecording()) return;
         window.stopTranscriptAudio();
-        audioBlob = null; startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
+        startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
+        $('recordHint').textContent = 'Avvio registrazione…';
         try {
             if(bridge.setTranscriptionGlossary)bridge.setTranscriptionGlossary(transcriptionGlossary);
             if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]);

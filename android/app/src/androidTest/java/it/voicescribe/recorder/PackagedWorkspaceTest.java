@@ -1,13 +1,18 @@
 package it.voicescribe.recorder;
 
+import android.Manifest;
 import android.app.Instrumentation;
 import android.content.Intent;
+import android.os.Build;
+import android.os.SystemClock;
 import android.webkit.WebView;
 import android.view.ViewGroup;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.*;
 import org.junit.runner.RunWith;
+import org.json.JSONObject;
+import java.io.File;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
@@ -39,5 +44,44 @@ public class PackagedWorkspaceTest {
     @Test public void appearanceAndBusyIndicatorWorkInTheNativeShell()throws Exception{
         assertEquals("true",js("(()=>{$('themeSelect').value='light';$('themeSelect').onchange({target:$('themeSelect')});setWorkTask('import','Preparazione audio · 3 di 8','Sorgente conservata',35);return document.documentElement.dataset.theme==='light'&&!$('workIndicator').hidden&&$('workProgress').value===35;})()"));
         assertEquals("true",js("(()=>{$('themeToggle').click();clearWorkTask('import');return document.documentElement.dataset.theme==='dark'&&$('workIndicator').hidden;})()"));
+    }
+
+    @Test public void oneTapRecordsAndSavesAudioWithoutGroq() throws Exception {
+        Assume.assumeTrue(Build.VERSION.SDK_INT >= 28);
+        instrument.getUiAutomation().grantRuntimePermission(
+            instrument.getTargetContext().getPackageName(), Manifest.permission.RECORD_AUDIO);
+        instrument.waitForIdleSync();
+        try {
+            js("whisperKey = ''; $('captureSourceSelect').value = 'microphone'; $('recordBtn').click(); true");
+            JSONObject captured = recorderState();
+            long deadline = SystemClock.elapsedRealtime() + 20000;
+            while ((!captured.optBoolean("recording") || captured.optLong("elapsedMs") < 1000)
+                && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                captured = recorderState();
+            }
+            assertTrue(captured.toString(), captured.optBoolean("recording") && captured.optLong("elapsedMs") >= 1000);
+            String session = captured.getString("sessionId");
+            js("syncNativeRecorder(); $('recordBtn').click(); true");
+            deadline = SystemClock.elapsedRealtime() + 10000;
+            JSONObject finished = recorderState();
+            while (finished.optBoolean("active") && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                finished = recorderState();
+            }
+            assertFalse(finished.toString(), finished.optBoolean("active"));
+            assertEquals(session, finished.getString("sessionId"));
+            assertEquals(0, finished.optInt("transcribedCount", -1));
+            assertTrue(finished.toString(), finished.optInt("pending") > 0);
+            File[] audio = Transcriber.segments(new File(instrument.getTargetContext().getFilesDir(), session));
+            assertTrue("WAV with PCM samples must be finalized on stop", audio.length > 0 && audio[0].length() > 44);
+            assertEquals("true", js("syncNativeRecorder(); savedRecordings.some(r => r.nativeAudioSession === '" + session + "' && r.hasAudio)"));
+        } finally {
+            js("AndroidRecorder.stop(); true");
+        }
+    }
+
+    private JSONObject recorderState() throws Exception {
+        return new JSONObject(js("JSON.parse(AndroidRecorder.state())"));
     }
 }

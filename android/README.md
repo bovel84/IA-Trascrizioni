@@ -361,7 +361,7 @@ La registrazione non è eseguita dalla pagina: `native-bridge.js` collega i puls
 
 ## Uso
 
-1. Avviare **Rec** dall'app visibile e consentire il microfono. Le notifiche vengono richieste su Android 13+; se negate, il servizio resta visibile in App attive e si può fermare dall'app.
+1. Toccare **Registra** dall'app visibile e consentire il microfono al primo avvio. L'audio viene salvato anche senza chiave Groq. Se le notifiche sono disattivate, il servizio resta visibile in **App attive** e si può fermare dall'app.
 2. Bloccare il telefono o premere Home: il microfono rimane nel foreground service, con notifica e pulsante **Ferma**.
 3. Riaprendo l'app, la stessa schermata mostra il testo e il timer aggiornati. Pausa/Riprendi comandano il recorder Android.
 4. Le registrazioni native compaiono automaticamente nella scheda **💾**. **Salva Progetto** conserva testo modificato, speaker, note, disegno e riferimento all'audio nativo; nessuna copia integrale del WAV viene caricata in RAM per salvare il progetto.

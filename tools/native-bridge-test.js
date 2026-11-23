@@ -218,21 +218,31 @@ async function main() {
     teamsFile.name = 'Riunione Teams.vtt';
     await ctx.__elements.get('teamsTranscriptInput').onchange({target:{files:[teamsFile]}});
     await run("loadRec(savedRecordings.find(r => r.name === 'Riunione Teams').id)");
-    run("$('captureSourceSelect').value = 'microphone'");
-    ctx.confirm = () => false;
+    run("$('captureSourceSelect').value = 'microphone'; whisperKey = ''; notesText = 'Note aggiunte al VTT';");
+    ctx.confirm = () => { throw new Error('Recording must start without a project confirmation'); };
     const previousStarts = calls.filter(c => c[0] === 'start').length;
-    await run('startRecording()');
-    check('cancelling a new recording leaves the Teams project open',run('transcriptOnly && transcriptEntries.length === 1')
-        && calls.filter(c => c[0] === 'start').length === previousStarts);
-    ctx.confirm = () => true;
-    await run('startRecording()');
+    run("$('recordBtn').click()");
+    check('one tap starts native capture with no Groq key or project confirmation',
+        calls.filter(c => c[0] === 'start').length === previousStarts + 1
+        && calls.at(-1)[0] === 'start' && calls.at(-1)[1] === '' && run('isProcessing'));
+    check('the recorder shows immediate startup feedback', ctx.__elements.get('recordHint').textContent === 'Avvio registrazione…');
     run("nativeRecorderError('Permesso microfono negato')");
-    check('denied microphone permission preserves the open Teams transcript',run('transcriptOnly && transcriptEntries[0].text === "Testo Teams"'));
+    check('denied microphone permission preserves the open Teams transcript and shows the reason',
+        run('transcriptOnly && transcriptEntries[0].text === "Testo Teams"')
+        && ctx.__elements.get('recordHint').textContent === 'Permesso microfono negato');
     await run('startRecording()');
-    state = {active:true,recording:true,source:'microphone',sessionId:'session-1790769999000',entries:[]};
+    state = {active:true,recording:false,starting:true,source:'microphone',sessionId:'session-1790769999000',entries:[]};
     run('syncNativeRecorder()');
-    check('new native capture has its own transcript and keeps the archived Teams text',
-        run('!transcriptOnly && transcriptEntries.length === 0 && savedRecordings.find(r => r.transcriptOnly).entries[0].text === "Testo Teams"'));
+    check('starting the native service does not clear the previous project until capture is ready', run('transcriptOnly'));
+    Object.assign(state, {recording:true,starting:false,elapsedMs:1000,pending:1,automaticTranscription:false});
+    run('syncNativeRecorder()');
+    check('new native capture has its own workspace and automatically saves edits to the Teams project',
+        run('!transcriptOnly && transcriptEntries.length === 0 && savedRecordings.find(r => r.transcriptOnly).notes === "Note aggiunte al VTT"'));
+    check('audio-only recording does not show that transcription is in progress', run("!workTasks.has('live')"));
+    Object.assign(state, {active:false,recording:false,elapsedMs:2000,chunkCount:1,pending:1,transcribedCount:0,status:'Audio salvato in Progetti'});
+    run('syncNativeRecorder()');
+    check('a recording without a key is visible in Projects with audio available to transcribe',
+        run('savedRecordings.some(r => r.nativeAudioSession === window.nativeAudioSession && r.hasAudio && r.pendingTranscription === 1)'));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

@@ -1512,7 +1512,7 @@
     <script>
         // ============ MAIN APP ============
         let isRecording = false, isProcessing = false, isPaused = false, mediaRecorder = null, audioBlob = null;
-        let transcriptOnly = false;
+        let transcriptOnly = false, openedProjectId = null;
         let transcriptEntries = [], speakers = loadSpeakers(), currentSpeaker = 1;
         let startTime = null, timerInterval = null, audioContext = null, analyser = null, animationId = null;
         let pausedTime = 0, pauseStartTime = null; // Per gestire la pausa
@@ -2042,6 +2042,7 @@
                 date: new Date().toISOString(),
                 duration: $('timer').textContent,
                 entries: transcriptEntries,
+                openedProjectId,
                 transcriptOnly,
                 transcriptIncomplete,
                 importedAudioChunks: [...importedAudioChunks],
@@ -2080,6 +2081,7 @@
 
         function restoreSnapshot(s) {
             resetAnalysisScope();
+            openedProjectId = s.openedProjectId ?? null;
             transcriptOnly = !!s.transcriptOnly;
             transcriptIncomplete=!!s.transcriptIncomplete;
             window.nativeAudioSession = s.nativeAudioSession || null;
@@ -3163,7 +3165,7 @@
             aiJob.controller.abort(); aiJob = null; updateAIControls();
             $('aiToolStatus').textContent = 'Analisi annullata. I risultati precedenti sono conservati.';
         };
-        function resetAnalysisScope() { window.cancelAI();window.stopTranscriptAudio();transcriptOnly=false;transcriptIncomplete=false;liveQuotaLimited=false; analysisGeneration++; $('aiToolStatus').textContent = ''; }
+        function resetAnalysisScope() { window.cancelAI();window.stopTranscriptAudio();openedProjectId=null;transcriptOnly=false;transcriptIncomplete=false;liveQuotaLimited=false; analysisGeneration++; $('aiToolStatus').textContent = ''; }
         function splitAnalysisText(text, limit = 10000) {
             const chunks = []; let start = 0;
             while (start < text.length) {
@@ -3964,6 +3966,7 @@
                 catch (e2) { savedRecordings.pop(); return showToast('⚠️ Spazio insufficiente: elimina qualche progetto'); }
             }
             $('saveModal').classList.remove('active');
+            openedProjectId = sessionId;
             renderSavedRecordings();
             clearAutosave();
             showToast('✅ Progetto salvato');
@@ -4001,6 +4004,7 @@
             if (isRecording || isProcessing || diarizationBusy) return showToast('Attendi il completamento');
             const r = savedRecordings.find(x => x.id === id); if (!r) return;
             resetAnalysisScope();
+            openedProjectId = r.id;
             transcriptOnly = !!r.transcriptOnly;
             transcriptIncomplete=!!r.transcriptIncomplete;
             window.nativeAudioSession = window.AndroidRecorder ? (r.nativeAudioSession || null) : null;
@@ -4023,7 +4027,10 @@
 
             // Load drawing: entra nella history, cosi' non sparisce al primo ridisegno
             drawingHistory = []; drawingRedo = [];
-            if (r.hasDrawing) {
+            if (Array.isArray(r.drawing)) {
+                drawingHistory = r.drawing.slice();
+                redrawFromHistory();
+            } else if (r.hasDrawing) {
                 const drawingData = await getSessionDrawing(id);
                 if (drawingData) loadCanvasFromDataUrl(drawingData);
                 else redrawFromHistory();
