@@ -65,7 +65,7 @@ final class DocumentExports {
                 queue.add(entry);
             }
             failed=!queue.isEmpty()&&queue.peek().failed;
-        } catch(Exception e) { status="Esportazione interrotta: audio originale conservato, ripeti Scarica Audio"; }
+        } catch(Exception e) { status="Esportazione interrotta · file originale conservato. Riprova dall’app."; }
     }
     File directory() throws IOException {
         File dir=new File(app.getFilesDir(),"exports");
@@ -96,7 +96,7 @@ final class DocumentExports {
     void result(int result, Uri destination, int flags) {
         pickerOpen=false;
         Entry entry=queue.peek();
-        if(entry==null){notifyStatus("Sorgente dell’esportazione non trovata: ripeti Scarica Audio. Registrazioni conservate.");return;}
+        if(entry==null){notifyStatus("Sorgente dell’esportazione non trovata. Riprova a esportare il file.");return;}
         if(result!=Activity.RESULT_OK||destination==null){queue.remove();if(entry.disposable)entry.source.delete();persistAndDispatch();return;}
         try { app.getContentResolver().takePersistableUriPermission(destination,flags&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION)); }
         catch(RuntimeException ignored) { /* Temporary document grants still permit this export. */ }
@@ -112,7 +112,7 @@ final class DocumentExports {
     }
     private void persistAndDispatch() {
         try { save(); dispatch(); }
-        catch(Exception e){failed=true;notifyStatus("Salvataggio dell’esportazione non riuscito: audio originale conservato");}
+        catch(Exception e){failed=true;notifyStatus("Salvataggio dell’esportazione non riuscito · file originale conservato");}
     }
     private void save() throws Exception {
         JSONArray entries=new JSONArray();for(Entry entry:queue)entries.put(entry.json());

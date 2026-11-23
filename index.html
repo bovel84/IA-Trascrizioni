@@ -732,10 +732,11 @@
                 <div class="session-controls">
                 <div class="recording-section"><div class="recorder-caption"><span class="ready-dot"></span> REGISTRATORE</div>
                     <div class="audio-source" id="nativeAudioSource" hidden>
-                        <label for="captureSourceSelect">Sorgente audio</label>
+                        <label for="captureSourceSelect">Modalità di registrazione</label>
                         <select class="control-select" id="captureSourceSelect" aria-describedby="captureSourceHint">
                             <option value="microphone">Microfono</option>
                             <option value="playback" id="playbackSourceOption">Audio del dispositivo (video)</option>
+                            <option value="screen" id="screenSourceOption" hidden>Video dello schermo</option>
                         </select>
                         <p id="captureSourceHint" aria-live="polite"></p>
                     </div>
@@ -755,6 +756,7 @@
                         <div class="record-rings"></div>
                     </div>
                     <div class="timer" id="timer" aria-label="Durata registrazione">00:00</div>
+                    <div class="timer" id="screenTimer" aria-label="Durata video" hidden>00:00</div>
                     <div class="chunk-indicator" id="chunkIndicator">Chunk: 0</div>
                     <div class="visualizer" id="visualizer" style="display: none;"></div>
                     <p class="record-hint" id="recordHint">Tocca per registrare</p>
@@ -969,6 +971,10 @@
                 </div>
                 <div class="section-title" style="margin-top: 1rem;">📂 Progetti Salvati</div>
                 <div class="recordings-list" id="recordingsList"></div>
+                <section id="screenVideosSection" hidden>
+                    <div class="section-title" style="margin-top: 1rem;">Video dello schermo</div>
+                    <div class="recordings-list" id="screenVideoList"></div>
+                </section>
             </div>
         </main>
     </div>

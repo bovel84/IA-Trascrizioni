@@ -1,5 +1,14 @@
 # VoiceScribe Pro
 
+## Video dello schermo su Android — 2.7.6
+
+Scegli **Video dello schermo** nel selettore della registrazione, premi **Registra**
+e conferma la condivisione di Android. Puoi passare a Teams o a un’altra app.
+Premi di nuovo il pulsante per fermare. Il video MP4 viene salvato automaticamente
+in **Progetti → Video dello schermo**, da cui puoi riprodurlo o esportarlo.
+Il video contiene le immagini dello schermo. L’accesso a schermate protette
+dipende da Android.
+
 ## Registrazione con un tocco su Android — 2.7.5
 
 Tocca **Registra** per avviare il microfono. Il primo avvio richiede il permesso Android.

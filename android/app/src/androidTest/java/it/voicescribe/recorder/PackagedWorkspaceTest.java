@@ -5,6 +5,7 @@ import android.app.Instrumentation;
 import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.webkit.WebView;
 import android.view.ViewGroup;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -12,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.File;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -83,5 +85,59 @@ public class PackagedWorkspaceTest {
 
     private JSONObject recorderState() throws Exception {
         return new JSONObject(js("JSON.parse(AndroidRecorder.state())"));
+    }
+
+    @Test public void screenRecordingProducesAnMp4AfterAndroidConsent() throws Exception {
+        JSONArray before = new JSONArray(js("JSON.parse(AndroidRecorder.screenVideos())"));
+        try {
+            js("$('captureSourceSelect').value = 'screen'; $('recordBtn').click(); true");
+            long deadline = SystemClock.elapsedRealtime() + 15000;
+            boolean accepted = false;
+            while (!accepted && SystemClock.elapsedRealtime() < deadline) {
+                accepted = approveScreenConsent();
+                if (!accepted) Thread.sleep(150);
+            }
+            assertTrue("Android screen consent should appear", accepted);
+
+            deadline = SystemClock.elapsedRealtime() + 18000;
+            JSONObject capture = recorderState();
+            while ((!capture.optBoolean("screenRecording") || capture.optLong("screenElapsedMs") < 1800)
+                && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(150);
+                capture = recorderState();
+            }
+            assertTrue(capture.toString(), capture.optBoolean("screenRecording"));
+
+            js("syncNativeRecorder(); $('recordBtn').click(); true");
+            deadline = SystemClock.elapsedRealtime() + 12000;
+            JSONObject stopped = recorderState();
+            while (stopped.optBoolean("screenActive") && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(100);
+                stopped = recorderState();
+            }
+            assertFalse(stopped.toString(), stopped.optBoolean("screenActive"));
+            JSONArray after = new JSONArray(js("JSON.parse(AndroidRecorder.screenVideos())"));
+            assertEquals(stopped.toString(), before.length() + 1, after.length());
+            File file = ScreenVideos.open(instrument.getTargetContext().getFilesDir(), after.getJSONObject(0).getString("name"));
+            assertTrue("The newly saved MP4 must contain readable video frames", ScreenVideos.hasFrames(file));
+            assertEquals("true", js("syncNativeRecorder(); !$('screenVideosSection').hidden"));
+        } finally {
+            js("AndroidRecorder.stop(); true");
+        }
+    }
+
+    private boolean approveScreenConsent() {
+        AccessibilityNodeInfo root = instrument.getUiAutomation().getRootInActiveWindow();
+        if (root == null || !"com.android.systemui".equals(String.valueOf(root.getPackageName()))) return false;
+        for (String label : new String[] {"Start now", "Share screen", "Share"}) {
+            for (AccessibilityNodeInfo button : root.findAccessibilityNodeInfosByText(label)) {
+                if (button.isClickable() && button.isEnabled() && label.equals(String.valueOf(button.getText()))
+                    && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+            }
+        }
+        for (AccessibilityNodeInfo button : root.findAccessibilityNodeInfosByViewId("android:id/button1")) {
+            if (button.isEnabled() && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+        }
+        return false;
     }
 }

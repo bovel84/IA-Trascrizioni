@@ -16,6 +16,7 @@
             </intent-filter>
         </activity>
         <service android:name=".RecordingService" android:exported="false" android:foregroundServiceType="microphone|mediaProjection" android:stopWithTask="false" />
+        <service android:name=".ScreenRecordingService" android:exported="false" android:foregroundServiceType="mediaProjection" android:stopWithTask="false" />
         <service android:name=".AudioImportService" android:exported="false" android:foregroundServiceType="dataSync" android:stopWithTask="false" />
     </application>
 </manifest>

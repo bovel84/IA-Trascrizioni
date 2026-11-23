@@ -7,6 +7,7 @@ const { createEnvironment } = require('./dom-stub');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '..', 'native-bridge.js'), 'utf8');
 let state = { active: false, recording: false, paused: false, starting: false, status: 'Pronto', entries: [] };
+let clips = [];
 const calls = [], ctx = createEnvironment({ html });
 ctx.HTMLAnchorElement = class {
     click() { calls.push(['browserClick']); }
@@ -27,6 +28,10 @@ ctx.AndroidRecorder = {
     setLocalVoices: value => calls.push(['voiceMode',value]),
     renameVoice: (...args) => calls.push(['renameVoice',...args]),
     startPlayback: (...args) => calls.push(['startPlayback', ...args]),
+    startScreen: () => calls.push(['startScreen']),
+    screenVideos: () => JSON.stringify(clips),
+    playScreenVideo: name => calls.push(['playScreenVideo', name]),
+    exportScreenVideo: name => calls.push(['exportScreenVideo', name]),
     stop: () => calls.push(['stop']),
     importAudio: (...args)=>calls.push(['importAudio',...args]),
     cancelImport: ()=>calls.push(['cancelImport']),
@@ -243,6 +248,25 @@ async function main() {
     run('syncNativeRecorder()');
     check('a recording without a key is visible in Projects with audio available to transcribe',
         run('savedRecordings.some(r => r.nativeAudioSession === window.nativeAudioSession && r.hasAudio && r.pendingTranscription === 1)'));
+    run("notesText = 'Progetto ancora aperto'; $('captureSourceSelect').value = 'screen'; $('captureSourceSelect').onchange(); $('recordBtn').click()");
+    check('the screen option uses native projection separately from audio and Groq',
+        calls.at(-1)[0] === 'startScreen' && run('isProcessing') && !ctx.__elements.get('screenSourceOption').hidden);
+    state = {...state, screenActive:true, screenRecording:true, screenElapsedMs:4500, screenStatus:'Schermo in registrazione'};
+    run('syncNativeRecorder()');
+    check('screen recording has its own timer and keeps the open audio project',
+        ctx.__elements.get('screenTimer').textContent === '00:04' && ctx.__elements.get('timer').hidden
+        && !ctx.__elements.get('pauseBtn').classList.contains('visible')
+        && run("notesText === 'Progetto ancora aperto' && window.nativeAudioSession === 'session-1790769999000'"));
+    run("$('recordBtn').click()");
+    check('the main record button also stops screen recording', calls.at(-1)[0] === 'stop');
+    clips = [{name:'schermo-1790769999000-12345.mp4',date:1790769999000,bytes:2500000}];
+    state = {...state, screenActive:false, screenRecording:false, screenStatus:'Video salvato in Progetti'};
+    run('syncNativeRecorder()');
+    check('the completed MP4 is listed with play and export controls and the audio timer is restored',
+        !ctx.__elements.get('screenVideosSection').hidden && ctx.__elements.get('screenTimer').hidden
+        && !ctx.__elements.get('timer').hidden && ctx.__elements.get('screenVideoList').innerHTML.includes('Riproduci video')
+        && ctx.__elements.get('screenVideoList').innerHTML.includes('Esporta MP4')
+        && ctx.__elements.get('recordHint').textContent === 'Video salvato in Progetti');
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

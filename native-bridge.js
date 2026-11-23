@@ -47,17 +47,25 @@ window.initNativeRecorder = function () {
     let exportNote, retryExportButton, cancelExportButton;
     const sourceSelect = $('captureSourceSelect');
     const playbackSupported = typeof bridge.canCapturePlayback === 'function' && bridge.canCapturePlayback();
+    const screenSupported = typeof bridge.startScreen === 'function' && typeof bridge.screenVideos === 'function';
     $('nativeAudioSource').hidden = false;
     $('playbackSourceOption').disabled = !playbackSupported;
-    sourceSelect.value = playbackSupported && localStorage.getItem('voicescribe_capture_source') === 'playback' ? 'playback' : 'microphone';
+    $('screenSourceOption').hidden = !screenSupported;
+    $('screenSourceOption').disabled = !screenSupported;
+    const preferred = localStorage.getItem('voicescribe_capture_source');
+    sourceSelect.value = (playbackSupported && preferred === 'playback') || (screenSupported && preferred === 'screen')
+        ? preferred : 'microphone';
     function updateSourceHint() {
+        const screen = sourceSelect.value === 'screen';
         $('captureSourceHint').textContent = sourceSelect.value === 'playback'
             ? 'Premi Registra, autorizza la condivisione Android, poi riproduci il video. Per le chiamate Teams, importa il VTT o l’MP4 da Progetti.'
+            : screen ? 'Registra lo schermo in MP4 senza traccia audio. Android chiede il consenso a ogni avvio.'
             : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'L’audio dei video richiede l’app Android aggiornata e Android 10 o successivo.';
         const setting = document.querySelector('.setting-info');
         if (setting) setting.innerHTML = sourceSelect.value === 'playback'
             ? '<h4>▶️ Audio in background</h4><p>Puoi cambiare app. Il blocco schermo può interrompere la cattura.</p>'
-            : '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
+            : screen ? '<h4>Video dello schermo</h4><p>Puoi cambiare app. Tieni lo schermo acceso durante la registrazione.</p>'
+                : '<h4>🔒 Schermo spento</h4><p>Registrazione Android con notifica persistente</p>';
         $('backgroundToggle').setAttribute('aria-label', 'Registrazione Android in background');
     }
     sourceSelect.onchange = () => {
@@ -73,6 +81,7 @@ window.initNativeRecorder = function () {
     window.nativeVoicesEnabled=()=>voiceAvailable && voiceSelect.value==='local';
     voiceSelect.onchange=()=>{if(!voiceSelect.disabled && bridge.setLocalVoices)bridge.setLocalVoices(voiceSelect.value==='local');};
     let startRequested = false, wasActive = false, wasRetrying = false, wasImporting=false, lastArchive = '';
+    let screenRequested = false, wasScreenActive = false;
     let requestedSession = null, keptProjectForSession = null;
     let seen;
     try { seen = new Set(JSON.parse(localStorage.getItem('voicescribe_native_seen') || '[]')); }
@@ -200,14 +209,72 @@ window.initNativeRecorder = function () {
     }
     window.nativeRecorderError = message => {
         startRequested = false; isProcessing = false; sourceSelect.disabled = false; updateUI();
+        screenRequested = false;
         $('recordHint').textContent = message;
         showToast(message);
     };
+    function renderScreenVideos() {
+        if (!screenSupported) return;
+        const videos = JSON.parse(bridge.screenVideos()).filter(clip => /^schermo-[0-9]+-[0-9]+\.mp4$/.test(clip.name));
+        $('screenVideosSection').hidden = !videos.length;
+        $('screenVideoList').innerHTML = videos.map(clip => {
+            const date = new Date(clip.date).toLocaleString('it-IT');
+            const size = (clip.bytes / 1_000_000).toLocaleString('it-IT', { maximumFractionDigits: 1 });
+            return `<div class="recording-item">
+                <div class="recording-item-info">
+                    <div class="recording-item-title">Video dello schermo</div>
+                    <div class="recording-item-meta">${escapeHtml(date)} · ${escapeHtml(size)} MB · MP4</div>
+                </div>
+                <div class="recording-item-actions">
+                    <button type="button" class="action-btn" aria-label="Riproduci video" title="Riproduci video" onclick="AndroidRecorder.playScreenVideo('${clip.name}')">▶</button>
+                    <button type="button" class="action-btn" aria-label="Esporta MP4" title="Esporta MP4" onclick="AndroidRecorder.exportScreenVideo('${clip.name}')">↓</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    function applyScreenState(state) {
+        if (state.screenActive) {
+            wasScreenActive = true;
+            screenRequested = false;
+            startRequested = false;
+            isRecording = !!state.screenRecording;
+            isProcessing = !isRecording;
+            isPaused = false;
+            sourceSelect.value = 'screen';
+            sourceSelect.disabled = true;
+            voiceSelect.disabled = true;
+            updateSourceHint();
+            updateUI();
+            if (isProcessing) setWorkTask('processing', state.screenStatus || 'Preparazione del video…');
+            $('recordBtn').setAttribute('aria-label', isRecording ? 'Ferma video dello schermo' : 'Video dello schermo in elaborazione');
+            $('pauseBtn').classList.remove('visible');
+            $('timer').hidden = true;
+            $('screenTimer').hidden = false;
+            $('screenTimer').textContent = formatDuration(state.screenElapsedMs || 0);
+            $('visualizer').style.display = 'none';
+            $('bgBadge').style.display = 'none';
+            $('bgWarning').classList.remove('active');
+            $('chunkIndicator').classList.remove('active', 'busy');
+            $('recordHint').textContent = state.screenStatus || 'Schermo in registrazione';
+            return true;
+        }
+        if (wasScreenActive || (screenRequested && !state.starting && state.screenStatus)) {
+            wasScreenActive = false;
+            screenRequested = false;
+            startRequested = false;
+            $('timer').hidden = false;
+            $('screenTimer').hidden = true;
+            renderScreenVideos();
+            if (state.screenStatus) showToast(state.screenStatus);
+        }
+        return false;
+    }
     window.applyNativeRecorderState = state => {
         if(state.exportBusy)setWorkTask('export',state.exportStatus||'Salvataggio del file in corso…','Attendi la conferma del salvataggio.');else clearWorkTask('export');
         if(exportNote){exportNote.textContent=state.exportStatus||'';exportNote.style.display=state.exportStatus?'block':'none';}
         if(retryExportButton)retryExportButton.style.display=state.exportFailed?'block':'none';
         if(cancelExportButton)cancelExportButton.style.display=state.exportFailed?'block':'none';
+        if (applyScreenState(state)) return;
         if(state.importActive){
             setWorkTask('import',state.importStatus||'Importazione audio in corso…',state.importPhase==='copy'?'Salvataggio del file originale.':'Suddivisione automatica e trascrizione ordinata.',state.importPhase==='copy'?null:state.importPercent,()=>{bridge.cancelImport?.();$('workCancel').disabled=true;});
         }else{clearWorkTask('import');$('workCancel').disabled=false;}
@@ -276,6 +343,7 @@ window.initNativeRecorder = function () {
         } else if (wasRetrying || wasActive) showProgress(false);
         $('recordHint').textContent = state.active || state.retrying ? (state.status || 'Registrazione in corso') : 'Tocca per registrare';
         if (!state.active && state.status && state.status !== 'Pronto') $('recordHint').textContent = state.status;
+        if (sourceSelect.value === 'screen' && state.screenStatus) $('recordHint').textContent = state.screenStatus;
         if (startRequested || state.starting) $('recordHint').textContent = 'Avvio registrazione…';
         const bars = $('visualizer').querySelectorAll('.visualizer-bar');
         bars.forEach((bar, i) => { bar.style.height = `${Math.max(8, (state.level || 0) * (32 + (i % 4) * 4))}px`; });
@@ -309,6 +377,11 @@ window.initNativeRecorder = function () {
         startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
         $('recordHint').textContent = 'Avvio registrazione…';
         try {
+            if (sourceSelect.value === 'screen' && screenSupported) {
+                screenRequested = true;
+                bridge.startScreen();
+                return;
+            }
             if(bridge.setTranscriptionGlossary)bridge.setTranscriptionGlossary(transcriptionGlossary);
             if (bridge.selectSpeaker) bridge.selectSpeaker(currentSpeaker, speakers[currentSpeaker-1]);
             if (sourceSelect.value === 'playback') {
@@ -319,7 +392,7 @@ window.initNativeRecorder = function () {
         catch (error) { window.nativeRecorderError('Impossibile avviare il servizio Android: ' + (error.message || 'errore sconosciuto')); }
     };
     stopRecording = async function () { bridge.stop(); };
-    window.togglePause = () => { if (isRecording) { bridge.pause(!isPaused); isPaused = !isPaused; updateUI(); } };
+    window.togglePause = () => { if (isRecording && !wasScreenActive) { bridge.pause(!isPaused); isPaused = !isPaused; updateUI(); } };
     const webExportAudio = window.exportAudio;
     window.exportAudio = async () => {
         if (window.nativeAudioSession) return bridge.exportAudio(window.nativeAudioSession);
@@ -381,6 +454,7 @@ window.initNativeRecorder = function () {
         };
     }
     saveArchives(JSON.parse(bridge.sessions()));
+    renderScreenVideos();
     window.syncNativeRecorder();
     setInterval(window.syncNativeRecorder, 1000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') window.syncNativeRecorder(); });
