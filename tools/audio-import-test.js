@@ -16,5 +16,26 @@ let passed=0;function check(name,value){assert(value,name);passed++;console.log(
  for(const script of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi))run(script[1]);await run('init()');
  run("setWorkTask('import','Preparazione audio','Sorgente conservata',42);showPanel('notes');");check('progress remains available when changing panels',!ctx.__elements.get('workIndicator').hidden&&ctx.__elements.get('workProgress').value===42);
  run("clearWorkTask('import')");check('completion removes the work indicator',ctx.__elements.get('workIndicator').hidden);
+ const vtt = new Blob(['WEBVTT\n\n00:08.000 --> 00:09.500\n<v Ada>Decisione della riunione.'], {type:'text/vtt'});
+ vtt.name = 'Riunione Teams.vtt';
+ const input = ctx.__elements.get('teamsTranscriptInput');
+ const importTeams = () => input.onchange({target:{files:[vtt],value:''}});
+ await importTeams();
+ check('a VTT opens as a saved project in an empty workspace',run("transcriptOnly && savedRecordings.length === 1 && transcriptEntries[0].speakerName === 'Ada'"));
+ const early = run(`parseTranscriptVtt('WEBVTT\\n\\n-00:01.000 --> 00:01.500\\n<v Ada>Prima frase</v>\\n\\n00:03.000 --> 00:04.000\\nSeconda frase')`);
+ assert.deepEqual(Array.from(early.entries, entry => [entry.offsetMs, entry.endMs]), [[0, 2500], [4000, 5000]]);
+ check('a Teams cue before time zero keeps its length and spacing',early.duration === '00:05');
+ await run("saveChunkToDB(new Blob(['old audio']), AUDIO_SESSION, {transcriptionDone:false})");
+ check('an imported transcript never picks up audio from a different project',await run('ensureAudio()') === null);
+ await run('newTranscript()');
+ check('closing a text project preserves audio awaiting recovery',await run('listChunkMetadata(AUDIO_SESSION).then(parts => parts.length)') === 1);
+ await importTeams();
+ check('a new VTT is saved without replacing the workspace when audio is awaiting recovery',run('savedRecordings.length === 2 && transcriptEntries.length === 0'));
+ await run('clearChunksFromDB(AUDIO_SESSION);');
+ await run('loadRec(savedRecordings[0].id)');
+ run("whisperKey = 'gsk_test'");
+ await run('startRecording()');
+ check('a new web recording starts with a clean transcript and keeps the saved Teams project',
+   run('isRecording && !transcriptOnly && transcriptEntries.length === 0 && savedRecordings[0].entries.length === 1'));
  console.log(passed+' audio-import checks passed.');process.exit(0);
 })().catch(error=>{console.error(error);process.exitCode=1;});

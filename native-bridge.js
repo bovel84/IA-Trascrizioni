@@ -52,7 +52,7 @@ window.initNativeRecorder = function () {
     sourceSelect.value = playbackSupported && localStorage.getItem('voicescribe_capture_source') === 'playback' ? 'playback' : 'microphone';
     function updateSourceHint() {
         $('captureSourceHint').textContent = sourceSelect.value === 'playback'
-            ? 'Premi Registra, autorizza la condivisione Android, poi apri il video nell’altra app. Viene acquisito solo l’audio; alcune app ne impediscono la cattura.'
+            ? 'Premi Registra, autorizza la condivisione Android, poi riproduci il video. Per le chiamate Teams, importa il VTT o l’MP4 da Progetti.'
             : playbackSupported ? 'Registra le voci e i suoni dal microfono.' : 'L’audio dei video richiede l’app Android aggiornata e Android 10 o successivo.';
         const setting = document.querySelector('.setting-info');
         if (setting) setting.innerHTML = sourceSelect.value === 'playback'
@@ -193,6 +193,7 @@ window.initNativeRecorder = function () {
         if (state.active) {
             startRequested = false;
             if (state.sessionId && window.nativeAudioSession !== state.sessionId) {
+                if (transcriptOnly) clearWorkspace();
                 window.nativeAudioSession = state.sessionId; audioBlob = null;
             }
         } else if (/^Avvio fallito/.test(state.status || '')) startRequested = false;
@@ -243,13 +244,17 @@ window.initNativeRecorder = function () {
         }
         wasActive = !!state.active; wasRetrying = !!state.retrying;
     };
-    if(typeof bridge.importAudio==='function')window.loadAudioFile=()=>{
-        if(isRecording||isProcessing||diarizationBusy)return showToast('Attendi il completamento dell’audio in corso');
-        if(!whisperKey){openConnectionSettings();return showToast('Inserisci la chiave Whisper');}
-        if(hasCurrentContent()&&!confirm('Importare come nuova sessione? Salva prima il progetto corrente. Il contenuto viene sostituito dopo il primo testo riconosciuto.'))return;
-        window.stopTranscriptAudio();window.nativeImportRequested=true;
-        bridge.setTranscriptionGlossary?.(transcriptionGlossary);bridge.importAudio(whisperKey,sttModel,$('languageSelect').value);
-    };
+    if (typeof bridge.importAudio === 'function') {
+        $('audioImportLabel').textContent = 'Trascrivi file audio o video MP4';
+        $('audioImportInfo').textContent = 'Carica anche una registrazione MP4 di Teams. L’app estrae la traccia audio e la trascrive con Whisper.';
+        window.loadAudioFile = () => {
+            if (isRecording || isProcessing || diarizationBusy) return showToast('Attendi il completamento dell’audio in corso');
+            if (!whisperKey) { openConnectionSettings(); return showToast('Inserisci la chiave Whisper'); }
+            if (hasCurrentContent() && !confirm('Importare come nuova sessione? Salva prima il progetto corrente. Il contenuto viene sostituito dopo il primo testo riconosciuto.')) return;
+            window.stopTranscriptAudio(); window.nativeImportRequested = true;
+            bridge.setTranscriptionGlossary?.(transcriptionGlossary); bridge.importAudio(whisperKey, sttModel, $('languageSelect').value);
+        };
+    }
     window.syncNativeRecorder = () => {
         try { window.applyNativeRecorderState(JSON.parse(bridge.state())); }
         catch (e) { showToast('Impossibile leggere lo stato Android'); }
@@ -257,6 +262,7 @@ window.initNativeRecorder = function () {
     startRecording = async function () {
         if (!whisperKey) { openConnectionSettings(); return showToast('⚠️ Inserisci chiave Whisper'); }
         if (isRecording || isProcessing || diarizationBusy) return;
+        if (!confirmNewAudioRecording()) return;
         window.stopTranscriptAudio();
         audioBlob = null; startRequested = true; isProcessing = true; sourceSelect.disabled = true; updateUI();
         try {

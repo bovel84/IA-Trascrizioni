@@ -13,6 +13,7 @@ import java.util.concurrent.*;
 public final class RecordingService extends Service {
     static final String STOP = "it.voicescribe.STOP";
     static final String MICROPHONE = "microphone", PLAYBACK = "playback";
+    private static final String NO_PLAYBACK_AUDIO = "Nessun audio ricevuto. Verifica la riproduzione. Per Teams, importa il VTT o l’MP4 in Progetti.";
     static volatile String source = MICROPHONE;
     static volatile boolean active, recording, paused;
     static volatile String status = "Pronto";
@@ -116,6 +117,7 @@ public final class RecordingService extends Service {
         long totalBytes = 0, segmentBytes = 0;
         long silentBytes = 0;
         boolean silenceWarning = false;
+        boolean playbackSignal = false;
         SpeakerSelection capturedSpeaker = selectedSpeaker;
         String failure = null;
         try {
@@ -139,7 +141,8 @@ public final class RecordingService extends Service {
                 public void onRecordingConfigChanged(java.util.List<AudioRecordingConfiguration> configs) {
                     for (AudioRecordingConfiguration config : configs) {
                         if (audio != null && config.getClientAudioSessionId() == audio.getAudioSessionId() && config.isClientSilenced()) {
-                            captureIssue = status = "Sorgente audio silenziata dal sistema: sessione interrotta";
+                            captureIssue = status = PLAYBACK.equals(source) ? NO_PLAYBACK_AUDIO
+                                : "Android ha silenziato il microfono. La registrazione è stata interrotta.";
                             recording = false;
                         }
                     }
@@ -161,9 +164,10 @@ public final class RecordingService extends Service {
                     continue;
                 }
                 if (PLAYBACK.equals(source)) {
+                    playbackSignal = playbackSignal || peak > 0;
                     silentBytes = peak == 0 ? silentBytes + n : 0;
                     boolean silent = silentBytes >= WavFile.BYTES_PER_SECOND * 8L;
-                    if (silent && !silenceWarning) announce("Nessun audio ricevuto · avvia il video; l'app potrebbe vietare la cattura");
+                    if (silent && !silenceWarning) announce(NO_PLAYBACK_AUDIO);
                     else if (!silent && silenceWarning) announce(captureStatus);
                     silenceWarning = silent;
                 }
@@ -197,6 +201,7 @@ public final class RecordingService extends Service {
             catch (Exception e) { failure = "Audio parziale da recuperare: " + e.getMessage(); }
             releaseProjection();
             if (captureIssue != null) failure = captureIssue;
+            if (failure == null && PLAYBACK.equals(source) && !playbackSignal) failure = NO_PLAYBACK_AUDIO;
             if (failure != null) status = failure;
             else if (stopping) status = "Audio salvato · completo le trascrizioni";
             final String captureFailure = failure;

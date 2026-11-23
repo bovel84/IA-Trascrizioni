@@ -1,5 +1,19 @@
 # VoiceScribe Pro
 
+## Riunioni Microsoft Teams — 2.7.4
+
+- Apri **Riepilogo → Trascrizione → Scarica** in Teams e scegli **.vtt**, se la
+  trascrizione è disponibile e hai il permesso di scaricarla. In VoiceScribe,
+  usa **Progetti → Importa trascrizione Teams (.vtt)**. Il progetto conserva
+  testo, nomi presenti nel file e tempi degli interventi. L’importazione del
+  testo è locale e funziona senza chiave Whisper.
+- Se hai la registrazione **MP4**, nell’APK usa **Progetti → Trascrivi file
+  audio o video MP4**. L’app estrae la traccia audio e invia a Whisper solo i
+  segmenti audio. Servono connessione e chiave Groq.
+- La cattura **Audio del dispositivo** è per i flussi multimediali consentiti
+  da Android. Per le riunioni Teams sullo stesso dispositivo usa uno dei file
+  scaricabili dal riepilogo dopo la riunione.
+
 ## Aggiornamenti Android — 2.7.3
 
 Gli APK ufficiali usano una chiave permanente e un codice versione crescente.

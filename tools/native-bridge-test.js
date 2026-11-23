@@ -214,6 +214,25 @@ async function main() {
     check('file-save retry reaches the native export queue',calls.some(c=>c[0]==='retryExport'));
     const cancelExport=run("document.querySelector('.retranscribe-section').children.find(e=>e.textContent==='Annulla salvataggio')");cancelExport.click();
     check('failed export can be dismissed separately from the recording',calls.some(c=>c[0]==='cancelExport'));
+    const teamsFile = new Blob(['WEBVTT\n\n00:01.000 --> 00:03.000\n<v Ada>Testo Teams</v>'], {type:'text/vtt'});
+    teamsFile.name = 'Riunione Teams.vtt';
+    await ctx.__elements.get('teamsTranscriptInput').onchange({target:{files:[teamsFile]}});
+    await run("loadRec(savedRecordings.find(r => r.name === 'Riunione Teams').id)");
+    run("$('captureSourceSelect').value = 'microphone'");
+    ctx.confirm = () => false;
+    const previousStarts = calls.filter(c => c[0] === 'start').length;
+    await run('startRecording()');
+    check('cancelling a new recording leaves the Teams project open',run('transcriptOnly && transcriptEntries.length === 1')
+        && calls.filter(c => c[0] === 'start').length === previousStarts);
+    ctx.confirm = () => true;
+    await run('startRecording()');
+    run("nativeRecorderError('Permesso microfono negato')");
+    check('denied microphone permission preserves the open Teams transcript',run('transcriptOnly && transcriptEntries[0].text === "Testo Teams"'));
+    await run('startRecording()');
+    state = {active:true,recording:true,source:'microphone',sessionId:'session-1790769999000',entries:[]};
+    run('syncNativeRecorder()');
+    check('new native capture has its own transcript and keeps the archived Teams text',
+        run('!transcriptOnly && transcriptEntries.length === 0 && savedRecordings.find(r => r.transcriptOnly).entries[0].text === "Testo Teams"'));
     console.log(`${passed}/${passed} native UI checks passed.`);
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

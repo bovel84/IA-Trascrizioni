@@ -328,7 +328,10 @@ con il microfono. Per tornare alle riunioni, fermare e scegliere **Microfono**.
   il servizio microfono continua a dichiarare esclusivamente il tipo `microphone` a runtime.
 - Sono acquisibili i flussi media/game/unknown delle app che lo consentono, nello stesso
   profilo Android. App che vietano la cattura, contenuti protetti, telefonate e flussi
-  di comunicazione non sono supportati. Nessun aggiramento o ripiego automatico sul microfono.
+  di comunicazione non sono supportati. Per Teams, in **Progetti** importa la
+  **trascrizione .vtt** dal riepilogo o trascrivi il file **MP4** scaricato. Il VTT
+  si apre come progetto di testo con nomi e tempi, mentre per il video viene
+  estratta e trascritta la sola traccia audio.
 - Dopo circa 8 secondi di silenzio digitale compare **Nessun audio ricevuto**: avviare
   il video o provare un'app che consenta la cattura. I WAV mantengono silenzio e tempi,
   ma i segmenti interamente silenziosi non vengono inviati a Whisper, anche al recupero.

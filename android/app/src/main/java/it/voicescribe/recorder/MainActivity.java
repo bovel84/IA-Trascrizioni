@@ -108,7 +108,12 @@ public final class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (filePicker != null) filePicker.onReceiveValue(null);
                 filePicker = callback;
-                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*"), 10); return true;
+                boolean transcript = Arrays.stream(params.getAcceptTypes()).anyMatch(type -> type.contains(".vtt") || type.contains("text/vtt"));
+                // Document providers may report VTT as text/plain or application/octet-stream.
+                // The page validates the WebVTT header before saving the chosen file.
+                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(transcript ? "*/*" : "audio/*"), 10);
+                return true;
             }
         });
         web.loadUrl(PAGE);
@@ -259,7 +264,9 @@ public final class MainActivity extends Activity {
             if(RecordingService.active||AudioImportService.active||starting||retrying||diarizing)return;
             if(apiKey==null||apiKey.trim().isEmpty()||selectedModel==null||selectedModel.trim().isEmpty()||lang==null||!lang.matches("[a-z]{2}")){toast("Inserisci chiave Whisper, modello e lingua");return;}
             importKey=apiKey;importModel=selectedModel;importLanguage=lang;
-            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),50);
+            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"audio/*", "video/mp4"})
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 50);
         });}
         @JavascriptInterface public void cancelImport(){ui.post(()->{if(AudioImportService.active)startService(new Intent(MainActivity.this,AudioImportService.class).setAction(AudioImportService.CANCEL));});}
         @JavascriptInterface public void selectSpeaker(int id, String name) {
